@@ -95,10 +95,6 @@ public class EngineSettingsService {
         return getSettings();
     }
 
-    public synchronized UciEngineConfig toPlayerEngineConfig() {
-        return copy(whitePlayerConfig);
-    }
-
     public synchronized UciEngineConfig toEvaluationEngineConfig() {
         return copy(evaluationConfig);
     }
