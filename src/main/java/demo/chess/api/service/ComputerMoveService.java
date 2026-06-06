@@ -21,6 +21,8 @@ import demo.chess.game.Game;
 @Service
 public class ComputerMoveService {
 
+    private static final String COMPUTER_MOVE_CANCELLED_MESSAGE = "Computer move was cancelled";
+
     private static final Log logger = LogFactory.getLog(ComputerMoveService.class);
 
     private final GameService gameService;
@@ -30,6 +32,8 @@ public class ComputerMoveService {
     private PlayerEngine blackPlayerEngine;
     private String currentWhitePlayerEnginePath;
     private String currentBlackPlayerEnginePath;
+    private long whitePlayerEngineGeneration;
+    private long blackPlayerEngineGeneration;
 
     public ComputerMoveService(GameService gameService, EngineSettingsService engineSettingsService) {
         this.gameService = gameService;
@@ -60,12 +64,21 @@ public class ComputerMoveService {
         }
 
         Color color = game.getPlayer().getColor();
-        PlayerEngine engine = getPlayerEngine(color);
-        EngineConfig playerEngineConfig = color == Color.WHITE
-                ? engineSettingsService.getWhitePlayerConfig()
-                : engineSettingsService.getBlackPlayerConfig();
+        PlayerEngineSnapshot engineSnapshot = getPlayerEngineSnapshot(color);
 
-        Move bestMove = engine.getBestMove(game, playerEngineConfig);
+        Move bestMove;
+        try {
+            bestMove = engineSnapshot.engine.getBestMove(game, engineSnapshot.config);
+        } catch (NoMoveFoundException | IOException | InterruptedException | RuntimeException e) {
+            if (isPlayerEngineGenerationChanged(color, engineSnapshot.generation)) {
+                return computerMoveCancelledResult();
+            }
+            throw e;
+        }
+
+        if (isPlayerEngineGenerationChanged(color, engineSnapshot.generation)) {
+            return computerMoveCancelledResult();
+        }
 
         String from = bestMove.getSource() != null ? bestMove.getSource().getName() : null;
         String to = bestMove.getTarget() != null ? bestMove.getTarget().getName() : null;
@@ -87,11 +100,9 @@ public class ComputerMoveService {
     /**
      * Stops and recreates the long-lived player engines for a clean new-game boundary.
      *
-     * This method is intentionally synchronized only against engine reference replacement,
-     * not against makeComputerMove(). A new game must be able to cancel a currently
-     * thinking engine instead of waiting for the old move to finish. Closing the old
-     * engine unblocks the in-flight getBestMove() call; applyMoveIfCurrent(...) then
-     * protects the newly started game from stale engine results.
+     * A new game must be able to cancel a currently thinking engine instead of waiting
+     * for the old move to finish. Engine generations invalidate in-flight computer
+     * moves before they can be applied to the current game.
      */
     public synchronized void resetForNewGame() {
         logger.info("Resetting player engines for new game");
@@ -103,9 +114,34 @@ public class ComputerMoveService {
         currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
         whitePlayerEngine = createPlayerEngineWithFallback(currentWhitePlayerEnginePath, "white player");
         blackPlayerEngine = createPlayerEngineWithFallback(currentBlackPlayerEnginePath, "black player");
+        whitePlayerEngineGeneration++;
+        blackPlayerEngineGeneration++;
 
         closePlayerEngine(oldWhitePlayerEngine, "previous white player");
         closePlayerEngine(oldBlackPlayerEngine, "previous black player");
+    }
+
+    /**
+     * Cancels a currently running computer move for the selected side by replacing the
+     * underlying UCI process and invalidating the in-flight engine generation.
+     */
+    public synchronized void cancelPlayerEngine(Color color) {
+        if (color == Color.WHITE) {
+            logger.info("Cancelling white player engine");
+            PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
+            currentWhitePlayerEnginePath = engineSettingsService.getWhitePlayerEnginePath();
+            whitePlayerEngine = createPlayerEngineWithFallback(currentWhitePlayerEnginePath, "white player");
+            whitePlayerEngineGeneration++;
+            closePlayerEngine(oldWhitePlayerEngine, "cancelled white player");
+            return;
+        }
+
+        logger.info("Cancelling black player engine");
+        PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
+        currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
+        blackPlayerEngine = createPlayerEngineWithFallback(currentBlackPlayerEnginePath, "black player");
+        blackPlayerEngineGeneration++;
+        closePlayerEngine(oldBlackPlayerEngine, "cancelled black player");
     }
 
     /**
@@ -116,24 +152,48 @@ public class ComputerMoveService {
         return makeComputerMove();
     }
 
-    private synchronized PlayerEngine getPlayerEngine(Color color) {
+    private synchronized PlayerEngineSnapshot getPlayerEngineSnapshot(Color color) {
         if (color == Color.WHITE) {
             String configuredPath = engineSettingsService.getWhitePlayerEnginePath();
             if (!configuredPath.equals(currentWhitePlayerEnginePath)) {
-                closePlayerEngine(whitePlayerEngine, "white player");
+                PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
                 currentWhitePlayerEnginePath = configuredPath;
                 whitePlayerEngine = createPlayerEngineWithFallback(configuredPath, "white player");
+                whitePlayerEngineGeneration++;
+                closePlayerEngine(oldWhitePlayerEngine, "white player");
             }
-            return whitePlayerEngine;
+            return new PlayerEngineSnapshot(
+                    whitePlayerEngine,
+                    engineSettingsService.getWhitePlayerConfig(),
+                    whitePlayerEngineGeneration);
         }
 
         String configuredPath = engineSettingsService.getBlackPlayerEnginePath();
         if (!configuredPath.equals(currentBlackPlayerEnginePath)) {
-            closePlayerEngine(blackPlayerEngine, "black player");
+            PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
             currentBlackPlayerEnginePath = configuredPath;
             blackPlayerEngine = createPlayerEngineWithFallback(configuredPath, "black player");
+            blackPlayerEngineGeneration++;
+            closePlayerEngine(oldBlackPlayerEngine, "black player");
         }
-        return blackPlayerEngine;
+        return new PlayerEngineSnapshot(
+                blackPlayerEngine,
+                engineSettingsService.getBlackPlayerConfig(),
+                blackPlayerEngineGeneration);
+    }
+
+    private synchronized boolean isPlayerEngineGenerationChanged(Color color, long generation) {
+        return color == Color.WHITE
+                ? whitePlayerEngineGeneration != generation
+                : blackPlayerEngineGeneration != generation;
+    }
+
+    private MoveResultDto computerMoveCancelledResult() {
+        Game game = gameService.getCurrentGame();
+        String sideToMove = game != null ? sideToMove(game) : null;
+        String gameState = game != null && game.getState() != null ? game.getState().name() : null;
+        return new MoveResultDto(false, COMPUTER_MOVE_CANCELLED_MESSAGE, null, null, null, sideToMove,
+                gameService.getCurrentPositionString(), gameState);
     }
 
     private PlayerEngine createPlayerEngineWithFallback(String requestedPath, String label) {
@@ -189,5 +249,17 @@ public class ComputerMoveService {
         return game.getPlayer() != null && game.getPlayer().getColor() != null
                 ? game.getPlayer().getColor().name().toLowerCase(Locale.ROOT)
                 : null;
+    }
+
+    private static final class PlayerEngineSnapshot {
+        private final PlayerEngine engine;
+        private final EngineConfig config;
+        private final long generation;
+
+        private PlayerEngineSnapshot(PlayerEngine engine, EngineConfig config, long generation) {
+            this.engine = engine;
+            this.config = config;
+            this.generation = generation;
+        }
     }
 }
