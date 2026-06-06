@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.GameSettingsDto;
+import demo.chess.api.service.GameLifecycleService;
 import demo.chess.api.service.GameService;
 
 @RestController
@@ -15,9 +16,11 @@ import demo.chess.api.service.GameService;
 public class GameController {
 
     private final GameService gameService;
+    private final GameLifecycleService gameLifecycleService;
 
-    public GameController(GameService gameService) {
+    public GameController(GameService gameService, GameLifecycleService gameLifecycleService) {
         this.gameService = gameService;
+        this.gameLifecycleService = gameLifecycleService;
     }
 
     /**
@@ -33,7 +36,7 @@ public class GameController {
      */
     @PostMapping("/new-game")
     public ResponseEntity<GameSettingsDto> startNewGame(@RequestBody(required = false) GameSettingsDto settings) {
-        GameSettingsDto appliedSettings = gameService.startNewGame(settings);
+        GameSettingsDto appliedSettings = gameLifecycleService.startNewGame(settings);
         return ResponseEntity.ok(appliedSettings);
     }
 }

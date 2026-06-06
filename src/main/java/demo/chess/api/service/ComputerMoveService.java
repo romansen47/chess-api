@@ -70,7 +70,11 @@ public class ComputerMoveService {
         String from = bestMove.getSource() != null ? bestMove.getSource().getName() : null;
         String to = bestMove.getTarget() != null ? bestMove.getTarget().getName() : null;
 
-        gameService.applyMove(bestMove);
+        boolean applied = gameService.applyMoveIfCurrent(game, bestMove);
+        if (!applied) {
+            return new MoveResultDto(false, "Game has changed while the engine was thinking", from, to, null, null,
+                    gameService.getCurrentPositionString(), null);
+        }
 
         String san = lastSan(game);
         String sideToMove = sideToMove(game);
@@ -78,6 +82,30 @@ public class ComputerMoveService {
         String gameState = game.getState() != null ? game.getState().name() : null;
 
         return new MoveResultDto(true, null, from, to, san, sideToMove, position, gameState);
+    }
+
+    /**
+     * Stops and recreates the long-lived player engines for a clean new-game boundary.
+     *
+     * This method is intentionally synchronized only against engine reference replacement,
+     * not against makeComputerMove(). A new game must be able to cancel a currently
+     * thinking engine instead of waiting for the old move to finish. Closing the old
+     * engine unblocks the in-flight getBestMove() call; applyMoveIfCurrent(...) then
+     * protects the newly started game from stale engine results.
+     */
+    public synchronized void resetForNewGame() {
+        logger.info("Resetting player engines for new game");
+
+        PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
+        PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
+
+        currentWhitePlayerEnginePath = engineSettingsService.getWhitePlayerEnginePath();
+        currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
+        whitePlayerEngine = createPlayerEngineWithFallback(currentWhitePlayerEnginePath, "white player");
+        blackPlayerEngine = createPlayerEngineWithFallback(currentBlackPlayerEnginePath, "black player");
+
+        closePlayerEngine(oldWhitePlayerEngine, "previous white player");
+        closePlayerEngine(oldBlackPlayerEngine, "previous black player");
     }
 
     /**
@@ -145,7 +173,7 @@ public class ComputerMoveService {
         try {
             engine.close();
         } catch (Exception e) {
-            logger.warn("Could not close old " + label + " engine: " + e.getMessage());
+            logger.warn("Could not close " + label + " engine: " + e.getMessage());
         }
     }
 

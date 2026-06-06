@@ -51,7 +51,7 @@ public class EvaluationService {
      * Durch periodische Aufrufe (z.B. alle 2 Sekunden aus dem Frontend) erhältst du
      * aktualisierte Lines.
      */
-    public EngineEvaluationDto getEvaluation() {
+    public synchronized EngineEvaluationDto getEvaluation() {
         Game game = gameService.getCurrentGame();
         EngineConfig engineConfig = engineSettingsService.toEvaluationEngineConfig();
         EvaluationEngine engine = getEvaluationEngine();
@@ -110,6 +110,22 @@ public class EvaluationService {
         }
 
         return new EngineEvaluationDto(eval, bar, lines);
+    }
+
+
+    /**
+     * Stops and recreates the evaluation engine for a clean new-game boundary.
+     *
+     * The cached lines and settings version are reset as well, so the next evaluation
+     * request starts from the new game position with an empty cache.
+     */
+    public synchronized void resetForNewGame() {
+        logger.info("Resetting evaluation engine for new game");
+
+        closeEvaluationEngine(evaluationEngine);
+        currentEvaluationEnginePath = engineSettingsService.getEvaluationEnginePath();
+        evaluationEngine = createEvaluationEngineWithFallback(currentEvaluationEnginePath);
+        lastSeenSettingsVersion = -1L;
     }
 
     private synchronized EvaluationEngine getEvaluationEngine() {

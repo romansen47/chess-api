@@ -57,7 +57,7 @@ public class GameService {
     /**
      * Startet eine komplett neue Partie mit den bisher gespeicherten Einstellungen.
      */
-    public GameSettingsDto startNewGame() {
+    public synchronized GameSettingsDto startNewGame() {
         return startNewGame(this.gameSettings);
     }
 
@@ -65,7 +65,7 @@ public class GameService {
      * Startet eine komplett neue Partie mit den übergebenen Einstellungen.
      * Wird von /api/new-game aufgerufen.
      */
-    public GameSettingsDto startNewGame(GameSettingsDto settings) {
+    public synchronized GameSettingsDto startNewGame(GameSettingsDto settings) {
         GameSettingsDto normalizedSettings = normalizeGameSettings(settings);
 
         this.gameSettings = normalizedSettings;
@@ -80,14 +80,14 @@ public class GameService {
     /**
      * Liefert die aktuellen Einstellungen für neue Partien.
      */
-    public GameSettingsDto getGameSettings() {
+    public synchronized GameSettingsDto getGameSettings() {
         return copyGameSettings(this.gameSettings);
     }
 
     /**
      * Liefert die aktuelle Partie.
      */
-    public Game getCurrentGame() {
+    public synchronized Game getCurrentGame() {
         return game;
     }
 
@@ -192,12 +192,26 @@ public class GameService {
      * menschliche Züge kommen aus dem REST-Request als from/to, Engine-Züge
      * kommen bereits als Move-Instanz aus PlayerUciEngine.getBestMove(...).
      */
-    public Move applyMove(Move move) throws NoMoveFoundException, IOException {
+    public synchronized Move applyMove(Move move) throws NoMoveFoundException, IOException {
         if (move == null) {
             throw new NoMoveFoundException("move must not be null");
         }
         game.apply(move);
         return move;
+    }
+
+
+    /**
+     * Applies an engine move only if the game instance used for the calculation is
+     * still the active game. This protects a newly started game from a late engine
+     * response that was calculated for the previous game.
+     */
+    public synchronized boolean applyMoveIfCurrent(Game expectedGame, Move move) throws NoMoveFoundException, IOException {
+        if (expectedGame == null || expectedGame != this.game) {
+            return false;
+        }
+        applyMove(move);
+        return true;
     }
 
     /**
@@ -216,7 +230,7 @@ public class GameService {
      * @throws NoMoveFoundException wenn kein legaler Zug gefunden wurde
      * @throws IOException          wenn beim Anwenden des Zuges ein Fehler auftritt
      */
-    public Move applyMove(String from, String to, String promotion)
+    public synchronized Move applyMove(String from, String to, String promotion)
             throws NoMoveFoundException, IOException {
 
         if (from == null || to == null) {
@@ -315,7 +329,7 @@ public class GameService {
      * Beispiel Startstellung:
      * rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR
      */
-    public String getCurrentPositionString() {
+    public synchronized String getCurrentPositionString() {
         Board board = game.getChessBoard();
         StringBuilder position = new StringBuilder(64);
 
@@ -371,7 +385,7 @@ public class GameService {
      * Es werden nur Farbe, Figurentyp und Feldname übertragen, keine Layout-Infos.
      * Diese Methode wird vom REST-Controller (z.B. /api/board) verwendet.
      */
-    public BoardDto getBoardView() {
+    public synchronized BoardDto getBoardView() {
         Board board = game.getChessBoard();
         List<PieceDto> pieces = new ArrayList<>();
 
