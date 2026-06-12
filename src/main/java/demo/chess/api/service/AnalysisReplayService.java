@@ -94,7 +94,8 @@ public class AnalysisReplayService {
                 san,
                 Math.round(evaluation.evaluation * 100.0) / 100.0,
                 evaluation.bar,
-                evaluation.depth));
+                evaluation.depth,
+                evaluation.lines));
 
         boolean done = session.currentPly >= session.originalMoves.size();
         if (done) {
@@ -157,7 +158,7 @@ public class AnalysisReplayService {
         int depth = Math.max(0, source.getDepth());
         int threads = source.getThreads() > 0 ? source.getThreads() : 1;
         int hashSize = source.getHashSize() > 0 ? source.getHashSize() : 256;
-        int multiPV = source.getMultiPV() > 0 ? source.getMultiPV() : 1;
+        int multiPV = source.getMultiPV() > 0 ? source.getMultiPV() : 3;
         int contempt = source.getContempt();
         int uciElo = Math.max(0, source.getUciElo());
 
@@ -414,7 +415,6 @@ public class AnalysisReplayService {
         private final double evaluation;
         private final double bar;
         private final int depth;
-        @SuppressWarnings("unused")
         private final List<EngineLineDto> lines;
 
         private AnalysisEvaluation(double evaluation, double bar, int depth, List<EngineLineDto> lines) {
