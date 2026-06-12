@@ -18,6 +18,8 @@ import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
+import demo.chess.definitions.players.Player;
+import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
 
@@ -204,6 +206,11 @@ public class AnalysisReplayService {
     }
 
     private AnalysisEvaluation analyzeCurrentReplayPosition(AnalysisReplaySession source) {
+        AnalysisEvaluation terminalEvaluation = evaluateTerminalPosition(source);
+        if (terminalEvaluation != null) {
+            return terminalEvaluation;
+        }
+
         try {
             source.engine.clearChachedLines();
             List<Pair<Pair<Double, Integer>, String>> bestLines = source.engine.getBestLines(
@@ -236,6 +243,75 @@ public class AnalysisReplayService {
             safeStop(source.engine);
             return new AnalysisEvaluation(0.0, 0.5, 0, List.of());
         }
+    }
+
+    private AnalysisEvaluation evaluateTerminalPosition(AnalysisReplaySession source) {
+        if (source == null || source.replayGame == null) {
+            return null;
+        }
+
+        AnalysisEvaluation explicitStateEvaluation = evaluateExplicitTerminalState(source);
+        if (explicitStateEvaluation != null) {
+            return explicitStateEvaluation;
+        }
+
+        return evaluateTerminalSimulationPosition(source);
+    }
+
+    private AnalysisEvaluation evaluateExplicitTerminalState(AnalysisReplaySession source) {
+        State state = source.replayGame.getState();
+        if (state == null) {
+            return null;
+        }
+
+        if (state == State.BLACK_MATED || state == State.BLACK_RESIGNED) {
+            return new AnalysisEvaluation(100.0, 1.0, latestDepth(source), List.of());
+        }
+
+        if (state == State.WHITE_MATED || state == State.WHITE_RESIGNED) {
+            return new AnalysisEvaluation(-100.0, 0.0, latestDepth(source), List.of());
+        }
+
+        if (state == State.STALEMATE
+                || state == State.DRAW_BY_50_MOVES_RULE
+                || state == State.DRAW_BY_THREEFOLD_REPETITION) {
+            return new AnalysisEvaluation(0.0, 0.5, latestDepth(source), List.of());
+        }
+
+        return null;
+    }
+
+    private AnalysisEvaluation evaluateTerminalSimulationPosition(AnalysisReplaySession source) {
+        Player playerToMove = source.replayGame.getPlayer();
+        if (playerToMove == null || playerToMove.getKing() == null || playerToMove.getKing().getField() == null) {
+            return null;
+        }
+
+        try {
+            if (!playerToMove.getValidMoves(source.replayGame).isEmpty()) {
+                return null;
+            }
+        } catch (NoMoveFoundException | IOException e) {
+            return null;
+        }
+
+        Player opponent = playerToMove == source.replayGame.getWhitePlayer()
+                ? source.replayGame.getBlackPlayer()
+                : source.replayGame.getWhitePlayer();
+
+        boolean kingIsAttacked = opponent.getSimpleMoves().stream()
+                .map(Move::getTarget)
+                .anyMatch(playerToMove.getKing().getField()::equals);
+
+        if (!kingIsAttacked) {
+            return new AnalysisEvaluation(0.0, 0.5, latestDepth(source), List.of());
+        }
+
+        if (playerToMove == source.replayGame.getWhitePlayer()) {
+            return new AnalysisEvaluation(-100.0, 0.0, latestDepth(source), List.of());
+        }
+
+        return new AnalysisEvaluation(100.0, 1.0, latestDepth(source), List.of());
     }
 
     private double mapEvalToBar(double eval) {
