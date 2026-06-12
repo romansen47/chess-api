@@ -385,8 +385,22 @@ public class GameService {
      * Es werden nur Farbe, Figurentyp und Feldname übertragen, keine Layout-Infos.
      * Diese Methode wird vom REST-Controller (z.B. /api/board) verwendet.
      */
+    public synchronized List<Move> getMoveListSnapshot() {
+        return new ArrayList<>(game.getMoveList());
+    }
+
+    /**
+     * Erzeugt eine einfache, UI-neutrale View des aktuellen Bretts.
+     *
+     * Es werden nur Farbe, Figurentyp und Feldname übertragen, keine Layout-Infos.
+     * Diese Methode wird vom REST-Controller (z.B. /api/board) verwendet.
+     */
     public synchronized BoardDto getBoardView() {
-        Board board = game.getChessBoard();
+        return getBoardView(game);
+    }
+
+    public BoardDto getBoardView(Game sourceGame) {
+        Board board = sourceGame.getChessBoard();
         List<PieceDto> pieces = new ArrayList<>();
 
         for (int file = 1; file <= 8; file++) {

@@ -13,6 +13,7 @@ import demo.chess.definitions.engines.EvaluationEngine;
 import demo.chess.definitions.Color;
 import demo.chess.definitions.PieceType;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
+import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Castling;
 import demo.chess.definitions.moves.EnPassant;
@@ -112,6 +113,62 @@ public class EvaluationService {
         return new EngineEvaluationDto(eval, bar, lines);
     }
 
+
+
+    /**
+     * Bewertet ein isoliertes Analyse-/Replay-Game für eine feste Zeitspanne.
+     *
+     * Diese Methode ist bewusst synchron: Der aufrufende Analyse-Replay-Schritt
+     * blockiert so lange, bis die eingestellte Analysezeit abgelaufen ist und ein
+     * stabiler Snapshot aus dem Engine-Cache gelesen wurde.
+     */
+    public synchronized EngineEvaluationDto evaluateGameForAnalysis(
+            Game game,
+            UciEngineConfig engineConfig,
+            int moveTimeMillis) {
+        EvaluationEngine engine = getEvaluationEngine();
+        int safeMoveTimeMillis = Math.max(100, moveTimeMillis);
+
+        try {
+            engine.clearChachedLines();
+            engine.getBestLines(game, engineConfig);
+            Thread.sleep(safeMoveTimeMillis);
+            List<Pair<Pair<Double, Integer>, String>> bestLines = engine.getBestLines(game, engineConfig);
+            engine.stopEvaluation();
+
+            if (bestLines == null || bestLines.isEmpty()) {
+                return new EngineEvaluationDto(0.0, 0.5, List.of());
+            }
+
+            double eval = bestLines.get(0).getLeft().getLeft();
+            double bar = mapEvalToBar(eval);
+
+            List<EngineLineDto> lines = new ArrayList<>();
+            for (Pair<Pair<Double, Integer>, String> line : bestLines) {
+                double lineEval = line.getLeft().getLeft();
+                int depth = line.getLeft().getRight();
+                String movesUci = line.getRight();
+                double roundedEval = Math.round(lineEval * 100.0) / 100.0;
+                lines.add(new EngineLineDto(roundedEval, depth, movesUci));
+            }
+
+            return new EngineEvaluationDto(eval, bar, lines);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            try {
+                engine.stopEvaluation();
+            } catch (Exception ignored) {
+            }
+            return new EngineEvaluationDto(0.0, 0.5, List.of());
+        } catch (Exception e) {
+            logger.error("Engine error while replay-analyzing position: " + e.getMessage());
+            try {
+                engine.stopEvaluation();
+            } catch (Exception ignored) {
+            }
+            return new EngineEvaluationDto(0.0, 0.5, List.of());
+        }
+    }
 
     /**
      * Stops and recreates the evaluation engine for a clean new-game boundary.
