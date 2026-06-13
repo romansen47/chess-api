@@ -36,16 +36,22 @@ public class AnalysisReplayService {
 
     private final GameService gameService;
     private final EngineSettingsService engineSettingsService;
+    private final EvaluationService evaluationService;
     private AnalysisReplaySession session;
 
-    public AnalysisReplayService(GameService gameService, EngineSettingsService engineSettingsService) {
+    public AnalysisReplayService(
+            GameService gameService,
+            EngineSettingsService engineSettingsService,
+            EvaluationService evaluationService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
+        this.evaluationService = evaluationService;
     }
 
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
             throws NoMoveFoundException, IOException {
         closeSessionEngine();
+        evaluationService.stopLiveEvaluation();
 
         List<Move> moveListSnapshot = gameService.getMoveListSnapshot();
         AnalysisReplaySettingsDto normalizedSettings = normalizeSettings(settings);

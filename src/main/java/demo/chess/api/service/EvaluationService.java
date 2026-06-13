@@ -185,9 +185,16 @@ public class EvaluationService {
         lastSeenSettingsVersion = -1L;
     }
 
+    public synchronized void stopLiveEvaluation() {
+        logger.info("Stopping live evaluation engine");
+        closeEvaluationEngine(evaluationEngine);
+        evaluationEngine = null;
+        lastSeenSettingsVersion = -1L;
+    }
+
     private synchronized EvaluationEngine getEvaluationEngine() {
         String configuredPath = engineSettingsService.getEvaluationEnginePath();
-        if (!configuredPath.equals(currentEvaluationEnginePath)) {
+        if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
             closeEvaluationEngine(evaluationEngine);
             currentEvaluationEnginePath = configuredPath;
             evaluationEngine = createEvaluationEngineWithFallback(configuredPath);
