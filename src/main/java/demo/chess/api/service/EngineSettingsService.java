@@ -1,5 +1,18 @@
 package demo.chess.api.service;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineSettingsDto;
@@ -24,6 +37,8 @@ public class EngineSettingsService {
     private UciEngineConfig whitePlayerConfig;
     private UciEngineConfig blackPlayerConfig;
     private UciEngineConfig evaluationConfig;
+
+    private final Map<String, String> engineNameCache = new HashMap<>();
 
     private long version;
     private long whitePlayerVersion;
@@ -143,6 +158,18 @@ public class EngineSettingsService {
         return blackPlayerEnginePath;
     }
 
+    public synchronized String getWhitePlayerEngineName() {
+        return getUciEngineName(whitePlayerEnginePath);
+    }
+
+    public synchronized String getBlackPlayerEngineName() {
+        return getUciEngineName(blackPlayerEnginePath);
+    }
+
+    public synchronized String getEvaluationEngineName() {
+        return getUciEngineName(evaluationEnginePath);
+    }
+
     public synchronized void setBlackPlayerEnginePath(String blackPlayerEnginePath) {
         this.blackPlayerEnginePath = normalizeEnginePath(blackPlayerEnginePath);
     }
@@ -191,7 +218,7 @@ public class EngineSettingsService {
         result.setHashSize(128);
         result.setMultiPV(0);
         result.setContempt(0);
-        result.setMoveOverhead(0);
+        result.setMoveOverhead(1);
         result.setUciElo(0);
 
         return result;
@@ -222,7 +249,11 @@ public class EngineSettingsService {
         result.setHashSize(clamp(safeIncoming.getHashSize(), 1, 262144, safeCurrent.getHashSize()));
         result.setMultiPV(1);
         result.setContempt(clamp(safeIncoming.getContempt(), -1000, 1000, safeCurrent.getContempt()));
-        result.setMoveOverhead(clamp(safeIncoming.getMoveOverhead(), 0, 3600, safeCurrent.getMoveOverhead()));
+        result.setMoveOverhead(clamp(
+                safeIncoming.getMoveOverhead(),
+                1,
+                3600,
+                Math.max(1, safeCurrent.getMoveOverhead())));
         result.setUciElo(clamp(safeIncoming.getUciElo(), 0, 4000, safeCurrent.getUciElo()));
 
         return result;
@@ -243,6 +274,97 @@ public class EngineSettingsService {
         result.setUciElo(clamp(safeIncoming.getUciElo(), 0, 4000, safeCurrent.getUciElo()));
 
         return result;
+    }
+
+    private String getUciEngineName(String enginePath) {
+        String normalizedPath = normalizeEnginePath(enginePath);
+        String cached = engineNameCache.get(normalizedPath);
+        if (cached != null) {
+            return cached;
+        }
+
+        String probed = probeUciEngineName(normalizedPath);
+        engineNameCache.put(normalizedPath, probed);
+        return probed;
+    }
+
+    private String probeUciEngineName(String enginePath) {
+        Process process = null;
+        ExecutorService executor = null;
+
+        try {
+            process = new ProcessBuilder(enginePath).start();
+            Process engineProcess = process;
+
+            PrintWriter writer = new PrintWriter(new OutputStreamWriter(
+                    engineProcess.getOutputStream(), StandardCharsets.UTF_8), true);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(
+                    engineProcess.getInputStream(), StandardCharsets.UTF_8));
+
+            executor = Executors.newSingleThreadExecutor();
+            Future<String> future = executor.submit(() -> {
+                String engineName = null;
+                String line;
+
+                while ((line = reader.readLine()) != null) {
+                    if (line.startsWith("id name ")) {
+                        engineName = line.substring("id name ".length()).trim();
+                    }
+
+                    if (line.equals("uciok")) {
+                        break;
+                    }
+                }
+
+                return engineName;
+            });
+
+            writer.println("uci");
+            writer.flush();
+
+            String engineName = future.get(2, TimeUnit.SECONDS);
+
+            writer.println("quit");
+            writer.flush();
+
+            if (engineName != null && !engineName.isBlank()) {
+                return engineName.trim();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (executor != null) {
+                executor.shutdownNow();
+            }
+            if (process != null) {
+                process.destroy();
+                try {
+                    if (!process.waitFor(1, TimeUnit.SECONDS)) {
+                        process.destroyForcibly();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    process.destroyForcibly();
+                }
+            }
+        }
+
+        return fallbackEngineName(enginePath);
+    }
+
+    private String fallbackEngineName(String enginePath) {
+        if (enginePath == null || enginePath.isBlank()) {
+            return "Engine";
+        }
+
+        try {
+            Path fileName = Path.of(enginePath).getFileName();
+            if (fileName != null && !fileName.toString().isBlank()) {
+                return fileName.toString();
+            }
+        } catch (Exception ignored) {
+        }
+
+        return enginePath;
     }
 
     private String normalizeEnginePath(String value) {

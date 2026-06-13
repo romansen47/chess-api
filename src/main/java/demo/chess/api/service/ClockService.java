@@ -12,9 +12,11 @@ import demo.chess.game.Game;
 public class ClockService {
 
     private final GameService gameService;
+    private final EngineSettingsService engineSettingsService;
 
-    public ClockService(GameService gameService) {
+    public ClockService(GameService gameService, EngineSettingsService engineSettingsService) {
         this.gameService = gameService;
+        this.engineSettingsService = engineSettingsService;
     }
 
     public ClockDto getClock() {
@@ -27,6 +29,10 @@ public class ClockService {
                     null,
                     false,
                     false,
+                    null,
+                    null,
+                    null,
+                    null,
                     null,
                     null);
         }
@@ -47,6 +53,10 @@ public class ClockService {
 
         String gameState = game.getState() != null ? game.getState().name() : null;
         String timeControl = formatTimeControl(game.getTimeForEachPlayer(), game.getIncrementForWhite(), game.getIncrementForBlack());
+        String whitePlayerName = game.getWhitePlayer() != null ? game.getWhitePlayer().getName() : null;
+        String blackPlayerName = game.getBlackPlayer() != null ? game.getBlackPlayer().getName() : null;
+        String whitePlayerEngineName = engineSettingsService.getWhitePlayerEngineName();
+        String blackPlayerEngineName = engineSettingsService.getBlackPlayerEngineName();
 
         return new ClockDto(
                 Math.max(0, whiteTime),
@@ -55,7 +65,11 @@ public class ClockService {
                 whiteRunning,
                 blackRunning,
                 gameState,
-                timeControl);
+                timeControl,
+                whitePlayerName,
+                blackPlayerName,
+                whitePlayerEngineName,
+                blackPlayerEngineName);
     }
 
     private String formatTimeControl(int timeForEachPlayer, int incrementForWhite, int incrementForBlack) {
