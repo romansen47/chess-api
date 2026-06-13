@@ -1,5 +1,7 @@
 package demo.chess.api.dto;
 
+import java.util.List;
+
 public class EngineLineDto {
 
     /**
@@ -13,17 +15,30 @@ public class EngineLineDto {
     private int depth;
 
     /**
-     * Zugfolge in UCI-Notation, z.B. "e2e4 e7e5 g1f3".
+     * Zugfolge in Anzeige-Notation, z.B. "e4 e5 ♘f3".
      */
     private String moves;
+
+    /**
+     * Brettstellungen der Variante als 64-Zeichen-Strings.
+     *
+     * positions[0] ist die Ausgangsstellung der Variante, danach folgt je ein
+     * Eintrag nach jedem angewendeten Engine-Zug.
+     */
+    private List<String> positions = List.of();
 
     public EngineLineDto() {
     }
 
     public EngineLineDto(double eval, int depth, String moves) {
+        this(eval, depth, moves, List.of());
+    }
+
+    public EngineLineDto(double eval, int depth, String moves, List<String> positions) {
         this.eval = eval;
         this.depth = depth;
         this.moves = moves;
+        this.positions = positions != null ? positions : List.of();
     }
 
     public double getEval() {
@@ -48,5 +63,13 @@ public class EngineLineDto {
 
     public void setMoves(String moves) {
         this.moves = moves;
+    }
+
+    public List<String> getPositions() {
+        return positions;
+    }
+
+    public void setPositions(List<String> positions) {
+        this.positions = positions != null ? positions : List.of();
     }
 }
