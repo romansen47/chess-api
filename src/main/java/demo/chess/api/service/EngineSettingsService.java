@@ -218,7 +218,7 @@ public class EngineSettingsService {
         result.setHashSize(128);
         result.setMultiPV(0);
         result.setContempt(0);
-        result.setMoveOverhead(1);
+        result.setMoveOverhead(0);
         result.setUciElo(0);
 
         return result;
@@ -251,9 +251,9 @@ public class EngineSettingsService {
         result.setContempt(clamp(safeIncoming.getContempt(), -1000, 1000, safeCurrent.getContempt()));
         result.setMoveOverhead(clamp(
                 safeIncoming.getMoveOverhead(),
-                1,
+                0,
                 3600,
-                Math.max(1, safeCurrent.getMoveOverhead())));
+                Math.max(0, safeCurrent.getMoveOverhead())));
         result.setUciElo(clamp(safeIncoming.getUciElo(), 0, 4000, safeCurrent.getUciElo()));
 
         return result;
