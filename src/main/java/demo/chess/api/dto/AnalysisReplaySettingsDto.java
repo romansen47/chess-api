@@ -2,6 +2,7 @@ package demo.chess.api.dto;
 
 public class AnalysisReplaySettingsDto {
 
+    private String enginePath;
     private int moveTimeSeconds;
     private int depth;
     private int threads;
@@ -14,6 +15,7 @@ public class AnalysisReplaySettingsDto {
     }
 
     public AnalysisReplaySettingsDto(
+            String enginePath,
             int moveTimeSeconds,
             int depth,
             int threads,
@@ -21,6 +23,7 @@ public class AnalysisReplaySettingsDto {
             int multiPV,
             int contempt,
             int uciElo) {
+        this.enginePath = enginePath;
         this.moveTimeSeconds = moveTimeSeconds;
         this.depth = depth;
         this.threads = threads;
@@ -28,6 +31,14 @@ public class AnalysisReplaySettingsDto {
         this.multiPV = multiPV;
         this.contempt = contempt;
         this.uciElo = uciElo;
+    }
+
+    public String getEnginePath() {
+        return enginePath;
+    }
+
+    public void setEnginePath(String enginePath) {
+        this.enginePath = enginePath;
     }
 
     public int getMoveTimeSeconds() {

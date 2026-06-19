@@ -56,7 +56,7 @@ public class AnalysisReplayService {
         List<Move> moveListSnapshot = gameService.getMoveListSnapshot();
         AnalysisReplaySettingsDto normalizedSettings = normalizeSettings(settings);
         UciEngineConfig engineConfig = toEngineConfig(normalizedSettings);
-        DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine();
+        DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine(normalizedSettings.getEnginePath());
 
         AnalysisReplaySession newSession = new AnalysisReplaySession(
                 moveListSnapshot,
@@ -168,6 +168,7 @@ public class AnalysisReplayService {
     private AnalysisReplaySettingsDto normalizeSettings(AnalysisReplaySettingsDto settings) {
         AnalysisReplaySettingsDto source = settings != null ? settings : new AnalysisReplaySettingsDto();
 
+        String enginePath = normalizeAnalysisEnginePath(source.getEnginePath());
         int moveTimeSeconds = source.getMoveTimeSeconds() > 0 ? source.getMoveTimeSeconds() : 5;
         int depth = Math.max(0, source.getDepth());
         int threads = source.getThreads() > 0 ? source.getThreads() : 1;
@@ -177,6 +178,7 @@ public class AnalysisReplayService {
         int uciElo = Math.max(0, source.getUciElo());
 
         return new AnalysisReplaySettingsDto(
+                enginePath,
                 moveTimeSeconds,
                 depth,
                 threads,
@@ -184,6 +186,18 @@ public class AnalysisReplayService {
                 multiPV,
                 contempt,
                 uciElo);
+    }
+
+    private String normalizeAnalysisEnginePath(String requestedPath) {
+        if (requestedPath == null || requestedPath.isBlank()) {
+            String configuredPath = engineSettingsService.getEvaluationEnginePath();
+            if (configuredPath == null || configuredPath.isBlank()) {
+                return engineSettingsService.getDefaultEnginePath();
+            }
+            return configuredPath.trim();
+        }
+
+        return requestedPath.trim();
     }
 
     private UciEngineConfig toEngineConfig(AnalysisReplaySettingsDto settings) {
@@ -198,12 +212,11 @@ public class AnalysisReplayService {
         return config;
     }
 
-    private DeepAnalysisEngine createDeepAnalysisEngine(){
-        String configuredPath = engineSettingsService.getEvaluationEnginePath();
+    private DeepAnalysisEngine createDeepAnalysisEngine(String requestedPath){
         String defaultPath = engineSettingsService.getDefaultEnginePath();
-        String effectivePath = configuredPath == null || configuredPath.isBlank()
+        String effectivePath = requestedPath == null || requestedPath.isBlank()
                 ? defaultPath
-                : configuredPath.trim();
+                : requestedPath.trim();
 
         try {
             return new DeepAnalysisUciEngine(effectivePath);
