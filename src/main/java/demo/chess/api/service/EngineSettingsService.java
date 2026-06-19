@@ -214,8 +214,8 @@ public class EngineSettingsService {
         UciEngineConfig result = new UciEngineConfig();
 
         result.setDepth(0);
-        result.setThreads(1);
-        result.setHashSize(128);
+        result.setThreads(8);
+        result.setHashSize(1024);
         result.setMultiPV(0);
         result.setContempt(0);
         result.setMoveOverhead(0);
