@@ -225,7 +225,9 @@ public class EvaluationService {
     private EvaluationEngine createEvaluationEngine(String enginePath) {
         logger.info("Initializing evaluation engine at path: " + enginePath);
         try {
-            return new EvaluationUciEngine(enginePath);
+            EvaluationUciEngine engine = new EvaluationUciEngine(enginePath);
+            engine.setManagementLabel("evaluation");
+            return engine;
         } catch (Exception e) {
             logger.error("Could not start evaluation engine: " + e.getMessage());
             e.printStackTrace();

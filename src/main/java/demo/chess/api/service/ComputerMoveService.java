@@ -218,7 +218,9 @@ public class ComputerMoveService {
     private PlayerEngine createPlayerEngine(String enginePath, String label) {
         logger.info("Initializing " + label + " engine at path: " + enginePath);
         try {
-            return new PlayerUciEngine(enginePath);
+            PlayerUciEngine engine = new PlayerUciEngine(enginePath);
+            engine.setManagementLabel(label);
+            return engine;
         } catch (Exception e) {
             logger.error("Could not start " + label + " engine: " + e.getMessage());
             e.printStackTrace();

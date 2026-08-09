@@ -219,14 +219,18 @@ public class AnalysisReplayService {
                 : requestedPath.trim();
 
         try {
-            return new DeepAnalysisUciEngine(effectivePath);
+            DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(effectivePath);
+            engine.setManagementLabel("deep analysis");
+            return engine;
         } catch (Exception ex) {
             if (defaultPath.equals(effectivePath)) {
                 throw new IllegalStateException("Could not start deep analysis engine at " + effectivePath, ex);
             }
 
             try {
-                return new DeepAnalysisUciEngine(defaultPath);
+                DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(defaultPath);
+                engine.setManagementLabel("deep analysis fallback");
+                return engine;
             } catch (Exception fallbackEx) {
                 throw new IllegalStateException("Could not start deep analysis engine at " + defaultPath, fallbackEx);
             }
