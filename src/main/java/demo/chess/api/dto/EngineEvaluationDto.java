@@ -15,6 +15,11 @@ public class EngineEvaluationDto {
     private double bar;
 
     /**
+     * UCI-Name der aktuell verwendeten Bewertungsengine.
+     */
+    private String engineName;
+
+    /**
      * Mehrere beste Varianten der Engine (MultiPV).
      */
     private List<EngineLineDto> lines;
@@ -42,6 +47,14 @@ public class EngineEvaluationDto {
 
     public void setBar(double bar) {
         this.bar = bar;
+    }
+
+    public String getEngineName() {
+        return engineName;
+    }
+
+    public void setEngineName(String engineName) {
+        this.engineName = engineName;
     }
 
     public List<EngineLineDto> getLines() {

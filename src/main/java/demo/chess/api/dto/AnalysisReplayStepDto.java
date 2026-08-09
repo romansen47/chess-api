@@ -14,6 +14,7 @@ public class AnalysisReplayStepDto {
     private double evaluation;
     private double bar;
     private int depth;
+    private String engineName;
     private BoardDto board;
     private List<AnalysisProfilePointDto> profile;
     private String message;
@@ -32,6 +33,7 @@ public class AnalysisReplayStepDto {
             double evaluation,
             double bar,
             int depth,
+            String engineName,
             BoardDto board,
             List<AnalysisProfilePointDto> profile,
             String message) {
@@ -45,6 +47,7 @@ public class AnalysisReplayStepDto {
         this.evaluation = evaluation;
         this.bar = bar;
         this.depth = depth;
+        this.engineName = engineName;
         this.board = board;
         this.profile = profile;
         this.message = message;
@@ -128,6 +131,14 @@ public class AnalysisReplayStepDto {
 
     public void setDepth(int depth) {
         this.depth = depth;
+    }
+
+    public String getEngineName() {
+        return engineName;
+    }
+
+    public void setEngineName(String engineName) {
+        this.engineName = engineName;
     }
 
     public BoardDto getBoard() {

@@ -170,6 +170,10 @@ public class EngineSettingsService {
         return getUciEngineName(evaluationEnginePath);
     }
 
+    public synchronized String getEngineName(String enginePath) {
+        return getUciEngineName(enginePath);
+    }
+
     public synchronized void setBlackPlayerEnginePath(String blackPlayerEnginePath) {
         this.blackPlayerEnginePath = normalizeEnginePath(blackPlayerEnginePath);
     }

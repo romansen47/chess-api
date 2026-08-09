@@ -59,13 +59,15 @@ public class AnalysisReplayService {
         List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
         AnalysisReplaySettingsDto normalizedSettings = normalizeSettings(settings);
         UciEngineConfig engineConfig = toEngineConfig(normalizedSettings);
-        DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine(normalizedSettings.getEnginePath());
+        DeepAnalysisEngineSelection engineSelection = createDeepAnalysisEngine(normalizedSettings.getEnginePath());
+        String engineName = engineSettingsService.getEngineName(engineSelection.enginePath);
 
         AnalysisReplaySession newSession = new AnalysisReplaySession(
                 moveListSnapshot,
                 Simulation.createSimulation(),
-                deepAnalysisEngine,
-                engineConfig);
+                engineSelection.engine,
+                engineConfig,
+                engineName);
 
         newSession.profile.add(new AnalysisProfilePointDto(
                 0,
@@ -215,7 +217,7 @@ public class AnalysisReplayService {
         return config;
     }
 
-    private DeepAnalysisEngine createDeepAnalysisEngine(String requestedPath){
+    private DeepAnalysisEngineSelection createDeepAnalysisEngine(String requestedPath){
         String defaultPath = engineSettingsService.getDefaultEnginePath();
         String effectivePath = requestedPath == null || requestedPath.isBlank()
                 ? defaultPath
@@ -224,7 +226,7 @@ public class AnalysisReplayService {
         try {
             DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(effectivePath);
             engine.setManagementLabel("deep analysis");
-            return engine;
+            return new DeepAnalysisEngineSelection(engine, effectivePath);
         } catch (Exception ex) {
             if (defaultPath.equals(effectivePath)) {
                 throw new IllegalStateException("Could not start deep analysis engine at " + effectivePath, ex);
@@ -233,7 +235,7 @@ public class AnalysisReplayService {
             try {
                 DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(defaultPath);
                 engine.setManagementLabel("deep analysis fallback");
-                return engine;
+                return new DeepAnalysisEngineSelection(engine, defaultPath);
             } catch (Exception fallbackEx) {
                 throw new IllegalStateException("Could not start deep analysis engine at " + defaultPath, fallbackEx);
             }
@@ -649,6 +651,7 @@ public class AnalysisReplayService {
                 0.5,
                 0,
                 null,
+                null,
                 List.of(),
                 message);
     }
@@ -675,6 +678,7 @@ public class AnalysisReplayService {
                 Math.round(evaluation * 100.0) / 100.0,
                 bar,
                 depth,
+                source.engineName,
                 board,
                 new ArrayList<>(source.profile),
                 message);
@@ -698,6 +702,16 @@ public class AnalysisReplayService {
         try {
             engine.stopEvaluation();
         } catch (Exception ignored) {
+        }
+    }
+
+    private static class DeepAnalysisEngineSelection {
+        private final DeepAnalysisEngine engine;
+        private final String enginePath;
+
+        private DeepAnalysisEngineSelection(DeepAnalysisEngine engine, String enginePath) {
+            this.engine = engine;
+            this.enginePath = enginePath;
         }
     }
 
@@ -730,6 +744,7 @@ public class AnalysisReplayService {
         private final Game replayGame;
         private final DeepAnalysisEngine engine;
         private final UciEngineConfig engineConfig;
+        private final String engineName;
         private final List<AnalysisProfilePointDto> profile = new ArrayList<>();
         private int currentPly = 0;
         private boolean active = true;
@@ -738,11 +753,13 @@ public class AnalysisReplayService {
                 List<Move> originalMoves,
                 Game replayGame,
                 DeepAnalysisEngine engine,
-                UciEngineConfig engineConfig) {
+                UciEngineConfig engineConfig,
+                String engineName) {
             this.originalMoves = originalMoves;
             this.replayGame = replayGame;
             this.engine = engine;
             this.engineConfig = engineConfig;
+            this.engineName = engineName;
         }
     }
 }

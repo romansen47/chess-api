@@ -111,7 +111,9 @@ public class EvaluationService {
             lines.add(new EngineLineDto(roundedEval, depth, mateDistance, movesSan));
         }
 
-        return new EngineEvaluationDto(eval, bar, lines);
+        EngineEvaluationDto result = new EngineEvaluationDto(eval, bar, lines);
+        result.setEngineName(engineSettingsService.getEvaluationEngineName());
+        return result;
     }
 
 
