@@ -37,15 +37,18 @@ public class AnalysisReplayService {
     private final GameService gameService;
     private final EngineSettingsService engineSettingsService;
     private final EvaluationService evaluationService;
+    private final UciGameService uciGameService;
     private AnalysisReplaySession session;
 
     public AnalysisReplayService(
             GameService gameService,
             EngineSettingsService engineSettingsService,
-            EvaluationService evaluationService) {
+            EvaluationService evaluationService,
+            UciGameService uciGameService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
         this.evaluationService = evaluationService;
+        this.uciGameService = uciGameService;
     }
 
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
@@ -53,7 +56,7 @@ public class AnalysisReplayService {
         closeSessionEngine();
         evaluationService.stopLiveEvaluation();
 
-        List<Move> moveListSnapshot = gameService.getMoveListSnapshot();
+        List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
         AnalysisReplaySettingsDto normalizedSettings = normalizeSettings(settings);
         UciEngineConfig engineConfig = toEngineConfig(normalizedSettings);
         DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine(normalizedSettings.getEnginePath());
