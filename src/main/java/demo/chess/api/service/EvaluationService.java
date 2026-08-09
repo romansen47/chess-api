@@ -3,12 +3,12 @@ package demo.chess.api.service;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineEvaluationDto;
 import demo.chess.api.dto.EngineLineDto;
 import demo.chess.definitions.engines.EngineConfig;
+import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.EvaluationEngine;
 import demo.chess.definitions.Color;
 import demo.chess.definitions.PieceType;
@@ -65,10 +65,10 @@ public class EvaluationService {
             lastSeenSettingsVersion = settingsVersion;
         }
 
-        List<Pair<Pair<Double, Integer>, String>> bestLines;
+        List<EngineLine> bestLines;
 
         try {
-            // List of ( (eval, depth), movesString ) – movesString im UCI-Format
+            // Engine-Lines mit Bewertung, Suchtiefe, optionaler Mattdistanz und UCI-Zugfolge
             bestLines = engine.getBestLines(game, engineConfig);
         } catch (Exception e) {
             logger.error("Engine error while getting best lines: " + e.getMessage());
@@ -86,14 +86,15 @@ public class EvaluationService {
         }
 
         // Hauptbewertung (erste Linie)
-        double eval = bestLines.get(0).getLeft().getLeft();
+        double eval = bestLines.get(0).getEvaluation();
         double bar = mapEvalToBar(eval);
 
         List<EngineLineDto> lines = new ArrayList<>();
-        for (Pair<Pair<Double, Integer>, String> line : bestLines) {
-            double lineEval = line.getLeft().getLeft();
-            int depth = line.getLeft().getRight();
-            String movesUci = line.getRight();
+        for (EngineLine line : bestLines) {
+            double lineEval = line.getEvaluation();
+            int depth = line.getDepth();
+            Integer mateDistance = line.getMateDistance();
+            String movesUci = line.getMoves();
             String movesSan;
 
             // UCI → SAN, Exceptions werden hier abgefangen
@@ -107,7 +108,7 @@ public class EvaluationService {
 
             double roundedEval = Math.round(lineEval * 100.0) / 100.0;
 
-            lines.add(new EngineLineDto(roundedEval, depth, movesSan));
+            lines.add(new EngineLineDto(roundedEval, depth, mateDistance, movesSan));
         }
 
         return new EngineEvaluationDto(eval, bar, lines);
@@ -133,23 +134,24 @@ public class EvaluationService {
             engine.clearChachedLines();
             engine.getBestLines(game, engineConfig);
             Thread.sleep(safeMoveTimeMillis);
-            List<Pair<Pair<Double, Integer>, String>> bestLines = engine.getBestLines(game, engineConfig);
+            List<EngineLine> bestLines = engine.getBestLines(game, engineConfig);
             engine.stopEvaluation();
 
             if (bestLines == null || bestLines.isEmpty()) {
                 return new EngineEvaluationDto(0.0, 0.5, List.of());
             }
 
-            double eval = bestLines.get(0).getLeft().getLeft();
+            double eval = bestLines.get(0).getEvaluation();
             double bar = mapEvalToBar(eval);
 
             List<EngineLineDto> lines = new ArrayList<>();
-            for (Pair<Pair<Double, Integer>, String> line : bestLines) {
-                double lineEval = line.getLeft().getLeft();
-                int depth = line.getLeft().getRight();
-                String movesUci = line.getRight();
+            for (EngineLine line : bestLines) {
+                double lineEval = line.getEvaluation();
+                int depth = line.getDepth();
+                Integer mateDistance = line.getMateDistance();
+                String movesUci = line.getMoves();
                 double roundedEval = Math.round(lineEval * 100.0) / 100.0;
-                lines.add(new EngineLineDto(roundedEval, depth, movesUci));
+                lines.add(new EngineLineDto(roundedEval, depth, mateDistance, movesUci));
             }
 
             return new EngineEvaluationDto(eval, bar, lines);

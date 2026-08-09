@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
-import org.apache.commons.lang3.tuple.Pair;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.AnalysisProfilePointDto;
@@ -17,6 +16,7 @@ import demo.chess.definitions.board.Board;
 import demo.chess.definitions.Color;
 import demo.chess.definitions.PieceType;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
+import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
@@ -245,7 +245,7 @@ public class AnalysisReplayService {
 
         try {
             source.engine.clearChachedLines();
-            List<Pair<Pair<Double, Integer>, String>> bestLines = source.engine.getBestLines(
+            List<EngineLine> bestLines = source.engine.getBestLines(
                     source.replayGame,
                     source.engineConfig);
 
@@ -253,15 +253,16 @@ public class AnalysisReplayService {
                 return new AnalysisEvaluation(0.0, 0.5, 0, List.of());
             }
 
-            double eval = bestLines.get(0).getLeft().getLeft();
+            double eval = bestLines.get(0).getEvaluation();
             double bar = mapEvalToBar(eval);
-            int depth = bestLines.get(0).getLeft().getRight();
+            int depth = bestLines.get(0).getDepth();
 
             List<EngineLineDto> lines = new ArrayList<>();
-            for (Pair<Pair<Double, Integer>, String> line : bestLines) {
-                double lineEval = line.getLeft().getLeft();
-                int lineDepth = line.getLeft().getRight();
-                String movesUci = line.getRight();
+            for (EngineLine line : bestLines) {
+                double lineEval = line.getEvaluation();
+                int lineDepth = line.getDepth();
+                Integer mateDistance = line.getMateDistance();
+                String movesUci = line.getMoves();
                 EngineLineDisplayData displayData = convertEngineLine(
                         Simulation.forkDummyFrom(source.replayGame.getMoveList()),
                         movesUci);
@@ -269,6 +270,7 @@ public class AnalysisReplayService {
                 lines.add(new EngineLineDto(
                         roundedEval,
                         lineDepth,
+                        mateDistance,
                         displayData.moves,
                         displayData.positions));
             }
