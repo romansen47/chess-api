@@ -688,11 +688,9 @@ public class AnalysisReplayService {
         if (session == null || session.engine == null) {
             return;
         }
+        // DeepAnalysisUciEngine.stopEvaluation() is terminal and closes the
+        // underlying UCI process. Avoid a second close/quit here.
         safeStop(session.engine);
-        try {
-            session.engine.close();
-        } catch (Exception ignored) {
-        }
     }
 
     private void safeStop(DeepAnalysisEngine engine) {
