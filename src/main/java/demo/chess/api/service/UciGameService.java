@@ -1,13 +1,16 @@
 package demo.chess.api.service;
 
 import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
-import demo.chess.admin.impl.ChessAdmin;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.api.dto.UciGameMoveDto;
 import demo.chess.definitions.Color;
@@ -16,38 +19,46 @@ import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Move;
 import demo.chess.definitions.pieces.Piece;
-import demo.chess.definitions.players.Player;
+import demo.chess.definitions.states.State;
+import demo.chess.game.DummyGame;
 import demo.chess.game.Game;
-import demo.chess.game.impl.ChessGame;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
+import demo.chess.notation.PgnNotation;
 import demo.chess.save.GameSaver;
 
 @Service
 public class UciGameService {
 
+    private static final DateTimeFormatter PGN_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy.MM.dd");
+
     private final GameService gameService;
+    private final EngineSettingsService engineSettingsService;
     private final GameLoader gameLoader = new GameLoader();
     private final GameSaver gameSaver = new GameSaver();
 
     /**
-     * Optional analysis-only game loaded from a UCI move file. It deliberately does
-     * not replace GameService's live game and therefore never starts the live clocks.
+     * Optional analysis-only game loaded from a PGN file. It deliberately does not
+     * replace GameService's live game and therefore never starts the live clocks.
      */
     private Game importedAnalysisGame;
+    private Map<String, String> importedPgnTags = new LinkedHashMap<>();
 
-    public UciGameService(GameService gameService) {
+    public UciGameService(GameService gameService, EngineSettingsService engineSettingsService) {
         this.gameService = gameService;
+        this.engineSettingsService = engineSettingsService;
     }
 
     public synchronized UciGameDto importGame(String content) throws NoMoveFoundException, IOException {
-        List<String> uciMoves = gameLoader.parseMoveList(content);
+        List<String> uciMoves = gameLoader.parsePgnMoveList(content);
 
         Simulation importedGame = Simulation.createSimulation();
         gameLoader.loadGame(uciMoves, importedGame);
 
         List<UciGameMoveDto> moveDtos = createMoveDtos(importedGame.getMoveList());
+        Map<String, String> pgnTags = new LinkedHashMap<>(gameLoader.parsePgnTags(content));
         this.importedAnalysisGame = importedGame;
+        this.importedPgnTags = pgnTags;
 
         String sideToMove = importedGame.getPlayer() != null && importedGame.getPlayer().getColor() != null
                 ? importedGame.getPlayer().getColor().name().toLowerCase(Locale.ROOT)
@@ -57,11 +68,16 @@ public class UciGameService {
                 importedGame.getMoveList().size(),
                 sideToMove,
                 toPositionString(importedGame),
-                moveDtos);
+                moveDtos,
+                playerName(pgnTags.get("White"), "White"),
+                playerName(pgnTags.get("Black"), "Black"));
     }
 
-    public synchronized String exportGame() {
-        return gameSaver.toUci(getAnalysisMoveListSnapshot());
+    public synchronized String exportGame(boolean whiteComputerControlled, boolean blackComputerControlled)
+            throws NoMoveFoundException, IOException {
+        return gameSaver.toPgn(
+                getAnalysisMoveListSnapshot(),
+                getPgnTagsForExport(whiteComputerControlled, blackComputerControlled));
     }
 
     public synchronized List<Move> getAnalysisMoveListSnapshot() {
@@ -77,49 +93,108 @@ public class UciGameService {
 
     public synchronized void clearImportedGame() {
         importedAnalysisGame = null;
+        importedPgnTags = new LinkedHashMap<>();
     }
 
     private List<UciGameMoveDto> createMoveDtos(List<Move> originalMoves)
             throws NoMoveFoundException, IOException {
         List<UciGameMoveDto> result = new ArrayList<>();
         Simulation replayGame = Simulation.createSimulation();
-        ChessGame notationGame = (ChessGame) new ChessAdmin().chessGame(GameService.DEFAULT_TIME_SECONDS);
-        notationGame.getWhitePlayer().setupClock(GameService.DEFAULT_TIME_SECONDS, 0, () -> { });
-        notationGame.getBlackPlayer().setupClock(GameService.DEFAULT_TIME_SECONDS, 0, () -> { });
+        DummyGame notationGame = Simulation.createDummySimulation();
 
-        try {
-            int ply = 0;
-            for (Move originalMove : originalMoves) {
-                ply++;
+        int ply = 0;
+        for (Move originalMove : originalMoves) {
+            ply++;
 
-                Move replayMove = replayGame.getPlayer().getMoveInSimulation(replayGame, originalMove);
-                Move notationMove = notationGame.getPlayer().getMoveInSimulation(notationGame, originalMove);
-                String san = notationGame.getShortAlgebraicNotatedMove(notationMove);
+            Move replayMove = replayGame.getPlayer().getMoveInSimulation(replayGame, originalMove);
+            Move notationMove = notationGame.getPlayer().getMoveInSimulation(notationGame, originalMove);
+            String san = PgnNotation.toDisplayNotation(notationGame, notationMove);
 
-                replayGame.apply(replayMove);
-                notationGame.apply(notationMove);
+            replayGame.apply(replayMove);
+            notationGame.apply(notationMove);
 
-                result.add(new UciGameMoveDto(
-                        ply,
-                        originalMove.toString(),
-                        san,
-                        toPositionString(replayGame)));
-            }
-        } finally {
-            stopClock(notationGame.getWhitePlayer());
-            stopClock(notationGame.getBlackPlayer());
+            result.add(new UciGameMoveDto(
+                    ply,
+                    originalMove.toString(),
+                    san,
+                    toPositionString(replayGame)));
         }
 
         return result;
     }
 
-    private void stopClock(Player player) {
-        if (player != null
-                && player.getChessClock() != null
-                && player.getChessClock().isStarted()
-                && !player.getChessClock().isStopped()) {
-            player.getChessClock().stop();
+    private Map<String, String> getPgnTagsForExport(
+            boolean whiteComputerControlled,
+            boolean blackComputerControlled) {
+        if (importedAnalysisGame != null) {
+            return new LinkedHashMap<>(importedPgnTags);
         }
+
+        Game game = gameService.getCurrentGame();
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("Event", "Chess Frontend");
+        tags.put("Site", "?");
+        tags.put("Date", LocalDate.now().format(PGN_DATE_FORMAT));
+        tags.put("Round", "-");
+        tags.put("White", playerNameForExport(game, Color.WHITE, whiteComputerControlled));
+        tags.put("Black", playerNameForExport(game, Color.BLACK, blackComputerControlled));
+        tags.put("Result", gameResult(game));
+
+        if (game != null && game.getIncrementForWhite() == game.getIncrementForBlack()) {
+            tags.put("TimeControl", game.getTimeForEachPlayer() + "+" + game.getIncrementForWhite());
+        }
+        return tags;
+    }
+
+    private String playerNameForExport(Game game, Color color, boolean computerControlled) {
+        String fallback = color == Color.WHITE ? "White" : "Black";
+
+        if (computerControlled) {
+            String engineName = color == Color.WHITE
+                    ? engineSettingsService.getWhitePlayerEngineName()
+                    : engineSettingsService.getBlackPlayerEngineName();
+            return playerName(engineName, fallback + " Engine");
+        }
+
+        String gamePlayerName = null;
+        if (game != null) {
+            gamePlayerName = color == Color.WHITE
+                    ? game.getWhitePlayer().getName()
+                    : game.getBlackPlayer().getName();
+        }
+        return playerName(gamePlayerName, fallback);
+    }
+
+    private String playerName(String name, String fallback) {
+        if (name == null || name.isBlank()
+                || "ChessGame".equals(name)
+                || "Simulation".equals(name)) {
+            return fallback;
+        }
+        return name;
+    }
+
+    private String gameResult(Game game) {
+        if (game == null || game.getState() == null) {
+            return "*";
+        }
+
+        State state = game.getState();
+        if (state == State.BLACK_MATED || state == State.BLACK_RESIGNED) {
+            return "1-0";
+        }
+        if (state == State.WHITE_MATED || state == State.WHITE_RESIGNED) {
+            return "0-1";
+        }
+        if (state == State.STALEMATE
+                || state == State.DRAW_BY_50_MOVES_RULE
+                || state == State.DRAW_BY_THREEFOLD_REPETITION) {
+            return "1/2-1/2";
+        }
+        if (state == State.LOST_ON_TIME && game.getPlayer() != null) {
+            return game.getPlayer().getColor() == Color.WHITE ? "0-1" : "1-0";
+        }
+        return "*";
     }
 
     private String toPositionString(Game game) {

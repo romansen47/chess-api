@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.GameSettingsDto;
@@ -58,26 +59,34 @@ public class GameController {
     }
 
     /**
-     * Exportiert die aktuelle Analysequelle als UCI-Zugliste. Wenn zuvor eine UCI-Datei
+     * Exportiert die aktuelle Analysequelle als PGN. Wenn zuvor eine PGN-Datei
      * geladen wurde, wird diese Partie exportiert; ansonsten die aktuell gespielte Partie.
      */
-    @GetMapping(value = "/game/uci", produces = MediaType.TEXT_PLAIN_VALUE)
-    public ResponseEntity<String> exportUciGame() {
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"game.uci\"")
-                .contentType(MediaType.TEXT_PLAIN)
-                .body(uciGameService.exportGame());
+    @GetMapping(value = "/game/pgn", produces = MediaType.TEXT_PLAIN_VALUE)
+    public ResponseEntity<?> exportPgnGame(
+            @RequestParam(name = "whiteComputer", defaultValue = "false") boolean whiteComputer,
+            @RequestParam(name = "blackComputer", defaultValue = "false") boolean blackComputer) {
+        try {
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"game.pgn\"")
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .body(uciGameService.exportGame(whiteComputer, blackComputer));
+        } catch (NoMoveFoundException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().body("I/O error while exporting PGN game");
+        }
     }
 
     /**
-     * Lädt eine UCI-Zugliste als separate, ruhende Analysepartie. Das aktuell laufende
+     * Lädt eine PGN-Partie als separate, ruhende Analysepartie. Das aktuell laufende
      * Game im GameService wird dabei nicht überschrieben.
      */
     @PostMapping(
-            value = "/game/uci",
+            value = "/game/pgn",
             consumes = MediaType.TEXT_PLAIN_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> importUciGame(@RequestBody(required = false) String content) {
+    public ResponseEntity<?> importPgnGame(@RequestBody(required = false) String content) {
         analysisReplayService.cancel();
 
         try {
@@ -86,7 +95,7 @@ public class GameController {
         } catch (NoMoveFoundException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (IOException e) {
-            return ResponseEntity.internalServerError().body("I/O error while importing UCI game");
+            return ResponseEntity.internalServerError().body("I/O error while importing PGN game");
         }
     }
 }
