@@ -41,7 +41,7 @@ public class EvaluationService {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
         this.currentEvaluationEnginePath = engineSettingsService.getEvaluationEnginePath();
-        this.evaluationEngine = createEvaluationEngineWithFallback(currentEvaluationEnginePath);
+        this.evaluationEngine = null;
     }
 
     /**
@@ -175,17 +175,17 @@ public class EvaluationService {
     }
 
     /**
-     * Stops and recreates the evaluation engine for a clean new-game boundary.
+     * Stops the evaluation engine for a clean new-game boundary.
      *
-     * The cached lines and settings version are reset as well, so the next evaluation
-     * request starts from the new game position with an empty cache.
+     * The engine is intentionally not recreated here. It is started lazily by the next
+     * evaluation request, so a disabled live evaluation stays disabled across a new game.
      */
     public synchronized void resetForNewGame() {
         logger.info("Resetting evaluation engine for new game");
 
         closeEvaluationEngine(evaluationEngine);
+        evaluationEngine = null;
         currentEvaluationEnginePath = engineSettingsService.getEvaluationEnginePath();
-        evaluationEngine = createEvaluationEngineWithFallback(currentEvaluationEnginePath);
         lastSeenSettingsVersion = -1L;
     }
 
