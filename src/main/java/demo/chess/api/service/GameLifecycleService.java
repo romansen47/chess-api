@@ -23,9 +23,10 @@ public class GameLifecycleService {
     /**
      * Starts a new game with a clean engine lifecycle boundary.
      *
-     * Existing player engines are stopped and recreated before the GameService swaps
-     * the current game instance. The evaluation engine is stopped and stays dormant
-     * until the next evaluation request. Player-engine reset is deliberately able to
+     * Existing player engines are stopped before the GameService swaps the current game
+     * instance and stay dormant until a computer move actually needs them. The evaluation
+     * engine is stopped and stays dormant until the next evaluation request.
+     * Player-engine reset is deliberately able to
      * cancel an in-flight computer move instead of waiting for it to finish.
      * GameService.applyMoveIfCurrent(...) protects the new game from stale results.
      */

@@ -41,8 +41,8 @@ public class ComputerMoveService {
 
         this.currentWhitePlayerEnginePath = engineSettingsService.getWhitePlayerEnginePath();
         this.currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
-        this.whitePlayerEngine = createPlayerEngineWithFallback(currentWhitePlayerEnginePath, "white player");
-        this.blackPlayerEngine = createPlayerEngineWithFallback(currentBlackPlayerEnginePath, "black player");
+        this.whitePlayerEngine = null;
+        this.blackPlayerEngine = null;
     }
 
     public MoveResultDto makeComputerMove() throws NoMoveFoundException, IOException, InterruptedException, ExecutionException {
@@ -98,11 +98,12 @@ public class ComputerMoveService {
     }
 
     /**
-     * Stops and recreates the long-lived player engines for a clean new-game boundary.
+     * Stops any existing player engines for a clean new-game boundary.
      *
      * A new game must be able to cancel a currently thinking engine instead of waiting
      * for the old move to finish. Engine generations invalidate in-flight computer
-     * moves before they can be applied to the current game.
+     * moves before they can be applied to the current game. Engines stay dormant until
+     * the next computer move actually needs them.
      */
     public synchronized void resetForNewGame() {
         logger.info("Resetting player engines for new game");
@@ -112,8 +113,8 @@ public class ComputerMoveService {
 
         currentWhitePlayerEnginePath = engineSettingsService.getWhitePlayerEnginePath();
         currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
-        whitePlayerEngine = createPlayerEngineWithFallback(currentWhitePlayerEnginePath, "white player");
-        blackPlayerEngine = createPlayerEngineWithFallback(currentBlackPlayerEnginePath, "black player");
+        whitePlayerEngine = null;
+        blackPlayerEngine = null;
         whitePlayerEngineGeneration++;
         blackPlayerEngineGeneration++;
 
@@ -122,15 +123,16 @@ public class ComputerMoveService {
     }
 
     /**
-     * Cancels a currently running computer move for the selected side by replacing the
-     * underlying UCI process and invalidating the in-flight engine generation.
+     * Cancels a currently running computer move for the selected side, closes the
+     * underlying UCI process and invalidates the in-flight engine generation. The
+     * engine stays stopped until a later computer move actually needs it again.
      */
     public synchronized void cancelPlayerEngine(Color color) {
         if (color == Color.WHITE) {
             logger.info("Cancelling white player engine");
             PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
             currentWhitePlayerEnginePath = engineSettingsService.getWhitePlayerEnginePath();
-            whitePlayerEngine = createPlayerEngineWithFallback(currentWhitePlayerEnginePath, "white player");
+            whitePlayerEngine = null;
             whitePlayerEngineGeneration++;
             closePlayerEngine(oldWhitePlayerEngine, "cancelled white player");
             return;
@@ -139,7 +141,7 @@ public class ComputerMoveService {
         logger.info("Cancelling black player engine");
         PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
         currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
-        blackPlayerEngine = createPlayerEngineWithFallback(currentBlackPlayerEnginePath, "black player");
+        blackPlayerEngine = null;
         blackPlayerEngineGeneration++;
         closePlayerEngine(oldBlackPlayerEngine, "cancelled black player");
     }
@@ -155,7 +157,7 @@ public class ComputerMoveService {
     private synchronized PlayerEngineSnapshot getPlayerEngineSnapshot(Color color) {
         if (color == Color.WHITE) {
             String configuredPath = engineSettingsService.getWhitePlayerEnginePath();
-            if (!configuredPath.equals(currentWhitePlayerEnginePath)) {
+            if (whitePlayerEngine == null || !configuredPath.equals(currentWhitePlayerEnginePath)) {
                 PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
                 currentWhitePlayerEnginePath = configuredPath;
                 whitePlayerEngine = createPlayerEngineWithFallback(configuredPath, "white player");
@@ -169,7 +171,7 @@ public class ComputerMoveService {
         }
 
         String configuredPath = engineSettingsService.getBlackPlayerEnginePath();
-        if (!configuredPath.equals(currentBlackPlayerEnginePath)) {
+        if (blackPlayerEngine == null || !configuredPath.equals(currentBlackPlayerEnginePath)) {
             PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
             currentBlackPlayerEnginePath = configuredPath;
             blackPlayerEngine = createPlayerEngineWithFallback(configuredPath, "black player");
