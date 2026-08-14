@@ -7,6 +7,8 @@ public class GameSettingsDto {
     private int incrementForBlackSeconds;
     private int additionalTimeAfter40MovesSeconds;
     private String startingColor;
+    private String whiteEngineConfigId;
+    private String blackEngineConfigId;
     private long version;
 
     public GameSettingsDto() {
@@ -18,11 +20,32 @@ public class GameSettingsDto {
             int additionalTimeAfter40MovesSeconds,
             String startingColor,
             long version) {
+        this(
+                timeForEachPlayerSeconds,
+                incrementForWhiteSeconds,
+                incrementForBlackSeconds,
+                additionalTimeAfter40MovesSeconds,
+                startingColor,
+                null,
+                null,
+                version);
+    }
+
+    public GameSettingsDto(int timeForEachPlayerSeconds,
+            int incrementForWhiteSeconds,
+            int incrementForBlackSeconds,
+            int additionalTimeAfter40MovesSeconds,
+            String startingColor,
+            String whiteEngineConfigId,
+            String blackEngineConfigId,
+            long version) {
         this.timeForEachPlayerSeconds = timeForEachPlayerSeconds;
         this.incrementForWhiteSeconds = incrementForWhiteSeconds;
         this.incrementForBlackSeconds = incrementForBlackSeconds;
         this.additionalTimeAfter40MovesSeconds = additionalTimeAfter40MovesSeconds;
         this.startingColor = startingColor;
+        this.whiteEngineConfigId = whiteEngineConfigId;
+        this.blackEngineConfigId = blackEngineConfigId;
         this.version = version;
     }
 
@@ -64,6 +87,22 @@ public class GameSettingsDto {
 
     public void setStartingColor(String startingColor) {
         this.startingColor = startingColor;
+    }
+
+    public String getWhiteEngineConfigId() {
+        return whiteEngineConfigId;
+    }
+
+    public void setWhiteEngineConfigId(String whiteEngineConfigId) {
+        this.whiteEngineConfigId = whiteEngineConfigId;
+    }
+
+    public String getBlackEngineConfigId() {
+        return blackEngineConfigId;
+    }
+
+    public void setBlackEngineConfigId(String blackEngineConfigId) {
+        this.blackEngineConfigId = blackEngineConfigId;
     }
 
     public long getVersion() {

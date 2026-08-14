@@ -201,29 +201,10 @@ public class EvaluationService {
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
             closeEvaluationEngine(evaluationEngine);
             currentEvaluationEnginePath = configuredPath;
-            evaluationEngine = createEvaluationEngineWithFallback(configuredPath);
+            evaluationEngine = createEvaluationEngine(configuredPath);
             lastSeenSettingsVersion = -1L;
         }
         return evaluationEngine;
-    }
-
-    private EvaluationEngine createEvaluationEngineWithFallback(String requestedPath) {
-        String defaultPath = engineSettingsService.getDefaultEnginePath();
-        String effectiveRequestedPath = requestedPath == null || requestedPath.isBlank()
-                ? defaultPath
-                : requestedPath.trim();
-
-        try {
-            return createEvaluationEngine(effectiveRequestedPath);
-        } catch (RuntimeException ex) {
-            if (defaultPath.equals(effectiveRequestedPath)) {
-                throw ex;
-            }
-
-            logger.warn("Falling back to Stockfish for evaluation after failing to start "
-                    + effectiveRequestedPath + ": " + ex.getMessage());
-            return createEvaluationEngine(defaultPath);
-        }
     }
 
     private EvaluationEngine createEvaluationEngine(String enginePath) {

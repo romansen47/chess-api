@@ -1,28 +1,18 @@
 package demo.chess.api.dto;
 
-import demo.chess.definitions.engines.UciEngineConfig;
-
 /**
- * REST-/UI-Sicht auf einen konkreten Engine-Slot.
- *
- * Ein Slot beschreibt eine Rolle der Engine-Einbindung, z.B. Weiß-Spieler,
- * Schwarz-Spieler oder Bewertungsengine. Jeder Slot besitzt einen eigenen Pfad
- * und eine eigene UCI-Konfiguration.
+ * Legacy slot DTO kept only so older clients can be migrated independently.
+ * New game/player assignment is based on engineConfigId.
  */
+@Deprecated
 public class UciEngineSlotSettingsDto {
 
     private String displayName;
     private String enginePath;
-    private UciEngineSettingsDto settings;
+    private String engineConfigId;
+    private UciEngineSettingsDto settings = new UciEngineSettingsDto();
 
     public UciEngineSlotSettingsDto() {
-        this.settings = new UciEngineSettingsDto();
-    }
-
-    public UciEngineSlotSettingsDto(String displayName, String enginePath, UciEngineConfig config) {
-        this.displayName = displayName;
-        this.enginePath = enginePath;
-        this.settings = new UciEngineSettingsDto(config);
     }
 
     public String getDisplayName() {
@@ -39,6 +29,14 @@ public class UciEngineSlotSettingsDto {
 
     public void setEnginePath(String enginePath) {
         this.enginePath = enginePath;
+    }
+
+    public String getEngineConfigId() {
+        return engineConfigId;
+    }
+
+    public void setEngineConfigId(String engineConfigId) {
+        this.engineConfigId = engineConfigId;
     }
 
     public UciEngineSettingsDto getSettings() {

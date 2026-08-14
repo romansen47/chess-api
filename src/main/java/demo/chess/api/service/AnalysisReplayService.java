@@ -18,6 +18,7 @@ import demo.chess.definitions.PieceType;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
+import demo.chess.definitions.engines.UciEngineInspector;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.fields.Field;
@@ -59,8 +60,8 @@ public class AnalysisReplayService {
         List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
         AnalysisReplaySettingsDto normalizedSettings = normalizeSettings(settings);
         UciEngineConfig engineConfig = toEngineConfig(normalizedSettings);
-        DeepAnalysisEngineSelection engineSelection = createDeepAnalysisEngine(normalizedSettings.getEnginePath());
-        String engineName = engineSettingsService.getEngineName(engineSelection.enginePath);
+        DeepAnalysisEngineSelection engineSelection = createDeepAnalysisEngine(engineConfig.getEngine());
+        String engineName = engineConfig.getEngineName();
 
         AnalysisReplaySession newSession = new AnalysisReplaySession(
                 moveListSnapshot,
@@ -205,40 +206,43 @@ public class AnalysisReplayService {
         return requestedPath.trim();
     }
 
-    private UciEngineConfig toEngineConfig(AnalysisReplaySettingsDto settings) {
-        UciEngineConfig config = new UciEngineConfig();
-        config.setDepth(settings.getDepth());
-        config.setThreads(settings.getThreads());
-        config.setHashSize(settings.getHashSize());
-        config.setMultiPV(settings.getMultiPV());
-        config.setContempt(settings.getContempt());
-        config.setMoveOverhead(settings.getMoveTimeSeconds());
-        config.setUciElo(settings.getUciElo());
-        return config;
+    private UciEngineConfig toEngineConfig(AnalysisReplaySettingsDto settings) throws IOException {
+        try {
+            UciEngineConfig config = UciEngineInspector.inspect(settings.getEnginePath());
+            config.setDepth(settings.getDepth());
+            config.setMoveTimeSeconds(settings.getMoveTimeSeconds());
+            setOptionIfPresent(config, "Threads", Integer.toString(settings.getThreads()));
+            setOptionIfPresent(config, "Hash", Integer.toString(settings.getHashSize()));
+            setOptionIfPresent(config, "MultiPV", Integer.toString(settings.getMultiPV()));
+            if (settings.getContempt() != 0) {
+                setOptionIfPresent(config, "Contempt", Integer.toString(settings.getContempt()));
+            }
+            if (settings.getUciElo() > 0) {
+                setOptionIfPresent(config, "UCI_LimitStrength", "true");
+                setOptionIfPresent(config, "UCI_Elo", Integer.toString(settings.getUciElo()));
+            }
+            return config;
+        } catch (Exception e) {
+            throw new IOException("Could not inspect analysis engine at " + settings.getEnginePath(), e);
+        }
     }
 
-    private DeepAnalysisEngineSelection createDeepAnalysisEngine(String requestedPath){
-        String defaultPath = engineSettingsService.getDefaultEnginePath();
-        String effectivePath = requestedPath == null || requestedPath.isBlank()
-                ? defaultPath
-                : requestedPath.trim();
+    private void setOptionIfPresent(UciEngineConfig config, String name, String value) {
+        if (config.getOption(name) != null && config.getOption(name).isConfigurable()) {
+            config.setOptionValue(name, value);
+        }
+    }
 
+    private DeepAnalysisEngineSelection createDeepAnalysisEngine(String enginePath) {
+        String effectivePath = enginePath == null || enginePath.isBlank()
+                ? engineSettingsService.getEvaluationEnginePath()
+                : enginePath.trim();
         try {
             DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(effectivePath);
             engine.setManagementLabel("deep analysis");
             return new DeepAnalysisEngineSelection(engine, effectivePath);
         } catch (Exception ex) {
-            if (defaultPath.equals(effectivePath)) {
-                throw new IllegalStateException("Could not start deep analysis engine at " + effectivePath, ex);
-            }
-
-            try {
-                DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(defaultPath);
-                engine.setManagementLabel("deep analysis fallback");
-                return new DeepAnalysisEngineSelection(engine, defaultPath);
-            } catch (Exception fallbackEx) {
-                throw new IllegalStateException("Could not start deep analysis engine at " + defaultPath, fallbackEx);
-            }
+            throw new IllegalStateException("Could not start deep analysis engine at " + effectivePath, ex);
         }
     }
 

@@ -156,31 +156,33 @@ public class ComputerMoveService {
 
     private synchronized PlayerEngineSnapshot getPlayerEngineSnapshot(Color color) {
         if (color == Color.WHITE) {
-            String configuredPath = engineSettingsService.getWhitePlayerEnginePath();
+            EngineConfig config = engineSettingsService.getWhitePlayerConfig();
+            String configuredPath = config.getEngine();
             if (whitePlayerEngine == null || !configuredPath.equals(currentWhitePlayerEnginePath)) {
                 PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
                 currentWhitePlayerEnginePath = configuredPath;
-                whitePlayerEngine = createPlayerEngineWithFallback(configuredPath, "white player");
+                whitePlayerEngine = createPlayerEngine(configuredPath, "white player");
                 whitePlayerEngineGeneration++;
                 closePlayerEngine(oldWhitePlayerEngine, "white player");
             }
             return new PlayerEngineSnapshot(
                     whitePlayerEngine,
-                    engineSettingsService.getWhitePlayerConfig(),
+                    config,
                     whitePlayerEngineGeneration);
         }
 
-        String configuredPath = engineSettingsService.getBlackPlayerEnginePath();
+        EngineConfig config = engineSettingsService.getBlackPlayerConfig();
+        String configuredPath = config.getEngine();
         if (blackPlayerEngine == null || !configuredPath.equals(currentBlackPlayerEnginePath)) {
             PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
             currentBlackPlayerEnginePath = configuredPath;
-            blackPlayerEngine = createPlayerEngineWithFallback(configuredPath, "black player");
+            blackPlayerEngine = createPlayerEngine(configuredPath, "black player");
             blackPlayerEngineGeneration++;
             closePlayerEngine(oldBlackPlayerEngine, "black player");
         }
         return new PlayerEngineSnapshot(
                 blackPlayerEngine,
-                engineSettingsService.getBlackPlayerConfig(),
+                config,
                 blackPlayerEngineGeneration);
     }
 
@@ -196,25 +198,6 @@ public class ComputerMoveService {
         String gameState = game != null && game.getState() != null ? game.getState().name() : null;
         return new MoveResultDto(false, COMPUTER_MOVE_CANCELLED_MESSAGE, null, null, null, sideToMove,
                 gameService.getCurrentPositionString(), gameState);
-    }
-
-    private PlayerEngine createPlayerEngineWithFallback(String requestedPath, String label) {
-        String defaultPath = engineSettingsService.getDefaultEnginePath();
-        String effectiveRequestedPath = requestedPath == null || requestedPath.isBlank()
-                ? defaultPath
-                : requestedPath.trim();
-
-        try {
-            return createPlayerEngine(effectiveRequestedPath, label);
-        } catch (RuntimeException ex) {
-            if (defaultPath.equals(effectiveRequestedPath)) {
-                throw ex;
-            }
-
-            logger.warn("Falling back to Stockfish for " + label + " after failing to start "
-                    + effectiveRequestedPath + ": " + ex.getMessage());
-            return createPlayerEngine(defaultPath, label + " fallback");
-        }
     }
 
     private PlayerEngine createPlayerEngine(String enginePath, String label) {

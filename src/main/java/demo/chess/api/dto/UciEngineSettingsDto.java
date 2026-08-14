@@ -1,91 +1,46 @@
 package demo.chess.api.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-
-import demo.chess.definitions.engines.UciEngineConfig;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
- * REST-/UI-Sicht auf eine UCI-Engine-Konfiguration.
- *
- * Fachlich trägt diese Klasse eine UciEngineConfig und delegiert die einzelnen
- * Konfigurationswerte nur an diese Instanz. Im JSON erscheint die Konfiguration
- * trotzdem flach, z.B. { "depth": 18, "threads": 1, ... }.
+ * Legacy transport shape kept for source compatibility. New code uses
+ * ManagedEngineConfigDto and the /api/engine-configs endpoints.
  */
+@Deprecated
 public class UciEngineSettingsDto {
 
-    @JsonIgnore
-    private UciEngineConfig config;
+    private int depth;
+    private int moveTimeSeconds;
+    private Map<String, UciOptionDto> options = new LinkedHashMap<>();
 
     public UciEngineSettingsDto() {
-        this.config = new UciEngineConfig();
-    }
-
-    public UciEngineSettingsDto(UciEngineConfig config) {
-        this.config = config != null ? config : new UciEngineConfig();
-    }
-
-    @JsonIgnore
-    public UciEngineConfig getConfig() {
-        return config;
-    }
-
-    public void setConfig(UciEngineConfig config) {
-        this.config = config != null ? config : new UciEngineConfig();
     }
 
     public int getDepth() {
-        return config.getDepth();
+        return depth;
     }
 
     public void setDepth(int depth) {
-        config.setDepth(depth);
+        this.depth = depth;
     }
 
-    public int getThreads() {
-        return config.getThreads();
+    public int getMoveTimeSeconds() {
+        return moveTimeSeconds;
     }
 
-    public void setThreads(Integer threads) {
-        config.setThreads(threads);
+    public void setMoveTimeSeconds(int moveTimeSeconds) {
+        this.moveTimeSeconds = moveTimeSeconds;
     }
 
-    public int getHashSize() {
-        return config.getHashSize();
+    public Map<String, UciOptionDto> getOptions() {
+        if (options == null) {
+            options = new LinkedHashMap<>();
+        }
+        return options;
     }
 
-    public void setHashSize(Integer hashSize) {
-        config.setHashSize(hashSize);
-    }
-
-    public int getMultiPV() {
-        return config.getMultiPV();
-    }
-
-    public void setMultiPV(Integer multiPV) {
-        config.setMultiPV(multiPV);
-    }
-
-    public int getContempt() {
-        return config.getContempt();
-    }
-
-    public void setContempt(Integer contempt) {
-        config.setContempt(contempt);
-    }
-
-    public int getMoveOverhead() {
-        return config.getMoveOverhead();
-    }
-
-    public void setMoveOverhead(Integer moveOverhead) {
-        config.setMoveOverhead(moveOverhead);
-    }
-
-    public int getUciElo() {
-        return config.getUciElo();
-    }
-
-    public void setUciElo(Integer uciElo) {
-        config.setUciElo(uciElo);
+    public void setOptions(Map<String, UciOptionDto> options) {
+        this.options = options != null ? new LinkedHashMap<>(options) : new LinkedHashMap<>();
     }
 }

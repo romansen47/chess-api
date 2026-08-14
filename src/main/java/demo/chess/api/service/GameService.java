@@ -39,6 +39,8 @@ public class GameService {
      * Aktuelles Spiel. Für den Moment arbeiten wir mit genau einer Partie,
      * die beim Start der Anwendung erzeugt wird.
      */
+    private final EngineSettingsService engineSettingsService;
+
     private Game game;
 
     /**
@@ -46,8 +48,12 @@ public class GameService {
      */
     private GameSettingsDto gameSettings;
 
-    public GameService() {
+    public GameService(EngineSettingsService engineSettingsService) {
+        this.engineSettingsService = engineSettingsService;
         this.gameSettings = createDefaultGameSettings();
+        this.engineSettingsService.setPlayerConfigIds(
+                this.gameSettings.getWhiteEngineConfigId(),
+                this.gameSettings.getBlackEngineConfigId());
         this.game = createGame(
                 this.gameSettings.getTimeForEachPlayerSeconds(),
                 this.gameSettings.getIncrementForWhiteSeconds(),
@@ -69,6 +75,9 @@ public class GameService {
         GameSettingsDto normalizedSettings = normalizeGameSettings(settings);
 
         this.gameSettings = normalizedSettings;
+        this.engineSettingsService.setPlayerConfigIds(
+                normalizedSettings.getWhiteEngineConfigId(),
+                normalizedSettings.getBlackEngineConfigId());
         this.game = createGame(
                 normalizedSettings.getTimeForEachPlayerSeconds(),
                 normalizedSettings.getIncrementForWhiteSeconds(),
@@ -92,12 +101,15 @@ public class GameService {
     }
 
     private GameSettingsDto createDefaultGameSettings() {
+        String defaultConfigId = engineSettingsService.getDefaultPlayerConfigId();
         return new GameSettingsDto(
                 DEFAULT_TIME_SECONDS,
                 DEFAULT_INCREMENT_SECONDS,
                 DEFAULT_INCREMENT_SECONDS,
                 0,
                 "WHITE",
+                defaultConfigId,
+                defaultConfigId,
                 0);
     }
 
@@ -119,12 +131,17 @@ public class GameService {
 
         long nextVersion = this.gameSettings != null ? this.gameSettings.getVersion() + 1 : 1;
 
+        String whiteEngineConfigId = engineSettingsService.normalizePlayerConfigId(source.getWhiteEngineConfigId());
+        String blackEngineConfigId = engineSettingsService.normalizePlayerConfigId(source.getBlackEngineConfigId());
+
         return new GameSettingsDto(
                 timeForEachPlayerSeconds,
                 incrementForWhiteSeconds,
                 incrementForBlackSeconds,
                 additionalTimeAfter40MovesSeconds,
                 startingColor,
+                whiteEngineConfigId,
+                blackEngineConfigId,
                 nextVersion);
     }
 
@@ -139,6 +156,8 @@ public class GameService {
                 settings.getIncrementForBlackSeconds(),
                 settings.getAdditionalTimeAfter40MovesSeconds(),
                 settings.getStartingColor(),
+                settings.getWhiteEngineConfigId(),
+                settings.getBlackEngineConfigId(),
                 settings.getVersion());
     }
 
