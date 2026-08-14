@@ -34,7 +34,10 @@ public class EngineSettingsController {
     @PostMapping("/inspect")
     public ResponseEntity<ManagedEngineConfigDto> inspectEngine(
             @RequestBody EngineConfigInspectRequestDto request) {
-        return ResponseEntity.ok(engineSettingsService.inspectEngine(request.getEngine(), request.getName()));
+        return ResponseEntity.ok(engineSettingsService.inspectEngine(
+                request.getEngine(),
+                request.getName(),
+                request.getType()));
     }
 
     @PostMapping

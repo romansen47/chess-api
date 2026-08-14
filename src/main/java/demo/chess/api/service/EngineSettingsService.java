@@ -22,6 +22,7 @@ import demo.chess.api.dto.EngineConfigStoreDto;
 import demo.chess.api.dto.ManagedEngineConfigDto;
 import demo.chess.api.dto.UciOptionDto;
 import demo.chess.definitions.engines.Engine;
+import demo.chess.definitions.engines.EngineConfigType;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.UciEngineInspector;
 import demo.chess.definitions.engines.UciOption;
@@ -31,8 +32,8 @@ import demo.chess.definitions.engines.UciOptionType;
  * Central registry for named, reusable UCI engine configurations.
  *
  * A configuration is created from one concrete executable by running a UCI
- * handshake once. The executable path inside UciEngineConfig is immutable;
- * changing the engine therefore means creating a new configuration.
+ * handshake once. Both the executable and the configuration type are immutable;
+ * another engine or another purpose therefore means creating another config.
  */
 @Service
 public class EngineSettingsService {
@@ -66,25 +67,38 @@ public class EngineSettingsService {
 
         this.whitePlayerConfigId = defaultPlayerConfigId;
         this.blackPlayerConfigId = defaultPlayerConfigId;
-        this.evaluationConfigId = resolveConfigId(evaluationConfigId, defaultEvaluationConfigId);
+        this.evaluationConfigId = resolveConfigId(
+                evaluationConfigId,
+                defaultEvaluationConfigId,
+                EngineConfigType.EVALUATION);
     }
 
     public synchronized EngineConfigOverviewDto getOverview() {
         List<ManagedEngineConfigDto> result = configs.values().stream()
                 .map(this::toDto)
-                .sorted(Comparator.comparing(ManagedEngineConfigDto::getName, String.CASE_INSENSITIVE_ORDER))
+                .sorted(Comparator
+                        .comparing(ManagedEngineConfigDto::getType)
+                        .thenComparing(ManagedEngineConfigDto::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         return new EngineConfigOverviewDto(result, evaluationConfigId, defaultPlayerConfigId, version);
     }
 
-    public synchronized ManagedEngineConfigDto inspectEngine(String enginePath, String requestedName) {
+    public synchronized ManagedEngineConfigDto inspectEngine(
+            String enginePath,
+            String requestedName,
+            String typeValue) {
+        EngineConfigType type = EngineConfigType.fromValue(typeValue);
         try {
-            UciEngineConfig inspected = UciEngineInspector.inspect(enginePath);
-            ManagedEngineConfigDto result = toDto(new ManagedConfig(null, displayName(requestedName, inspected), inspected));
+            UciEngineConfig inspected = UciEngineInspector.inspect(enginePath, type);
+            ManagedEngineConfigDto result = toDto(new ManagedConfig(
+                    null,
+                    displayName(requestedName, inspected),
+                    inspected));
             result.setId(null);
             return result;
         } catch (Exception e) {
-            throw new IllegalArgumentException("Could not inspect UCI engine at " + enginePath + ": " + e.getMessage(), e);
+            throw new IllegalArgumentException(
+                    "Could not inspect UCI engine at " + enginePath + ": " + e.getMessage(), e);
         }
     }
 
@@ -113,6 +127,11 @@ public class EngineSettingsService {
         if (incoming.getEngine() == null || !existing.config.getEngine().equals(incoming.getEngine().trim())) {
             throw new IllegalArgumentException(
                     "The engine of an existing configuration is immutable. Create a new configuration for another engine.");
+        }
+        EngineConfigType incomingType = EngineConfigType.fromValue(incoming.getType());
+        if (existing.config.getType() != incomingType) {
+            throw new IllegalArgumentException(
+                    "The type of an existing configuration is immutable. Create a new configuration for another purpose.");
         }
 
         UciEngineConfig updated = existing.config.copy();
@@ -164,7 +183,10 @@ public class EngineSettingsService {
     }
 
     public synchronized String setEvaluationConfigId(String configId) {
-        String resolved = resolveConfigId(configId, defaultEvaluationConfigId);
+        String resolved = resolveConfigId(
+                configId,
+                defaultEvaluationConfigId,
+                EngineConfigType.EVALUATION);
         if (!resolved.equals(evaluationConfigId)) {
             evaluationConfigId = resolved;
             evaluationVersion++;
@@ -175,8 +197,14 @@ public class EngineSettingsService {
     }
 
     public synchronized void setPlayerConfigIds(String whiteConfigId, String blackConfigId) {
-        String resolvedWhite = resolveConfigId(whiteConfigId, defaultPlayerConfigId);
-        String resolvedBlack = resolveConfigId(blackConfigId, defaultPlayerConfigId);
+        String resolvedWhite = resolveConfigId(
+                whiteConfigId,
+                defaultPlayerConfigId,
+                EngineConfigType.PLAYER);
+        String resolvedBlack = resolveConfigId(
+                blackConfigId,
+                defaultPlayerConfigId,
+                EngineConfigType.PLAYER);
 
         if (!resolvedWhite.equals(whitePlayerConfigId)) {
             whitePlayerConfigId = resolvedWhite;
@@ -189,7 +217,7 @@ public class EngineSettingsService {
     }
 
     public synchronized String normalizePlayerConfigId(String configId) {
-        return resolveConfigId(configId, defaultPlayerConfigId);
+        return resolveConfigId(configId, defaultPlayerConfigId, EngineConfigType.PLAYER);
     }
 
     public synchronized String getDefaultPlayerConfigId() {
@@ -209,43 +237,43 @@ public class EngineSettingsService {
     }
 
     public synchronized UciEngineConfig getConfig(String id) {
-        return requireManagedConfig(resolveConfigId(id, defaultPlayerConfigId)).config.copy();
+        return requireManagedConfig(id).config.copy();
     }
 
     public synchronized UciEngineConfig getWhitePlayerConfig() {
-        return requireManagedConfig(whitePlayerConfigId).config.copy();
+        return requireManagedConfig(whitePlayerConfigId, EngineConfigType.PLAYER).config.copy();
     }
 
     public synchronized UciEngineConfig getBlackPlayerConfig() {
-        return requireManagedConfig(blackPlayerConfigId).config.copy();
+        return requireManagedConfig(blackPlayerConfigId, EngineConfigType.PLAYER).config.copy();
     }
 
     public synchronized UciEngineConfig toEvaluationEngineConfig() {
-        return requireManagedConfig(evaluationConfigId).config.copy();
+        return requireManagedConfig(evaluationConfigId, EngineConfigType.EVALUATION).config.copy();
     }
 
     public synchronized String getWhitePlayerEnginePath() {
-        return requireManagedConfig(whitePlayerConfigId).config.getEngine();
+        return requireManagedConfig(whitePlayerConfigId, EngineConfigType.PLAYER).config.getEngine();
     }
 
     public synchronized String getBlackPlayerEnginePath() {
-        return requireManagedConfig(blackPlayerConfigId).config.getEngine();
+        return requireManagedConfig(blackPlayerConfigId, EngineConfigType.PLAYER).config.getEngine();
     }
 
     public synchronized String getEvaluationEnginePath() {
-        return requireManagedConfig(evaluationConfigId).config.getEngine();
+        return requireManagedConfig(evaluationConfigId, EngineConfigType.EVALUATION).config.getEngine();
     }
 
     public synchronized String getWhitePlayerEngineName() {
-        return requireManagedConfig(whitePlayerConfigId).config.getEngineName();
+        return requireManagedConfig(whitePlayerConfigId, EngineConfigType.PLAYER).config.getEngineName();
     }
 
     public synchronized String getBlackPlayerEngineName() {
-        return requireManagedConfig(blackPlayerConfigId).config.getEngineName();
+        return requireManagedConfig(blackPlayerConfigId, EngineConfigType.PLAYER).config.getEngineName();
     }
 
     public synchronized String getEvaluationEngineName() {
-        return requireManagedConfig(evaluationConfigId).config.getEngineName();
+        return requireManagedConfig(evaluationConfigId, EngineConfigType.EVALUATION).config.getEngineName();
     }
 
     public synchronized String getEngineName(String enginePath) {
@@ -257,7 +285,7 @@ public class EngineSettingsService {
             }
         }
         try {
-            return UciEngineInspector.inspect(enginePath).getEngineName();
+            return UciEngineInspector.inspect(enginePath, EngineConfigType.PLAYER).getEngineName();
         } catch (Exception e) {
             return fallbackEngineName(enginePath);
         }
@@ -287,6 +315,7 @@ public class EngineSettingsService {
         if (dto.getEngine() == null || dto.getEngine().isBlank()) {
             throw new IllegalArgumentException("Engine path must not be blank");
         }
+        EngineConfigType configType = EngineConfigType.fromValue(dto.getType());
 
         LinkedHashMap<String, UciOption> options = new LinkedHashMap<>();
         for (Map.Entry<String, UciOptionDto> entry : dto.getOptions().entrySet()) {
@@ -294,9 +323,9 @@ public class EngineSettingsService {
             if (source == null) {
                 continue;
             }
-            UciOptionType type = UciOptionType.fromUciValue(source.getType());
+            UciOptionType optionType = UciOptionType.fromUciValue(source.getType());
             options.put(entry.getKey(), new UciOption(
-                    type,
+                    optionType,
                     source.getDefaultValue(),
                     source.getValue(),
                     source.getMin(),
@@ -305,6 +334,7 @@ public class EngineSettingsService {
         }
 
         UciEngineConfig result = new UciEngineConfig(
+                configType,
                 dto.getEngine(),
                 dto.getEngineName(),
                 dto.getEngineAuthor(),
@@ -318,6 +348,7 @@ public class EngineSettingsService {
         ManagedEngineConfigDto dto = new ManagedEngineConfigDto();
         dto.setId(managed.id);
         dto.setName(managed.name);
+        dto.setType(managed.config.getType().name());
         dto.setEngine(managed.config.getEngine());
         dto.setEngineName(managed.config.getEngineName());
         dto.setEngineAuthor(managed.config.getEngineAuthor());
@@ -340,24 +371,32 @@ public class EngineSettingsService {
     }
 
     private void ensureDefaults() {
-        boolean hasPlayerDefault = defaultPlayerConfigId != null && configs.containsKey(defaultPlayerConfigId);
-        boolean hasEvaluationDefault = defaultEvaluationConfigId != null && configs.containsKey(defaultEvaluationConfigId);
+        boolean hasPlayerDefault = hasConfigOfType(defaultPlayerConfigId, EngineConfigType.PLAYER);
+        boolean hasEvaluationDefault = hasConfigOfType(defaultEvaluationConfigId, EngineConfigType.EVALUATION);
         if (hasPlayerDefault && hasEvaluationDefault) {
-            evaluationConfigId = resolveConfigId(evaluationConfigId, defaultEvaluationConfigId);
+            evaluationConfigId = resolveConfigId(
+                    evaluationConfigId,
+                    defaultEvaluationConfigId,
+                    EngineConfigType.EVALUATION);
             return;
         }
 
-        UciEngineConfig inspected;
+        UciEngineConfig inspectedPlayer;
         try {
-            inspected = UciEngineInspector.inspect(defaultEnginePath);
+            inspectedPlayer = UciEngineInspector.inspect(defaultEnginePath, EngineConfigType.PLAYER);
         } catch (Exception e) {
             logger.warn("Could not inspect default UCI engine at " + defaultEnginePath
                     + ". Starting with an empty option map: " + e.getMessage());
-            inspected = new UciEngineConfig(defaultEnginePath, fallbackEngineName(defaultEnginePath), "", Map.of());
+            inspectedPlayer = new UciEngineConfig(
+                    EngineConfigType.PLAYER,
+                    defaultEnginePath,
+                    fallbackEngineName(defaultEnginePath),
+                    "",
+                    Map.of());
         }
 
         if (!hasPlayerDefault) {
-            UciEngineConfig playerConfig = inspected.copy();
+            UciEngineConfig playerConfig = inspectedPlayer.copy();
             setOptionIfPresent(playerConfig, "Threads", "8");
             setOptionIfPresent(playerConfig, "Hash", "1024");
             setOptionIfPresent(playerConfig, "MultiPV", "1");
@@ -365,12 +404,12 @@ public class EngineSettingsService {
             defaultPlayerConfigId = UUID.randomUUID().toString();
             configs.put(defaultPlayerConfigId, new ManagedConfig(
                     defaultPlayerConfigId,
-                    inspected.getEngineName() + " · Player",
+                    inspectedPlayer.getEngineName() + " · Player",
                     playerConfig));
         }
 
         if (!hasEvaluationDefault) {
-            UciEngineConfig evaluationConfig = inspected.copy();
+            UciEngineConfig evaluationConfig = copyAsType(inspectedPlayer, EngineConfigType.EVALUATION);
             setOptionIfPresent(evaluationConfig, "Threads", "2");
             setOptionIfPresent(evaluationConfig, "Hash", "256");
             setOptionIfPresent(evaluationConfig, "MultiPV", "3");
@@ -378,12 +417,27 @@ public class EngineSettingsService {
             defaultEvaluationConfigId = UUID.randomUUID().toString();
             configs.put(defaultEvaluationConfigId, new ManagedConfig(
                     defaultEvaluationConfigId,
-                    inspected.getEngineName() + " · Evaluation",
+                    inspectedPlayer.getEngineName() + " · Evaluation",
                     evaluationConfig));
         }
 
-        evaluationConfigId = resolveConfigId(evaluationConfigId, defaultEvaluationConfigId);
+        evaluationConfigId = resolveConfigId(
+                evaluationConfigId,
+                defaultEvaluationConfigId,
+                EngineConfigType.EVALUATION);
         persistStore();
+    }
+
+    private UciEngineConfig copyAsType(UciEngineConfig source, EngineConfigType type) {
+        UciEngineConfig result = new UciEngineConfig(
+                type,
+                source.getEngine(),
+                source.getEngineName(),
+                source.getEngineAuthor(),
+                source.getOptions());
+        result.setDepth(source.getDepth());
+        result.setMoveTimeSeconds(source.getMoveTimeSeconds());
+        return result;
     }
 
     private void setOptionIfPresent(UciEngineConfig config, String name, String value) {
@@ -403,16 +457,23 @@ public class EngineSettingsService {
         }
         try {
             EngineConfigStoreDto store = objectMapper.readValue(storePath.toFile(), EngineConfigStoreDto.class);
+            defaultPlayerConfigId = store.getDefaultPlayerConfigId();
+            defaultEvaluationConfigId = store.getDefaultEvaluationConfigId();
+            evaluationConfigId = store.getEvaluationConfigId();
+
             for (ManagedEngineConfigDto dto : store.getConfigs()) {
                 if (dto.getId() == null || dto.getId().isBlank()) {
                     continue;
                 }
+                if (dto.getType() == null || dto.getType().isBlank()) {
+                    dto.setType(inferLegacyType(dto).name());
+                }
                 UciEngineConfig config = configFromDto(dto);
-                configs.put(dto.getId(), new ManagedConfig(dto.getId(), displayName(dto.getName(), config), config));
+                configs.put(dto.getId(), new ManagedConfig(
+                        dto.getId(),
+                        displayName(dto.getName(), config),
+                        config));
             }
-            defaultPlayerConfigId = store.getDefaultPlayerConfigId();
-            defaultEvaluationConfigId = store.getDefaultEvaluationConfigId();
-            evaluationConfigId = store.getEvaluationConfigId();
         } catch (Exception e) {
             logger.warn("Could not load engine config store " + storePath + ": " + e.getMessage());
             configs.clear();
@@ -420,6 +481,18 @@ public class EngineSettingsService {
             defaultEvaluationConfigId = null;
             evaluationConfigId = null;
         }
+    }
+
+    private EngineConfigType inferLegacyType(ManagedEngineConfigDto dto) {
+        if (dto.getId() != null
+                && (dto.getId().equals(defaultEvaluationConfigId) || dto.getId().equals(evaluationConfigId))) {
+            return EngineConfigType.EVALUATION;
+        }
+        String name = dto.getName();
+        if (name != null && name.toLowerCase().contains("evaluation")) {
+            return EngineConfigType.EVALUATION;
+        }
+        return EngineConfigType.PLAYER;
     }
 
     private void persistStore() {
@@ -471,17 +544,33 @@ public class EngineSettingsService {
         return result;
     }
 
-    private String resolveConfigId(String requested, String fallback) {
-        if (requested != null && configs.containsKey(requested)) {
+    private ManagedConfig requireManagedConfig(String id, EngineConfigType type) {
+        ManagedConfig result = requireManagedConfig(id);
+        if (result.config.getType() != type) {
+            throw new IllegalArgumentException(
+                    "Engine config " + id + " is " + result.config.getType() + ", expected " + type);
+        }
+        return result;
+    }
+
+    private boolean hasConfigOfType(String id, EngineConfigType type) {
+        ManagedConfig managed = id == null ? null : configs.get(id);
+        return managed != null && managed.config.getType() == type;
+    }
+
+    private String resolveConfigId(String requested, String fallback, EngineConfigType type) {
+        if (hasConfigOfType(requested, type)) {
             return requested;
         }
-        if (fallback != null && configs.containsKey(fallback)) {
+        if (hasConfigOfType(fallback, type)) {
             return fallback;
         }
-        if (!configs.isEmpty()) {
-            return configs.keySet().iterator().next();
+        for (ManagedConfig managed : configs.values()) {
+            if (managed.config.getType() == type) {
+                return managed.id;
+            }
         }
-        throw new IllegalStateException("No engine configurations available");
+        throw new IllegalStateException("No " + type + " engine configurations available");
     }
 
     private String displayName(String requestedName, UciEngineConfig config) {

@@ -17,6 +17,7 @@ import demo.chess.definitions.Color;
 import demo.chess.definitions.PieceType;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.EngineLine;
+import demo.chess.definitions.engines.EngineConfigType;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.UciEngineInspector;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
@@ -208,7 +209,7 @@ public class AnalysisReplayService {
 
     private UciEngineConfig toEngineConfig(AnalysisReplaySettingsDto settings) throws IOException {
         try {
-            UciEngineConfig config = UciEngineInspector.inspect(settings.getEnginePath());
+            UciEngineConfig config = UciEngineInspector.inspect(settings.getEnginePath(), EngineConfigType.EVALUATION);
             config.setDepth(settings.getDepth());
             config.setMoveTimeSeconds(settings.getMoveTimeSeconds());
             setOptionIfPresent(config, "Threads", Integer.toString(settings.getThreads()));
