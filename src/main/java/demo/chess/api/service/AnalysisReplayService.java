@@ -17,9 +17,7 @@ import demo.chess.definitions.Color;
 import demo.chess.definitions.PieceType;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.EngineLine;
-import demo.chess.definitions.engines.EngineConfigType;
 import demo.chess.definitions.engines.UciEngineConfig;
-import demo.chess.definitions.engines.UciEngineInspector;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.fields.Field;
@@ -59,8 +57,9 @@ public class AnalysisReplayService {
         evaluationService.stopLiveEvaluation();
 
         List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
-        AnalysisReplaySettingsDto normalizedSettings = normalizeSettings(settings);
-        UciEngineConfig engineConfig = toEngineConfig(normalizedSettings);
+        String requestedConfigId = settings != null ? settings.getEngineConfigId() : null;
+        String engineConfigId = engineSettingsService.normalizeDeepAnalysisConfigId(requestedConfigId);
+        UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(engineConfigId);
         DeepAnalysisEngineSelection engineSelection = createDeepAnalysisEngine(engineConfig.getEngine());
         String engineName = engineConfig.getEngineName();
 
@@ -172,71 +171,9 @@ public class AnalysisReplayService {
                 "Analysis replay cancelled.");
     }
 
-    private AnalysisReplaySettingsDto normalizeSettings(AnalysisReplaySettingsDto settings) {
-        AnalysisReplaySettingsDto source = settings != null ? settings : new AnalysisReplaySettingsDto();
-
-        String enginePath = normalizeAnalysisEnginePath(source.getEnginePath());
-        int moveTimeSeconds = source.getMoveTimeSeconds() > 0 ? source.getMoveTimeSeconds() : 5;
-        int depth = Math.max(0, source.getDepth());
-        int threads = source.getThreads() > 0 ? source.getThreads() : 1;
-        int hashSize = source.getHashSize() > 0 ? source.getHashSize() : 256;
-        int multiPV = source.getMultiPV() > 0 ? source.getMultiPV() : 3;
-        int contempt = source.getContempt();
-        int uciElo = Math.max(0, source.getUciElo());
-
-        return new AnalysisReplaySettingsDto(
-                enginePath,
-                moveTimeSeconds,
-                depth,
-                threads,
-                hashSize,
-                multiPV,
-                contempt,
-                uciElo);
-    }
-
-    private String normalizeAnalysisEnginePath(String requestedPath) {
-        if (requestedPath == null || requestedPath.isBlank()) {
-            String configuredPath = engineSettingsService.getEvaluationEnginePath();
-            if (configuredPath == null || configuredPath.isBlank()) {
-                return engineSettingsService.getDefaultEnginePath();
-            }
-            return configuredPath.trim();
-        }
-
-        return requestedPath.trim();
-    }
-
-    private UciEngineConfig toEngineConfig(AnalysisReplaySettingsDto settings) throws IOException {
-        try {
-            UciEngineConfig config = UciEngineInspector.inspect(settings.getEnginePath(), EngineConfigType.EVALUATION);
-            config.setDepth(settings.getDepth());
-            config.setMoveTimeSeconds(settings.getMoveTimeSeconds());
-            setOptionIfPresent(config, "Threads", Integer.toString(settings.getThreads()));
-            setOptionIfPresent(config, "Hash", Integer.toString(settings.getHashSize()));
-            setOptionIfPresent(config, "MultiPV", Integer.toString(settings.getMultiPV()));
-            if (settings.getContempt() != 0) {
-                setOptionIfPresent(config, "Contempt", Integer.toString(settings.getContempt()));
-            }
-            if (settings.getUciElo() > 0) {
-                setOptionIfPresent(config, "UCI_LimitStrength", "true");
-                setOptionIfPresent(config, "UCI_Elo", Integer.toString(settings.getUciElo()));
-            }
-            return config;
-        } catch (Exception e) {
-            throw new IOException("Could not inspect analysis engine at " + settings.getEnginePath(), e);
-        }
-    }
-
-    private void setOptionIfPresent(UciEngineConfig config, String name, String value) {
-        if (config.getOption(name) != null && config.getOption(name).isConfigurable()) {
-            config.setOptionValue(name, value);
-        }
-    }
-
     private DeepAnalysisEngineSelection createDeepAnalysisEngine(String enginePath) {
         String effectivePath = enginePath == null || enginePath.isBlank()
-                ? engineSettingsService.getEvaluationEnginePath()
+                ? engineSettingsService.getDefaultEnginePath()
                 : enginePath.trim();
         try {
             DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(effectivePath);

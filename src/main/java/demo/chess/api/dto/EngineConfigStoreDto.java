@@ -8,6 +8,7 @@ public class EngineConfigStoreDto {
     private List<ManagedEngineConfigDto> configs = new ArrayList<>();
     private String defaultPlayerConfigId;
     private String defaultEvaluationConfigId;
+    private String defaultDeepAnalysisConfigId;
     private String evaluationConfigId;
 
     public EngineConfigStoreDto() {
@@ -35,6 +36,14 @@ public class EngineConfigStoreDto {
 
     public void setDefaultEvaluationConfigId(String defaultEvaluationConfigId) {
         this.defaultEvaluationConfigId = defaultEvaluationConfigId;
+    }
+
+    public String getDefaultDeepAnalysisConfigId() {
+        return defaultDeepAnalysisConfigId;
+    }
+
+    public void setDefaultDeepAnalysisConfigId(String defaultDeepAnalysisConfigId) {
+        this.defaultDeepAnalysisConfigId = defaultDeepAnalysisConfigId;
     }
 
     public String getEvaluationConfigId() {

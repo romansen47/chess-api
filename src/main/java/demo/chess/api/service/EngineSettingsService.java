@@ -48,6 +48,7 @@ public class EngineSettingsService {
 
     private String defaultPlayerConfigId;
     private String defaultEvaluationConfigId;
+    private String defaultDeepAnalysisConfigId;
     private String evaluationConfigId;
     private String whitePlayerConfigId;
     private String blackPlayerConfigId;
@@ -80,7 +81,12 @@ public class EngineSettingsService {
                         .comparing(ManagedEngineConfigDto::getType)
                         .thenComparing(ManagedEngineConfigDto::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
-        return new EngineConfigOverviewDto(result, evaluationConfigId, defaultPlayerConfigId, version);
+        return new EngineConfigOverviewDto(
+                result,
+                evaluationConfigId,
+                defaultPlayerConfigId,
+                defaultDeepAnalysisConfigId,
+                version);
     }
 
     public synchronized ManagedEngineConfigDto inspectEngine(
@@ -90,6 +96,9 @@ public class EngineSettingsService {
         EngineConfigType type = EngineConfigType.fromValue(typeValue);
         try {
             UciEngineConfig inspected = UciEngineInspector.inspect(enginePath, type);
+            if (type == EngineConfigType.DEEP_ANALYSIS) {
+                inspected.setMoveTimeSeconds(5);
+            }
             ManagedEngineConfigDto result = toDto(new ManagedConfig(
                     null,
                     displayName(requestedName, inspected),
@@ -169,7 +178,9 @@ public class EngineSettingsService {
 
     public synchronized void deleteConfig(String id) {
         ManagedConfig existing = requireManagedConfig(id);
-        if (existing.id.equals(defaultPlayerConfigId) || existing.id.equals(defaultEvaluationConfigId)) {
+        if (existing.id.equals(defaultPlayerConfigId)
+                || existing.id.equals(defaultEvaluationConfigId)
+                || existing.id.equals(defaultDeepAnalysisConfigId)) {
             throw new IllegalArgumentException("Default engine configurations cannot be deleted");
         }
         if (existing.id.equals(whitePlayerConfigId)
@@ -220,8 +231,19 @@ public class EngineSettingsService {
         return resolveConfigId(configId, defaultPlayerConfigId, EngineConfigType.PLAYER);
     }
 
+    public synchronized String normalizeDeepAnalysisConfigId(String configId) {
+        return resolveConfigId(
+                configId,
+                defaultDeepAnalysisConfigId,
+                EngineConfigType.DEEP_ANALYSIS);
+    }
+
     public synchronized String getDefaultPlayerConfigId() {
         return defaultPlayerConfigId;
+    }
+
+    public synchronized String getDefaultDeepAnalysisConfigId() {
+        return defaultDeepAnalysisConfigId;
     }
 
     public synchronized String getWhitePlayerConfigId() {
@@ -250,6 +272,11 @@ public class EngineSettingsService {
 
     public synchronized UciEngineConfig toEvaluationEngineConfig() {
         return requireManagedConfig(evaluationConfigId, EngineConfigType.EVALUATION).config.copy();
+    }
+
+    public synchronized UciEngineConfig getDeepAnalysisConfig(String configId) {
+        String resolved = normalizeDeepAnalysisConfigId(configId);
+        return requireManagedConfig(resolved, EngineConfigType.DEEP_ANALYSIS).config.copy();
     }
 
     public synchronized String getWhitePlayerEnginePath() {
@@ -373,7 +400,10 @@ public class EngineSettingsService {
     private void ensureDefaults() {
         boolean hasPlayerDefault = hasConfigOfType(defaultPlayerConfigId, EngineConfigType.PLAYER);
         boolean hasEvaluationDefault = hasConfigOfType(defaultEvaluationConfigId, EngineConfigType.EVALUATION);
-        if (hasPlayerDefault && hasEvaluationDefault) {
+        boolean hasDeepAnalysisDefault = hasConfigOfType(
+                defaultDeepAnalysisConfigId,
+                EngineConfigType.DEEP_ANALYSIS);
+        if (hasPlayerDefault && hasEvaluationDefault && hasDeepAnalysisDefault) {
             evaluationConfigId = resolveConfigId(
                     evaluationConfigId,
                     defaultEvaluationConfigId,
@@ -421,6 +451,23 @@ public class EngineSettingsService {
                     evaluationConfig));
         }
 
+        if (!hasDeepAnalysisDefault) {
+            UciEngineConfig deepAnalysisConfig = copyAsType(
+                    inspectedPlayer,
+                    EngineConfigType.DEEP_ANALYSIS);
+            deepAnalysisConfig.setDepth(0);
+            deepAnalysisConfig.setMoveTimeSeconds(5);
+            setOptionIfPresent(deepAnalysisConfig, "Threads", "1");
+            setOptionIfPresent(deepAnalysisConfig, "Hash", "256");
+            setOptionIfPresent(deepAnalysisConfig, "MultiPV", "3");
+
+            defaultDeepAnalysisConfigId = UUID.randomUUID().toString();
+            configs.put(defaultDeepAnalysisConfigId, new ManagedConfig(
+                    defaultDeepAnalysisConfigId,
+                    inspectedPlayer.getEngineName() + " · Deep Analysis",
+                    deepAnalysisConfig));
+        }
+
         evaluationConfigId = resolveConfigId(
                 evaluationConfigId,
                 defaultEvaluationConfigId,
@@ -459,6 +506,7 @@ public class EngineSettingsService {
             EngineConfigStoreDto store = objectMapper.readValue(storePath.toFile(), EngineConfigStoreDto.class);
             defaultPlayerConfigId = store.getDefaultPlayerConfigId();
             defaultEvaluationConfigId = store.getDefaultEvaluationConfigId();
+            defaultDeepAnalysisConfigId = store.getDefaultDeepAnalysisConfigId();
             evaluationConfigId = store.getEvaluationConfigId();
 
             for (ManagedEngineConfigDto dto : store.getConfigs()) {
@@ -479,6 +527,7 @@ public class EngineSettingsService {
             configs.clear();
             defaultPlayerConfigId = null;
             defaultEvaluationConfigId = null;
+            defaultDeepAnalysisConfigId = null;
             evaluationConfigId = null;
         }
     }
@@ -489,8 +538,14 @@ public class EngineSettingsService {
             return EngineConfigType.EVALUATION;
         }
         String name = dto.getName();
-        if (name != null && name.toLowerCase().contains("evaluation")) {
-            return EngineConfigType.EVALUATION;
+        if (name != null) {
+            String normalized = name.toLowerCase();
+            if (normalized.contains("deep analysis") || normalized.contains("deep-analysis")) {
+                return EngineConfigType.DEEP_ANALYSIS;
+            }
+            if (normalized.contains("evaluation")) {
+                return EngineConfigType.EVALUATION;
+            }
         }
         return EngineConfigType.PLAYER;
     }
@@ -510,6 +565,7 @@ public class EngineSettingsService {
             store.setConfigs(dtoConfigs);
             store.setDefaultPlayerConfigId(defaultPlayerConfigId);
             store.setDefaultEvaluationConfigId(defaultEvaluationConfigId);
+            store.setDefaultDeepAnalysisConfigId(defaultDeepAnalysisConfigId);
             store.setEvaluationConfigId(evaluationConfigId);
 
             Path temporary = storePath.resolveSibling(storePath.getFileName() + ".tmp");
