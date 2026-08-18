@@ -5,7 +5,8 @@ import java.util.List;
 
 public class EngineConfigOverviewDto {
 
-    private List<ManagedEngineConfigDto> configs = new ArrayList<>();
+    private List<EngineDefinitionDto> engines = new ArrayList<>();
+    private List<EngineProfileDto> profiles = new ArrayList<>();
     private String evaluationConfigId;
     private String defaultPlayerConfigId;
     private String defaultDeepAnalysisConfigId;
@@ -15,24 +16,34 @@ public class EngineConfigOverviewDto {
     }
 
     public EngineConfigOverviewDto(
-            List<ManagedEngineConfigDto> configs,
+            List<EngineDefinitionDto> engines,
+            List<EngineProfileDto> profiles,
             String evaluationConfigId,
             String defaultPlayerConfigId,
             String defaultDeepAnalysisConfigId,
             long version) {
-        this.configs = configs != null ? new ArrayList<>(configs) : new ArrayList<>();
+        this.engines = engines != null ? new ArrayList<>(engines) : new ArrayList<>();
+        this.profiles = profiles != null ? new ArrayList<>(profiles) : new ArrayList<>();
         this.evaluationConfigId = evaluationConfigId;
         this.defaultPlayerConfigId = defaultPlayerConfigId;
         this.defaultDeepAnalysisConfigId = defaultDeepAnalysisConfigId;
         this.version = version;
     }
 
-    public List<ManagedEngineConfigDto> getConfigs() {
-        return configs;
+    public List<EngineDefinitionDto> getEngines() {
+        return engines;
     }
 
-    public void setConfigs(List<ManagedEngineConfigDto> configs) {
-        this.configs = configs != null ? new ArrayList<>(configs) : new ArrayList<>();
+    public void setEngines(List<EngineDefinitionDto> engines) {
+        this.engines = engines != null ? new ArrayList<>(engines) : new ArrayList<>();
+    }
+
+    public List<EngineProfileDto> getProfiles() {
+        return profiles;
+    }
+
+    public void setProfiles(List<EngineProfileDto> profiles) {
+        this.profiles = profiles != null ? new ArrayList<>(profiles) : new ArrayList<>();
     }
 
     public String getEvaluationConfigId() {

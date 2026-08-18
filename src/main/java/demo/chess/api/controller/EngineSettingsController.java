@@ -10,10 +10,11 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import demo.chess.api.dto.EngineConfigInspectRequestDto;
 import demo.chess.api.dto.EngineConfigOverviewDto;
 import demo.chess.api.dto.EngineConfigSelectionDto;
-import demo.chess.api.dto.ManagedEngineConfigDto;
+import demo.chess.api.dto.EngineDefinitionDto;
+import demo.chess.api.dto.EngineDefinitionInspectRequestDto;
+import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.service.EngineSettingsService;
 
 @RestController
@@ -31,31 +32,54 @@ public class EngineSettingsController {
         return engineSettingsService.getOverview();
     }
 
-    @PostMapping("/inspect")
-    public ResponseEntity<ManagedEngineConfigDto> inspectEngine(
-            @RequestBody EngineConfigInspectRequestDto request) {
-        return ResponseEntity.ok(engineSettingsService.inspectEngine(
+    @PostMapping("/reset")
+    public ResponseEntity<EngineConfigOverviewDto> resetEngineSettings() {
+        return ResponseEntity.ok(engineSettingsService.resetToFallbackDefaults());
+    }
+
+    @PostMapping("/engines/inspect")
+    public ResponseEntity<EngineDefinitionDto> inspectEngine(
+            @RequestBody EngineDefinitionInspectRequestDto request) {
+        return ResponseEntity.ok(engineSettingsService.inspectEngineDefinition(
                 request.getEngine(),
-                request.getName(),
-                request.getType()));
+                request.getName()));
     }
 
-    @PostMapping
-    public ResponseEntity<ManagedEngineConfigDto> createConfig(
-            @RequestBody ManagedEngineConfigDto config) {
-        return ResponseEntity.ok(engineSettingsService.createConfig(config));
+    @PostMapping("/engines")
+    public ResponseEntity<EngineDefinitionDto> createEngine(
+            @RequestBody EngineDefinitionDto engine) {
+        return ResponseEntity.ok(engineSettingsService.createEngine(engine));
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<ManagedEngineConfigDto> updateConfig(
+    @PutMapping("/engines/{id}")
+    public ResponseEntity<EngineDefinitionDto> updateEngine(
             @PathVariable String id,
-            @RequestBody ManagedEngineConfigDto config) {
-        return ResponseEntity.ok(engineSettingsService.updateConfig(id, config));
+            @RequestBody EngineDefinitionDto engine) {
+        return ResponseEntity.ok(engineSettingsService.updateEngine(id, engine));
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteConfig(@PathVariable String id) {
-        engineSettingsService.deleteConfig(id);
+    @DeleteMapping("/engines/{id}")
+    public ResponseEntity<Void> deleteEngine(@PathVariable String id) {
+        engineSettingsService.deleteEngine(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/profiles")
+    public ResponseEntity<EngineProfileDto> createProfile(
+            @RequestBody EngineProfileDto profile) {
+        return ResponseEntity.ok(engineSettingsService.createProfile(profile));
+    }
+
+    @PutMapping("/profiles/{id}")
+    public ResponseEntity<EngineProfileDto> updateProfile(
+            @PathVariable String id,
+            @RequestBody EngineProfileDto profile) {
+        return ResponseEntity.ok(engineSettingsService.updateProfile(id, profile));
+    }
+
+    @DeleteMapping("/profiles/{id}")
+    public ResponseEntity<Void> deleteProfile(@PathVariable String id) {
+        engineSettingsService.deleteProfile(id);
         return ResponseEntity.noContent().build();
     }
 

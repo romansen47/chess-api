@@ -26,12 +26,12 @@ import demo.chess.game.Game;
 public class GameService {
 
     /**
-     * Standard-Bedenkzeit für eine neue Partie: 45 Minuten = 45 * 60 Sekunden.
+     * Standard-Bedenkzeit für eine neue Partie: 5 Minuten = 5 * 60 Sekunden.
      */
-    public static final int DEFAULT_TIME_SECONDS = 45 * 60;
+    public static final int DEFAULT_TIME_SECONDS = 5 * 60;
 
     /**
-     * Standard-Inkrement: 0 Sekunden, also 45+0.
+     * Standard-Inkrement: 0 Sekunden, also 5+0.
      */
     public static final int DEFAULT_INCREMENT_SECONDS = 0;
 

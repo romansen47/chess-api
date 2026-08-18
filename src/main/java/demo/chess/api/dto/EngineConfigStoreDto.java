@@ -3,15 +3,40 @@ package demo.chess.api.dto;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class EngineConfigStoreDto {
 
+    private List<EngineDefinitionDto> engines = new ArrayList<>();
+    private List<EngineProfileDto> profiles = new ArrayList<>();
+
+    // Legacy field. It is read once to migrate the former combined config model
+    // and is no longer written by the new service.
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private List<ManagedEngineConfigDto> configs = new ArrayList<>();
+
     private String defaultPlayerConfigId;
     private String defaultEvaluationConfigId;
     private String defaultDeepAnalysisConfigId;
     private String evaluationConfigId;
 
     public EngineConfigStoreDto() {
+    }
+
+    public List<EngineDefinitionDto> getEngines() {
+        return engines;
+    }
+
+    public void setEngines(List<EngineDefinitionDto> engines) {
+        this.engines = engines != null ? new ArrayList<>(engines) : new ArrayList<>();
+    }
+
+    public List<EngineProfileDto> getProfiles() {
+        return profiles;
+    }
+
+    public void setProfiles(List<EngineProfileDto> profiles) {
+        this.profiles = profiles != null ? new ArrayList<>(profiles) : new ArrayList<>();
     }
 
     public List<ManagedEngineConfigDto> getConfigs() {
