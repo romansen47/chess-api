@@ -7,9 +7,8 @@ public class EngineConfigOverviewDto {
 
     private List<EngineDefinitionDto> engines = new ArrayList<>();
     private List<EngineProfileDto> profiles = new ArrayList<>();
-    private String evaluationConfigId;
-    private String defaultPlayerConfigId;
-    private String defaultDeepAnalysisConfigId;
+    private EngineProfileAssignmentsDto defaults = new EngineProfileAssignmentsDto();
+    private String fallbackProfileId;
     private long version;
 
     public EngineConfigOverviewDto() {
@@ -18,15 +17,13 @@ public class EngineConfigOverviewDto {
     public EngineConfigOverviewDto(
             List<EngineDefinitionDto> engines,
             List<EngineProfileDto> profiles,
-            String evaluationConfigId,
-            String defaultPlayerConfigId,
-            String defaultDeepAnalysisConfigId,
+            EngineProfileAssignmentsDto defaults,
+            String fallbackProfileId,
             long version) {
         this.engines = engines != null ? new ArrayList<>(engines) : new ArrayList<>();
         this.profiles = profiles != null ? new ArrayList<>(profiles) : new ArrayList<>();
-        this.evaluationConfigId = evaluationConfigId;
-        this.defaultPlayerConfigId = defaultPlayerConfigId;
-        this.defaultDeepAnalysisConfigId = defaultDeepAnalysisConfigId;
+        this.defaults = defaults != null ? defaults : new EngineProfileAssignmentsDto();
+        this.fallbackProfileId = fallbackProfileId;
         this.version = version;
     }
 
@@ -46,28 +43,23 @@ public class EngineConfigOverviewDto {
         this.profiles = profiles != null ? new ArrayList<>(profiles) : new ArrayList<>();
     }
 
-    public String getEvaluationConfigId() {
-        return evaluationConfigId;
+    public EngineProfileAssignmentsDto getDefaults() {
+        if (defaults == null) {
+            defaults = new EngineProfileAssignmentsDto();
+        }
+        return defaults;
     }
 
-    public void setEvaluationConfigId(String evaluationConfigId) {
-        this.evaluationConfigId = evaluationConfigId;
+    public void setDefaults(EngineProfileAssignmentsDto defaults) {
+        this.defaults = defaults != null ? defaults : new EngineProfileAssignmentsDto();
     }
 
-    public String getDefaultPlayerConfigId() {
-        return defaultPlayerConfigId;
+    public String getFallbackProfileId() {
+        return fallbackProfileId;
     }
 
-    public void setDefaultPlayerConfigId(String defaultPlayerConfigId) {
-        this.defaultPlayerConfigId = defaultPlayerConfigId;
-    }
-
-    public String getDefaultDeepAnalysisConfigId() {
-        return defaultDeepAnalysisConfigId;
-    }
-
-    public void setDefaultDeepAnalysisConfigId(String defaultDeepAnalysisConfigId) {
-        this.defaultDeepAnalysisConfigId = defaultDeepAnalysisConfigId;
+    public void setFallbackProfileId(String fallbackProfileId) {
+        this.fallbackProfileId = fallbackProfileId;
     }
 
     public long getVersion() {

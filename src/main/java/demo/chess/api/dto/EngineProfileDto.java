@@ -3,15 +3,32 @@ package demo.chess.api.dto;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+/**
+ * Reusable engine profile: one engine definition plus concrete UCI option values.
+ *
+ * Player/evaluation/deep-analysis are deliberately not profile properties. Those
+ * are use-case assignments handled separately.
+ */
 public class EngineProfileDto {
 
     private String id;
     private String name;
-    private String type;
     private String engineId;
-    private int depth;
-    private int moveTimeSeconds;
     private Map<String, String> optionValues = new LinkedHashMap<>();
+
+    // Legacy profile fields. They are accepted when reading the previous store
+    // format, but are never emitted by the new API/model.
+    @JsonProperty(value = "type", access = JsonProperty.Access.WRITE_ONLY)
+    private String legacyType;
+
+    @JsonProperty(value = "depth", access = JsonProperty.Access.WRITE_ONLY)
+    private Integer legacyDepth;
+
+    @JsonProperty(value = "moveTimeSeconds", access = JsonProperty.Access.WRITE_ONLY)
+    private Integer legacyMoveTimeSeconds;
 
     public EngineProfileDto() {
     }
@@ -32,36 +49,12 @@ public class EngineProfileDto {
         this.name = name;
     }
 
-    public String getType() {
-        return type;
-    }
-
-    public void setType(String type) {
-        this.type = type;
-    }
-
     public String getEngineId() {
         return engineId;
     }
 
     public void setEngineId(String engineId) {
         this.engineId = engineId;
-    }
-
-    public int getDepth() {
-        return depth;
-    }
-
-    public void setDepth(int depth) {
-        this.depth = depth;
-    }
-
-    public int getMoveTimeSeconds() {
-        return moveTimeSeconds;
-    }
-
-    public void setMoveTimeSeconds(int moveTimeSeconds) {
-        this.moveTimeSeconds = moveTimeSeconds;
     }
 
     public Map<String, String> getOptionValues() {
@@ -75,5 +68,20 @@ public class EngineProfileDto {
         this.optionValues = optionValues != null
                 ? new LinkedHashMap<>(optionValues)
                 : new LinkedHashMap<>();
+    }
+
+    @JsonIgnore
+    public String getLegacyType() {
+        return legacyType;
+    }
+
+    @JsonIgnore
+    public Integer getLegacyDepth() {
+        return legacyDepth;
+    }
+
+    @JsonIgnore
+    public Integer getLegacyMoveTimeSeconds() {
+        return legacyMoveTimeSeconds;
     }
 }

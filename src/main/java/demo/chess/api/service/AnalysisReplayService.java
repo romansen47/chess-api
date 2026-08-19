@@ -57,9 +57,14 @@ public class AnalysisReplayService {
         evaluationService.stopLiveEvaluation();
 
         List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
-        String requestedConfigId = settings != null ? settings.getEngineConfigId() : null;
-        String engineConfigId = engineSettingsService.normalizeDeepAnalysisConfigId(requestedConfigId);
-        UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(engineConfigId);
+        String requestedProfileId = settings != null ? settings.getEngineProfileId() : null;
+        int depth = settings != null ? Math.max(0, settings.getDepth()) : 0;
+        int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
+        String engineProfileId = engineSettingsService.normalizeDeepAnalysisProfileId(requestedProfileId);
+        UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
+                engineProfileId,
+                depth,
+                moveTimeSeconds);
         DeepAnalysisEngineSelection engineSelection = createDeepAnalysisEngine(engineConfig.getEngine());
         String engineName = engineConfig.getEngineName();
 

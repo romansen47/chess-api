@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.apache.commons.logging.Log;
@@ -20,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import demo.chess.api.dto.EngineConfigOverviewDto;
 import demo.chess.api.dto.EngineConfigStoreDto;
 import demo.chess.api.dto.EngineDefinitionDto;
+import demo.chess.api.dto.EngineProfileAssignmentsDto;
 import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.dto.ManagedEngineConfigDto;
 import demo.chess.api.dto.UciOptionDto;
@@ -32,12 +34,15 @@ import demo.chess.definitions.engines.UciOption;
 import demo.chess.definitions.engines.UciOptionType;
 
 /**
- * Registry for UCI engines and reusable profiles.
+ * Registry for UCI engines, reusable profiles and their use-case assignments.
  *
- * An engine definition owns the executable path, UCI identity and option schema.
- * A profile references exactly one engine definition and stores only contextual
- * search settings and concrete option values. Runtime UciEngineConfig instances
- * are resolved from that pair on demand.
+ * Engine definition: executable + UCI identity + option schema/defaults.
+ * Profile: one engine + concrete UCI option values.
+ * Assignment: which profile is used by White CPU, Black CPU, live evaluation
+ *             and deep analysis by default.
+ *
+ * A profile intentionally has no PLAYER/EVALUATION/DEEP_ANALYSIS type. The same
+ * profile may be assigned to any number of use cases.
  */
 @Service
 public class EngineSettingsService {
@@ -51,12 +56,11 @@ public class EngineSettingsService {
     private final LinkedHashMap<String, ManagedEngineDefinition> engines = new LinkedHashMap<>();
     private final LinkedHashMap<String, ManagedProfile> profiles = new LinkedHashMap<>();
 
-    private String defaultPlayerConfigId;
-    private String defaultEvaluationConfigId;
-    private String defaultDeepAnalysisConfigId;
-    private String evaluationConfigId;
-    private String whitePlayerConfigId;
-    private String blackPlayerConfigId;
+    private String fallbackProfileId;
+    private String defaultWhitePlayerProfileId;
+    private String defaultBlackPlayerProfileId;
+    private String defaultEvaluationProfileId;
+    private String defaultDeepAnalysisProfileId;
 
     private long version = 1L;
     private long whitePlayerVersion = 1L;
@@ -69,32 +73,20 @@ public class EngineSettingsService {
         this.storePath = resolveStorePath();
 
         loadStore();
-        ensureDefaults();
-
-        this.whitePlayerConfigId = defaultPlayerConfigId;
-        this.blackPlayerConfigId = defaultPlayerConfigId;
-        this.evaluationConfigId = resolveProfileId(
-                evaluationConfigId,
-                defaultEvaluationConfigId,
-                EngineConfigType.EVALUATION);
+        ensureFallbackAndAssignments();
     }
 
     public synchronized EngineConfigOverviewDto resetToFallbackDefaults() {
         engines.clear();
         profiles.clear();
 
-        defaultPlayerConfigId = null;
-        defaultEvaluationConfigId = null;
-        defaultDeepAnalysisConfigId = null;
-        evaluationConfigId = null;
-        whitePlayerConfigId = null;
-        blackPlayerConfigId = null;
+        fallbackProfileId = null;
+        defaultWhitePlayerProfileId = null;
+        defaultBlackPlayerProfileId = null;
+        defaultEvaluationProfileId = null;
+        defaultDeepAnalysisProfileId = null;
 
-        ensureDefaults();
-
-        whitePlayerConfigId = defaultPlayerConfigId;
-        blackPlayerConfigId = defaultPlayerConfigId;
-        evaluationConfigId = defaultEvaluationConfigId;
+        ensureFallbackAndAssignments();
 
         whitePlayerVersion++;
         blackPlayerVersion++;
@@ -113,17 +105,52 @@ public class EngineSettingsService {
                 .toList();
         List<EngineProfileDto> profileDtos = profiles.values().stream()
                 .map(this::toDto)
-                .sorted(Comparator
-                        .comparing(EngineProfileDto::getType)
-                        .thenComparing(EngineProfileDto::getName, String.CASE_INSENSITIVE_ORDER))
+                .sorted(Comparator.comparing(EngineProfileDto::getName, String.CASE_INSENSITIVE_ORDER))
                 .toList();
         return new EngineConfigOverviewDto(
                 engineDtos,
                 profileDtos,
-                evaluationConfigId,
-                defaultPlayerConfigId,
-                defaultDeepAnalysisConfigId,
+                currentAssignments(),
+                fallbackProfileId,
                 version);
+    }
+
+    public synchronized EngineProfileAssignmentsDto updateDefaultAssignments(EngineProfileAssignmentsDto incoming) {
+        if (incoming == null) {
+            throw new IllegalArgumentException("Default profile assignments must not be null");
+        }
+
+        String white = resolveProfileId(incoming.getWhitePlayerProfileId(), fallbackProfileId);
+        String black = resolveProfileId(incoming.getBlackPlayerProfileId(), fallbackProfileId);
+        String evaluation = resolveProfileId(incoming.getEvaluationProfileId(), fallbackProfileId);
+        String deepAnalysis = resolveProfileId(incoming.getDeepAnalysisProfileId(), fallbackProfileId);
+
+        boolean changed = false;
+        if (!white.equals(defaultWhitePlayerProfileId)) {
+            defaultWhitePlayerProfileId = white;
+            whitePlayerVersion++;
+            changed = true;
+        }
+        if (!black.equals(defaultBlackPlayerProfileId)) {
+            defaultBlackPlayerProfileId = black;
+            blackPlayerVersion++;
+            changed = true;
+        }
+        if (!evaluation.equals(defaultEvaluationProfileId)) {
+            defaultEvaluationProfileId = evaluation;
+            evaluationVersion++;
+            changed = true;
+        }
+        if (!deepAnalysis.equals(defaultDeepAnalysisProfileId)) {
+            defaultDeepAnalysisProfileId = deepAnalysis;
+            changed = true;
+        }
+
+        if (changed) {
+            version++;
+            persistStore();
+        }
+        return currentAssignments();
     }
 
     public synchronized EngineDefinitionDto inspectEngineDefinition(String enginePath, String requestedName) {
@@ -176,10 +203,11 @@ public class EngineSettingsService {
                     "The executable of an existing engine is immutable. Define another engine instead.");
         }
 
+        UciEngineDefinition replacementDefinition = definitionFromDto(incoming);
         ManagedEngineDefinition replacement = new ManagedEngineDefinition(
                 existing.id,
-                displayEngineName(incoming.getName(), existing.definition),
-                existing.definition.copy());
+                displayEngineName(incoming.getName(), replacementDefinition),
+                replacementDefinition);
         engines.put(existing.id, replacement);
         version++;
         persistStore();
@@ -216,17 +244,16 @@ public class EngineSettingsService {
 
     public synchronized EngineProfileDto updateProfile(String id, EngineProfileDto incoming) {
         ManagedProfile existing = requireProfile(id);
+        if (existing.id.equals(fallbackProfileId)) {
+            throw new IllegalArgumentException(
+                    "The fallback profile is fixed to /usr/games/stockfish UCI defaults. Duplicate it to customize it.");
+        }
         if (incoming == null) {
             throw new IllegalArgumentException("Engine profile must not be null");
         }
         if (incoming.getEngineId() == null || !existing.engineId.equals(incoming.getEngineId().trim())) {
             throw new IllegalArgumentException(
                     "The engine of an existing profile is immutable. Create a new profile for another engine.");
-        }
-        EngineConfigType incomingType = EngineConfigType.fromValue(incoming.getType());
-        if (existing.type != incomingType) {
-            throw new IllegalArgumentException(
-                    "The purpose of an existing profile is immutable. Create a new profile for another purpose.");
         }
 
         ManagedProfile replacement = profileFromDto(existing.id, incoming);
@@ -239,135 +266,90 @@ public class EngineSettingsService {
 
     public synchronized void deleteProfile(String id) {
         ManagedProfile existing = requireProfile(id);
-        if (existing.id.equals(defaultPlayerConfigId)
-                || existing.id.equals(defaultEvaluationConfigId)
-                || existing.id.equals(defaultDeepAnalysisConfigId)) {
-            throw new IllegalArgumentException("Default engine profiles cannot be deleted");
+        if (existing.id.equals(fallbackProfileId)) {
+            throw new IllegalArgumentException("The fallback profile cannot be deleted");
         }
-        if (existing.id.equals(whitePlayerConfigId)
-                || existing.id.equals(blackPlayerConfigId)
-                || existing.id.equals(evaluationConfigId)) {
-            throw new IllegalArgumentException("Engine profile is currently in use and cannot be deleted");
+        if (isAssigned(existing.id)) {
+            throw new IllegalArgumentException(
+                    "Engine profile is assigned under Defaults and cannot be deleted");
         }
         profiles.remove(existing.id);
         version++;
         persistStore();
     }
 
-    public synchronized String setEvaluationConfigId(String configId) {
-        String resolved = resolveProfileId(
-                configId,
-                defaultEvaluationConfigId,
-                EngineConfigType.EVALUATION);
-        if (!resolved.equals(evaluationConfigId)) {
-            evaluationConfigId = resolved;
-            evaluationVersion++;
-            version++;
-            persistStore();
-        }
-        return evaluationConfigId;
+    public synchronized String normalizeProfileId(String profileId) {
+        return resolveProfileId(profileId, fallbackProfileId);
     }
 
-    public synchronized void setPlayerConfigIds(String whiteConfigId, String blackConfigId) {
-        String resolvedWhite = resolveProfileId(
-                whiteConfigId,
-                defaultPlayerConfigId,
-                EngineConfigType.PLAYER);
-        String resolvedBlack = resolveProfileId(
-                blackConfigId,
-                defaultPlayerConfigId,
-                EngineConfigType.PLAYER);
-
-        if (!resolvedWhite.equals(whitePlayerConfigId)) {
-            whitePlayerConfigId = resolvedWhite;
-            whitePlayerVersion++;
-        }
-        if (!resolvedBlack.equals(blackPlayerConfigId)) {
-            blackPlayerConfigId = resolvedBlack;
-            blackPlayerVersion++;
-        }
+    public synchronized String normalizeDeepAnalysisProfileId(String profileId) {
+        return resolveProfileId(profileId, defaultDeepAnalysisProfileId);
     }
 
-    public synchronized String normalizePlayerConfigId(String configId) {
-        return resolveProfileId(configId, defaultPlayerConfigId, EngineConfigType.PLAYER);
+    public synchronized String getDefaultWhitePlayerProfileId() {
+        return defaultWhitePlayerProfileId;
     }
 
-    public synchronized String normalizeDeepAnalysisConfigId(String configId) {
-        return resolveProfileId(
-                configId,
-                defaultDeepAnalysisConfigId,
-                EngineConfigType.DEEP_ANALYSIS);
+    public synchronized String getDefaultBlackPlayerProfileId() {
+        return defaultBlackPlayerProfileId;
     }
 
-    public synchronized String getDefaultPlayerConfigId() {
-        return defaultPlayerConfigId;
+    public synchronized String getDefaultEvaluationProfileId() {
+        return defaultEvaluationProfileId;
     }
 
-    public synchronized String getDefaultDeepAnalysisConfigId() {
-        return defaultDeepAnalysisConfigId;
-    }
-
-    public synchronized String getWhitePlayerConfigId() {
-        return whitePlayerConfigId;
-    }
-
-    public synchronized String getBlackPlayerConfigId() {
-        return blackPlayerConfigId;
-    }
-
-    public synchronized String getEvaluationConfigId() {
-        return evaluationConfigId;
+    public synchronized String getDefaultDeepAnalysisProfileId() {
+        return defaultDeepAnalysisProfileId;
     }
 
     public synchronized UciEngineConfig getConfig(String id) {
-        return resolveRuntimeConfig(requireProfile(id));
+        return resolveRuntimeConfig(requireProfile(id), 0, 0);
     }
 
     public synchronized UciEngineConfig getWhitePlayerConfig() {
-        return resolveRuntimeConfig(requireProfile(whitePlayerConfigId, EngineConfigType.PLAYER));
+        return resolveRuntimeConfig(requireProfile(defaultWhitePlayerProfileId), 0, 0);
     }
 
     public synchronized UciEngineConfig getBlackPlayerConfig() {
-        return resolveRuntimeConfig(requireProfile(blackPlayerConfigId, EngineConfigType.PLAYER));
+        return resolveRuntimeConfig(requireProfile(defaultBlackPlayerProfileId), 0, 0);
     }
 
     public synchronized UciEngineConfig toEvaluationEngineConfig() {
-        return resolveRuntimeConfig(requireProfile(evaluationConfigId, EngineConfigType.EVALUATION));
+        return resolveRuntimeConfig(requireProfile(defaultEvaluationProfileId), 0, 0);
     }
 
-    public synchronized UciEngineConfig getDeepAnalysisConfig(String configId) {
-        String resolved = normalizeDeepAnalysisConfigId(configId);
-        return resolveRuntimeConfig(requireProfile(resolved, EngineConfigType.DEEP_ANALYSIS));
+    public synchronized UciEngineConfig getDeepAnalysisConfig(
+            String profileId,
+            int depth,
+            int moveTimeSeconds) {
+        String resolved = normalizeDeepAnalysisProfileId(profileId);
+        int safeDepth = Math.max(0, depth);
+        int safeMoveTimeSeconds = safeDepth > 0 ? 0 : Math.max(1, moveTimeSeconds);
+        return resolveRuntimeConfig(requireProfile(resolved), safeDepth, safeMoveTimeSeconds);
     }
 
     public synchronized String getWhitePlayerEnginePath() {
-        return engineForProfile(requireProfile(whitePlayerConfigId, EngineConfigType.PLAYER))
-                .definition.getEngine();
+        return engineForProfile(requireProfile(defaultWhitePlayerProfileId)).definition.getEngine();
     }
 
     public synchronized String getBlackPlayerEnginePath() {
-        return engineForProfile(requireProfile(blackPlayerConfigId, EngineConfigType.PLAYER))
-                .definition.getEngine();
+        return engineForProfile(requireProfile(defaultBlackPlayerProfileId)).definition.getEngine();
     }
 
     public synchronized String getEvaluationEnginePath() {
-        return engineForProfile(requireProfile(evaluationConfigId, EngineConfigType.EVALUATION))
-                .definition.getEngine();
+        return engineForProfile(requireProfile(defaultEvaluationProfileId)).definition.getEngine();
     }
 
     public synchronized String getWhitePlayerEngineName() {
-        return engineForProfile(requireProfile(whitePlayerConfigId, EngineConfigType.PLAYER))
-                .definition.getEngineName();
+        return engineForProfile(requireProfile(defaultWhitePlayerProfileId)).definition.getEngineName();
     }
 
     public synchronized String getBlackPlayerEngineName() {
-        return engineForProfile(requireProfile(blackPlayerConfigId, EngineConfigType.PLAYER))
-                .definition.getEngineName();
+        return engineForProfile(requireProfile(defaultBlackPlayerProfileId)).definition.getEngineName();
     }
 
     public synchronized String getEvaluationEngineName() {
-        return engineForProfile(requireProfile(evaluationConfigId, EngineConfigType.EVALUATION))
-                .definition.getEngineName();
+        return engineForProfile(requireProfile(defaultEvaluationProfileId)).definition.getEngineName();
     }
 
     public synchronized String getEngineName(String enginePath) {
@@ -402,6 +384,14 @@ public class EngineSettingsService {
         return defaultEnginePath;
     }
 
+    private EngineProfileAssignmentsDto currentAssignments() {
+        return new EngineProfileAssignmentsDto(
+                defaultWhitePlayerProfileId,
+                defaultBlackPlayerProfileId,
+                defaultEvaluationProfileId,
+                defaultDeepAnalysisProfileId);
+    }
+
     private UciEngineDefinition definitionFromDto(EngineDefinitionDto dto) {
         if (dto.getEngine() == null || dto.getEngine().isBlank()) {
             throw new IllegalArgumentException("Engine path must not be blank");
@@ -414,11 +404,11 @@ public class EngineSettingsService {
                 continue;
             }
             UciOptionType optionType = UciOptionType.fromUciValue(source.getType());
-            String initialValue = optionType == UciOptionType.BUTTON ? null : source.getDefaultValue();
+            String configuredDefault = optionType == UciOptionType.BUTTON ? null : source.getDefaultValue();
             options.put(entry.getKey(), new UciOption(
                     optionType,
-                    source.getDefaultValue(),
-                    initialValue,
+                    configuredDefault,
+                    configuredDefault,
                     source.getMin(),
                     source.getMax(),
                     source.getVars()));
@@ -436,12 +426,6 @@ public class EngineSettingsService {
             throw new IllegalArgumentException("An engine must be selected before a profile can be created");
         }
         ManagedEngineDefinition engine = requireEngine(dto.getEngineId().trim());
-        EngineConfigType type = EngineConfigType.fromValue(dto.getType());
-        int depth = Math.max(0, dto.getDepth());
-        int moveTimeSeconds = Math.max(0, dto.getMoveTimeSeconds());
-        if (type == EngineConfigType.DEEP_ANALYSIS && depth == 0) {
-            moveTimeSeconds = Math.max(1, moveTimeSeconds);
-        }
 
         for (String incomingName : dto.getOptionValues().keySet()) {
             UciOption option = engine.definition.getOption(incomingName);
@@ -471,24 +455,19 @@ public class EngineSettingsService {
         }
 
         String name = dto.getName() == null || dto.getName().isBlank()
-                ? engine.name + " · " + typeLabel(type)
+                ? engine.name + " Profile"
                 : dto.getName().trim();
-        return new ManagedProfile(
-                id,
-                name,
-                type,
-                engine.id,
-                depth,
-                moveTimeSeconds,
-                normalizedValues);
+        return new ManagedProfile(id, name, engine.id, normalizedValues);
     }
 
-    private UciEngineConfig resolveRuntimeConfig(ManagedProfile profile) {
+    private UciEngineConfig resolveRuntimeConfig(
+            ManagedProfile profile,
+            int depth,
+            int moveTimeSeconds) {
         ManagedEngineDefinition engine = engineForProfile(profile);
         return engine.definition.createRuntimeConfig(
-                profile.type,
-                profile.depth,
-                profile.moveTimeSeconds,
+                Math.max(0, depth),
+                Math.max(0, moveTimeSeconds),
                 profile.optionValues);
     }
 
@@ -519,15 +498,12 @@ public class EngineSettingsService {
         EngineProfileDto dto = new EngineProfileDto();
         dto.setId(managed.id);
         dto.setName(managed.name);
-        dto.setType(managed.type.name());
         dto.setEngineId(managed.engineId);
-        dto.setDepth(managed.depth);
-        dto.setMoveTimeSeconds(managed.moveTimeSeconds);
         dto.setOptionValues(managed.optionValues);
         return dto;
     }
 
-    private void ensureDefaults() {
+    private void ensureFallbackAndAssignments() {
         ManagedEngineDefinition defaultEngine = findEngineByPath(defaultEnginePath);
         if (defaultEngine == null) {
             UciEngineDefinition definition;
@@ -550,50 +526,23 @@ public class EngineSettingsService {
             engines.put(engineId, defaultEngine);
         }
 
-        defaultPlayerConfigId = ensureDefaultProfile(
-                defaultPlayerConfigId,
-                EngineConfigType.PLAYER,
-                defaultEngine,
-                "Player");
-        defaultEvaluationConfigId = ensureDefaultProfile(
-                defaultEvaluationConfigId,
-                EngineConfigType.EVALUATION,
-                defaultEngine,
-                "Evaluation");
-        defaultDeepAnalysisConfigId = ensureDefaultProfile(
-                defaultDeepAnalysisConfigId,
-                EngineConfigType.DEEP_ANALYSIS,
-                defaultEngine,
-                "Deep Analysis");
+        ManagedProfile fallback = fallbackProfileId == null ? null : profiles.get(fallbackProfileId);
+        if (fallback == null || !fallback.engineId.equals(defaultEngine.id)) {
+            fallbackProfileId = createFallbackProfile(defaultEngine);
+        }
 
-        evaluationConfigId = resolveProfileId(
-                evaluationConfigId,
-                defaultEvaluationConfigId,
-                EngineConfigType.EVALUATION);
+        defaultWhitePlayerProfileId = resolveProfileId(defaultWhitePlayerProfileId, fallbackProfileId);
+        defaultBlackPlayerProfileId = resolveProfileId(defaultBlackPlayerProfileId, fallbackProfileId);
+        defaultEvaluationProfileId = resolveProfileId(defaultEvaluationProfileId, fallbackProfileId);
+        defaultDeepAnalysisProfileId = resolveProfileId(defaultDeepAnalysisProfileId, fallbackProfileId);
+
         persistStore();
     }
 
-    private String ensureDefaultProfile(
-            String currentId,
-            EngineConfigType type,
-            ManagedEngineDefinition defaultEngine,
-            String suffix) {
-        if (hasProfileOfType(currentId, type)) {
-            return currentId;
-        }
-        for (ManagedProfile profile : profiles.values()) {
-            if (profile.type == type) {
-                return profile.id;
-            }
-        }
-
+    private String createFallbackProfile(ManagedEngineDefinition defaultEngine) {
         EngineProfileDto dto = new EngineProfileDto();
-        dto.setName(defaultEngine.name + " · " + suffix);
-        dto.setType(type.name());
+        dto.setName(defaultEngine.name + " · Default");
         dto.setEngineId(defaultEngine.id);
-        dto.setDepth(0);
-        dto.setMoveTimeSeconds(type == EngineConfigType.DEEP_ANALYSIS ? 5 : 0);
-
         dto.setOptionValues(defaultOptionValues(defaultEngine.definition));
 
         String id = UUID.randomUUID().toString();
@@ -617,26 +566,32 @@ public class EngineSettingsService {
         }
         try {
             EngineConfigStoreDto store = objectMapper.readValue(storePath.toFile(), EngineConfigStoreDto.class);
-            defaultPlayerConfigId = store.getDefaultPlayerConfigId();
-            defaultEvaluationConfigId = store.getDefaultEvaluationConfigId();
-            defaultDeepAnalysisConfigId = store.getDefaultDeepAnalysisConfigId();
-            evaluationConfigId = store.getEvaluationConfigId();
+            fallbackProfileId = store.getFallbackProfileId();
+
+            EngineProfileAssignmentsDto storedDefaults = store.getDefaults();
+            defaultWhitePlayerProfileId = storedDefaults.getWhitePlayerProfileId();
+            defaultBlackPlayerProfileId = storedDefaults.getBlackPlayerProfileId();
+            defaultEvaluationProfileId = storedDefaults.getEvaluationProfileId();
+            defaultDeepAnalysisProfileId = storedDefaults.getDeepAnalysisProfileId();
 
             boolean hasModernData = !store.getEngines().isEmpty() || !store.getProfiles().isEmpty();
             if (hasModernData) {
                 loadModernStore(store);
-            } else if (!store.getConfigs().isEmpty()) {
-                migrateLegacyConfigs(store.getConfigs());
-                logger.info("Migrated legacy combined engine configs to engine definitions and profiles");
+            } else if (!store.getLegacyConfigs().isEmpty()) {
+                migrateLegacyConfigs(store.getLegacyConfigs());
+                logger.info("Migrated legacy combined engine configs to engine definitions and untyped profiles");
             }
+
+            applyLegacyAssignments(store);
         } catch (Exception e) {
             logger.warn("Could not load engine config store " + storePath + ": " + e.getMessage());
             engines.clear();
             profiles.clear();
-            defaultPlayerConfigId = null;
-            defaultEvaluationConfigId = null;
-            defaultDeepAnalysisConfigId = null;
-            evaluationConfigId = null;
+            fallbackProfileId = null;
+            defaultWhitePlayerProfileId = null;
+            defaultBlackPlayerProfileId = null;
+            defaultEvaluationProfileId = null;
+            defaultDeepAnalysisProfileId = null;
         }
     }
 
@@ -658,9 +613,64 @@ public class EngineSettingsService {
             }
             try {
                 profiles.put(dto.getId(), profileFromDto(dto.getId(), dto));
+                seedAssignmentFromLegacyProfile(dto);
             } catch (IllegalArgumentException e) {
                 logger.warn("Skipping invalid engine profile " + dto.getId() + ": " + e.getMessage());
             }
+        }
+    }
+
+    private void seedAssignmentFromLegacyProfile(EngineProfileDto dto) {
+        if (dto.getLegacyType() == null || dto.getLegacyType().isBlank() || dto.getId() == null) {
+            return;
+        }
+        EngineConfigType type;
+        try {
+            type = EngineConfigType.fromValue(dto.getLegacyType());
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        switch (type) {
+            case PLAYER -> {
+                if (defaultWhitePlayerProfileId == null) {
+                    defaultWhitePlayerProfileId = dto.getId();
+                }
+                if (defaultBlackPlayerProfileId == null) {
+                    defaultBlackPlayerProfileId = dto.getId();
+                }
+            }
+            case EVALUATION -> {
+                if (defaultEvaluationProfileId == null) {
+                    defaultEvaluationProfileId = dto.getId();
+                }
+            }
+            case DEEP_ANALYSIS -> {
+                if (defaultDeepAnalysisProfileId == null) {
+                    defaultDeepAnalysisProfileId = dto.getId();
+                }
+            }
+        }
+    }
+
+    private void applyLegacyAssignments(EngineConfigStoreDto store) {
+        String legacyPlayer = validProfileId(store.getLegacyDefaultPlayerConfigId());
+        String legacyEvaluation = validProfileId(store.getLegacyEvaluationConfigId());
+        if (legacyEvaluation == null) {
+            legacyEvaluation = validProfileId(store.getLegacyDefaultEvaluationConfigId());
+        }
+        String legacyDeep = validProfileId(store.getLegacyDefaultDeepAnalysisConfigId());
+
+        if (defaultWhitePlayerProfileId == null && legacyPlayer != null) {
+            defaultWhitePlayerProfileId = legacyPlayer;
+        }
+        if (defaultBlackPlayerProfileId == null && legacyPlayer != null) {
+            defaultBlackPlayerProfileId = legacyPlayer;
+        }
+        if (defaultEvaluationProfileId == null && legacyEvaluation != null) {
+            defaultEvaluationProfileId = legacyEvaluation;
+        }
+        if (defaultDeepAnalysisProfileId == null && legacyDeep != null) {
+            defaultDeepAnalysisProfileId = legacyDeep;
         }
     }
 
@@ -707,12 +717,7 @@ public class EngineSettingsService {
 
             EngineProfileDto profileDto = new EngineProfileDto();
             profileDto.setName(legacy.getName());
-            profileDto.setType(legacy.getType() == null || legacy.getType().isBlank()
-                    ? inferLegacyType(legacy).name()
-                    : legacy.getType());
             profileDto.setEngineId(engineId);
-            profileDto.setDepth(legacy.getDepth());
-            profileDto.setMoveTimeSeconds(legacy.getMoveTimeSeconds());
 
             LinkedHashMap<String, String> values = new LinkedHashMap<>();
             for (Map.Entry<String, UciOptionDto> entry : legacy.getOptions().entrySet()) {
@@ -727,14 +732,38 @@ public class EngineSettingsService {
                     ? UUID.randomUUID().toString()
                     : legacy.getId();
             profiles.put(profileId, profileFromDto(profileId, profileDto));
+
+            EngineConfigType legacyType = legacy.getType() == null || legacy.getType().isBlank()
+                    ? inferLegacyType(legacy)
+                    : EngineConfigType.fromValue(legacy.getType());
+            seedMigratedAssignment(profileId, legacyType);
+        }
+    }
+
+    private void seedMigratedAssignment(String profileId, EngineConfigType type) {
+        switch (type) {
+            case PLAYER -> {
+                if (defaultWhitePlayerProfileId == null) {
+                    defaultWhitePlayerProfileId = profileId;
+                }
+                if (defaultBlackPlayerProfileId == null) {
+                    defaultBlackPlayerProfileId = profileId;
+                }
+            }
+            case EVALUATION -> {
+                if (defaultEvaluationProfileId == null) {
+                    defaultEvaluationProfileId = profileId;
+                }
+            }
+            case DEEP_ANALYSIS -> {
+                if (defaultDeepAnalysisProfileId == null) {
+                    defaultDeepAnalysisProfileId = profileId;
+                }
+            }
         }
     }
 
     private EngineConfigType inferLegacyType(ManagedEngineConfigDto dto) {
-        if (dto.getId() != null
-                && (dto.getId().equals(defaultEvaluationConfigId) || dto.getId().equals(evaluationConfigId))) {
-            return EngineConfigType.EVALUATION;
-        }
         String name = dto.getName();
         if (name != null) {
             String normalized = name.toLowerCase();
@@ -766,10 +795,8 @@ public class EngineSettingsService {
             }
             store.setEngines(engineDtos);
             store.setProfiles(profileDtos);
-            store.setDefaultPlayerConfigId(defaultPlayerConfigId);
-            store.setDefaultEvaluationConfigId(defaultEvaluationConfigId);
-            store.setDefaultDeepAnalysisConfigId(defaultDeepAnalysisConfigId);
-            store.setEvaluationConfigId(evaluationConfigId);
+            store.setDefaults(currentAssignments());
+            store.setFallbackProfileId(fallbackProfileId);
 
             Path temporary = storePath.resolveSibling(storePath.getFileName() + ".tmp");
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(temporary.toFile(), store);
@@ -811,15 +838,6 @@ public class EngineSettingsService {
         return result;
     }
 
-    private ManagedProfile requireProfile(String id, EngineConfigType type) {
-        ManagedProfile result = requireProfile(id);
-        if (result.type != type) {
-            throw new IllegalArgumentException(
-                    "Engine profile " + id + " is " + result.type + ", expected " + type);
-        }
-        return result;
-    }
-
     private ManagedEngineDefinition engineForProfile(ManagedProfile profile) {
         return requireEngine(profile.engineId);
     }
@@ -837,34 +855,40 @@ public class EngineSettingsService {
         return null;
     }
 
-    private boolean hasProfileOfType(String id, EngineConfigType type) {
-        ManagedProfile profile = id == null ? null : profiles.get(id);
-        return profile != null && profile.type == type;
+    private String resolveProfileId(String requested, String fallback) {
+        String requestedId = validProfileId(requested);
+        if (requestedId != null) {
+            return requestedId;
+        }
+        String fallbackId = validProfileId(fallback);
+        if (fallbackId != null) {
+            return fallbackId;
+        }
+        if (!profiles.isEmpty()) {
+            return profiles.values().iterator().next().id;
+        }
+        throw new IllegalStateException("No engine profiles available");
     }
 
-    private String resolveProfileId(String requested, String fallback, EngineConfigType type) {
-        if (hasProfileOfType(requested, type)) {
-            return requested;
-        }
-        if (hasProfileOfType(fallback, type)) {
-            return fallback;
-        }
-        for (ManagedProfile profile : profiles.values()) {
-            if (profile.type == type) {
-                return profile.id;
-            }
-        }
-        throw new IllegalStateException("No " + type + " engine profiles available");
+    private String validProfileId(String id) {
+        return id != null && profiles.containsKey(id) ? id : null;
+    }
+
+    private boolean isAssigned(String profileId) {
+        return Objects.equals(profileId, defaultWhitePlayerProfileId)
+                || Objects.equals(profileId, defaultBlackPlayerProfileId)
+                || Objects.equals(profileId, defaultEvaluationProfileId)
+                || Objects.equals(profileId, defaultDeepAnalysisProfileId);
     }
 
     private void bumpRuntimeVersions(String profileId) {
-        if (profileId.equals(whitePlayerConfigId)) {
+        if (profileId.equals(defaultWhitePlayerProfileId)) {
             whitePlayerVersion++;
         }
-        if (profileId.equals(blackPlayerConfigId)) {
+        if (profileId.equals(defaultBlackPlayerProfileId)) {
             blackPlayerVersion++;
         }
-        if (profileId.equals(evaluationConfigId)) {
+        if (profileId.equals(defaultEvaluationProfileId)) {
             evaluationVersion++;
         }
     }
@@ -874,14 +898,6 @@ public class EngineSettingsService {
             return requestedName.trim();
         }
         return definition.getEngineName();
-    }
-
-    private String typeLabel(EngineConfigType type) {
-        return switch (type) {
-            case PLAYER -> "Player";
-            case EVALUATION -> "Evaluation";
-            case DEEP_ANALYSIS -> "Deep Analysis";
-        };
     }
 
     private String fallbackEngineName(String path) {
@@ -911,26 +927,17 @@ public class EngineSettingsService {
     private static final class ManagedProfile {
         private final String id;
         private final String name;
-        private final EngineConfigType type;
         private final String engineId;
-        private final int depth;
-        private final int moveTimeSeconds;
         private final LinkedHashMap<String, String> optionValues;
 
         private ManagedProfile(
                 String id,
                 String name,
-                EngineConfigType type,
                 String engineId,
-                int depth,
-                int moveTimeSeconds,
                 Map<String, String> optionValues) {
             this.id = id;
             this.name = name;
-            this.type = type;
             this.engineId = engineId;
-            this.depth = depth;
-            this.moveTimeSeconds = moveTimeSeconds;
             this.optionValues = new LinkedHashMap<>(optionValues);
         }
     }

@@ -3,22 +3,29 @@ package demo.chess.api.dto;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class EngineConfigStoreDto {
 
     private List<EngineDefinitionDto> engines = new ArrayList<>();
     private List<EngineProfileDto> profiles = new ArrayList<>();
+    private EngineProfileAssignmentsDto defaults = new EngineProfileAssignmentsDto();
+    private String fallbackProfileId;
 
-    // Legacy field. It is read once to migrate the former combined config model
-    // and is no longer written by the new service.
+    // Legacy combined model. Read-only for migration and never written again.
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private List<ManagedEngineConfigDto> configs = new ArrayList<>();
 
-    private String defaultPlayerConfigId;
-    private String defaultEvaluationConfigId;
-    private String defaultDeepAnalysisConfigId;
-    private String evaluationConfigId;
+    // Legacy assignment fields from the typed-profile implementation.
+    @JsonProperty(value = "defaultPlayerConfigId", access = JsonProperty.Access.WRITE_ONLY)
+    private String legacyDefaultPlayerConfigId;
+    @JsonProperty(value = "defaultEvaluationConfigId", access = JsonProperty.Access.WRITE_ONLY)
+    private String legacyDefaultEvaluationConfigId;
+    @JsonProperty(value = "defaultDeepAnalysisConfigId", access = JsonProperty.Access.WRITE_ONLY)
+    private String legacyDefaultDeepAnalysisConfigId;
+    @JsonProperty(value = "evaluationConfigId", access = JsonProperty.Access.WRITE_ONLY)
+    private String legacyEvaluationConfigId;
 
     public EngineConfigStoreDto() {
     }
@@ -39,43 +46,47 @@ public class EngineConfigStoreDto {
         this.profiles = profiles != null ? new ArrayList<>(profiles) : new ArrayList<>();
     }
 
-    public List<ManagedEngineConfigDto> getConfigs() {
+    public EngineProfileAssignmentsDto getDefaults() {
+        if (defaults == null) {
+            defaults = new EngineProfileAssignmentsDto();
+        }
+        return defaults;
+    }
+
+    public void setDefaults(EngineProfileAssignmentsDto defaults) {
+        this.defaults = defaults != null ? defaults : new EngineProfileAssignmentsDto();
+    }
+
+    public String getFallbackProfileId() {
+        return fallbackProfileId;
+    }
+
+    public void setFallbackProfileId(String fallbackProfileId) {
+        this.fallbackProfileId = fallbackProfileId;
+    }
+
+    @JsonIgnore
+    public List<ManagedEngineConfigDto> getLegacyConfigs() {
         return configs;
     }
 
-    public void setConfigs(List<ManagedEngineConfigDto> configs) {
-        this.configs = configs != null ? new ArrayList<>(configs) : new ArrayList<>();
+    @JsonIgnore
+    public String getLegacyDefaultPlayerConfigId() {
+        return legacyDefaultPlayerConfigId;
     }
 
-    public String getDefaultPlayerConfigId() {
-        return defaultPlayerConfigId;
+    @JsonIgnore
+    public String getLegacyDefaultEvaluationConfigId() {
+        return legacyDefaultEvaluationConfigId;
     }
 
-    public void setDefaultPlayerConfigId(String defaultPlayerConfigId) {
-        this.defaultPlayerConfigId = defaultPlayerConfigId;
+    @JsonIgnore
+    public String getLegacyDefaultDeepAnalysisConfigId() {
+        return legacyDefaultDeepAnalysisConfigId;
     }
 
-    public String getDefaultEvaluationConfigId() {
-        return defaultEvaluationConfigId;
-    }
-
-    public void setDefaultEvaluationConfigId(String defaultEvaluationConfigId) {
-        this.defaultEvaluationConfigId = defaultEvaluationConfigId;
-    }
-
-    public String getDefaultDeepAnalysisConfigId() {
-        return defaultDeepAnalysisConfigId;
-    }
-
-    public void setDefaultDeepAnalysisConfigId(String defaultDeepAnalysisConfigId) {
-        this.defaultDeepAnalysisConfigId = defaultDeepAnalysisConfigId;
-    }
-
-    public String getEvaluationConfigId() {
-        return evaluationConfigId;
-    }
-
-    public void setEvaluationConfigId(String evaluationConfigId) {
-        this.evaluationConfigId = evaluationConfigId;
+    @JsonIgnore
+    public String getLegacyEvaluationConfigId() {
+        return legacyEvaluationConfigId;
     }
 }

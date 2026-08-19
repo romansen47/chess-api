@@ -11,9 +11,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.EngineConfigOverviewDto;
-import demo.chess.api.dto.EngineConfigSelectionDto;
 import demo.chess.api.dto.EngineDefinitionDto;
 import demo.chess.api.dto.EngineDefinitionInspectRequestDto;
+import demo.chess.api.dto.EngineProfileAssignmentsDto;
 import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.service.EngineSettingsService;
 
@@ -35,6 +35,13 @@ public class EngineSettingsController {
     @PostMapping("/reset")
     public ResponseEntity<EngineConfigOverviewDto> resetEngineSettings() {
         return ResponseEntity.ok(engineSettingsService.resetToFallbackDefaults());
+    }
+
+    @PutMapping("/defaults")
+    public ResponseEntity<EngineConfigOverviewDto> updateDefaults(
+            @RequestBody EngineProfileAssignmentsDto assignments) {
+        engineSettingsService.updateDefaultAssignments(assignments);
+        return ResponseEntity.ok(engineSettingsService.getOverview());
     }
 
     @PostMapping("/engines/inspect")
@@ -81,12 +88,5 @@ public class EngineSettingsController {
     public ResponseEntity<Void> deleteProfile(@PathVariable String id) {
         engineSettingsService.deleteProfile(id);
         return ResponseEntity.noContent().build();
-    }
-
-    @PutMapping("/evaluation")
-    public ResponseEntity<EngineConfigOverviewDto> selectEvaluationConfig(
-            @RequestBody EngineConfigSelectionDto selection) {
-        engineSettingsService.setEvaluationConfigId(selection.getConfigId());
-        return ResponseEntity.ok(engineSettingsService.getOverview());
     }
 }
