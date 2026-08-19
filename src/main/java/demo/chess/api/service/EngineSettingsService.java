@@ -25,7 +25,6 @@ import demo.chess.api.dto.EngineProfileAssignmentsDto;
 import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.dto.ManagedEngineConfigDto;
 import demo.chess.api.dto.UciOptionDto;
-import demo.chess.definitions.engines.Engine;
 import demo.chess.definitions.engines.EngineConfigType;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.UciEngineDefinition;
@@ -50,6 +49,7 @@ public class EngineSettingsService {
     private static final Log logger = LogFactory.getLog(EngineSettingsService.class);
     private static final String STORE_PROPERTY = "chess.engine.config.file";
 
+    private final EngineDiscoveryService engineDiscoveryService;
     private final String defaultEnginePath;
     private final ObjectMapper objectMapper;
     private final Path storePath;
@@ -67,12 +67,20 @@ public class EngineSettingsService {
     private long blackPlayerVersion = 1L;
     private long evaluationVersion = 1L;
 
-    public EngineSettingsService(ObjectMapper objectMapper) {
+    public EngineSettingsService(ObjectMapper objectMapper, EngineDiscoveryService engineDiscoveryService) {
         this.objectMapper = objectMapper;
-        this.defaultEnginePath = "/usr/games/" + Engine.STOCKFISH_16.path();
+        this.engineDiscoveryService = engineDiscoveryService;
+        this.defaultEnginePath = engineDiscoveryService.getPreferredEnginePath();
         this.storePath = resolveStorePath();
 
         loadStore();
+
+        // Discovery is automatic only for an empty installation. A normal
+        // restart never re-adds engines that a user deliberately removed.
+        if (engines.isEmpty() && profiles.isEmpty()) {
+            discoverSystemEnginesInternal();
+        }
+
         ensureFallbackAndAssignments();
     }
 
@@ -86,6 +94,7 @@ public class EngineSettingsService {
         defaultEvaluationProfileId = null;
         defaultDeepAnalysisProfileId = null;
 
+        discoverSystemEnginesInternal();
         ensureFallbackAndAssignments();
 
         whitePlayerVersion++;
@@ -94,7 +103,22 @@ public class EngineSettingsService {
         version++;
 
         persistStore();
-        logger.info("Reset engine settings to fallback engine " + defaultEnginePath + " with UCI defaults");
+        logger.info("Reset engine settings and rediscovered system UCI engines in "
+                + engineDiscoveryService.getDiscoveryDirectory());
+        return getOverview();
+    }
+
+    /**
+     * Scans the configured system engine directory and adds only UCI engines
+     * that are not already registered. Existing engines, profiles and default
+     * assignments are left untouched.
+     */
+    public synchronized EngineConfigOverviewDto discoverSystemEngines() {
+        int addedEngines = discoverSystemEnginesInternal();
+        if (addedEngines > 0) {
+            version++;
+            persistStore();
+        }
         return getOverview();
     }
 
@@ -198,7 +222,7 @@ public class EngineSettingsService {
             throw new IllegalArgumentException("Engine definition must not be null");
         }
         if (incoming.getEngine() == null
-                || !existing.definition.getEngine().equals(incoming.getEngine().trim())) {
+                || !sameEnginePath(existing.definition.getEngine(), incoming.getEngine().trim())) {
             throw new IllegalArgumentException(
                     "The executable of an existing engine is immutable. Define another engine instead.");
         }
@@ -246,7 +270,7 @@ public class EngineSettingsService {
         ManagedProfile existing = requireProfile(id);
         if (existing.id.equals(fallbackProfileId)) {
             throw new IllegalArgumentException(
-                    "The fallback profile is fixed to /usr/games/stockfish UCI defaults. Duplicate it to customize it.");
+                    "The fallback profile is fixed to its engine UCI defaults. Duplicate it to customize it.");
         }
         if (incoming == null) {
             throw new IllegalArgumentException("Engine profile must not be null");
@@ -503,32 +527,46 @@ public class EngineSettingsService {
         return dto;
     }
 
-    private void ensureFallbackAndAssignments() {
-        ManagedEngineDefinition defaultEngine = findEngineByPath(defaultEnginePath);
-        if (defaultEngine == null) {
-            UciEngineDefinition definition;
-            try {
-                definition = UciEngineInspector.inspect(defaultEnginePath);
-            } catch (Exception e) {
-                logger.warn("Could not inspect default UCI engine at " + defaultEnginePath
-                        + ". Creating a definition without UCI options: " + e.getMessage());
-                definition = new UciEngineDefinition(
-                        defaultEnginePath,
-                        fallbackEngineName(defaultEnginePath),
-                        "",
-                        Map.of());
+    private int discoverSystemEnginesInternal() {
+        int added = 0;
+        for (UciEngineDefinition definition : engineDiscoveryService.discover()) {
+            if (findEngineByPath(definition.getEngine()) != null) {
+                continue;
             }
+
             String engineId = UUID.randomUUID().toString();
-            defaultEngine = new ManagedEngineDefinition(
+            ManagedEngineDefinition managed = new ManagedEngineDefinition(
                     engineId,
                     definition.getEngineName(),
                     definition);
-            engines.put(engineId, defaultEngine);
+            engines.put(engineId, managed);
+            createDefaultProfile(managed);
+            added++;
+        }
+        return added;
+    }
+
+    private void ensureFallbackAndAssignments() {
+        ManagedProfile fallback = validProfile(fallbackProfileId);
+        ManagedEngineDefinition fallbackEngine = fallback == null ? null : engines.get(fallback.engineId);
+
+        if (fallbackEngine == null) {
+            fallbackEngine = findEngineByPath(defaultEnginePath);
+        }
+        if (fallbackEngine == null && !engines.isEmpty()) {
+            fallbackEngine = engines.values().iterator().next();
+        }
+        if (fallbackEngine == null) {
+            fallbackEngine = createCompatibilityFallbackEngine();
         }
 
-        ManagedProfile fallback = fallbackProfileId == null ? null : profiles.get(fallbackProfileId);
-        if (fallback == null || !fallback.engineId.equals(defaultEngine.id)) {
-            fallbackProfileId = createFallbackProfile(defaultEngine);
+        if (fallback == null || !fallback.engineId.equals(fallbackEngine.id)) {
+            fallback = findDefaultProfileForEngine(fallbackEngine);
+            if (fallback == null) {
+                String id = createDefaultProfile(fallbackEngine);
+                fallback = profiles.get(id);
+            }
+            fallbackProfileId = fallback.id;
         }
 
         defaultWhitePlayerProfileId = resolveProfileId(defaultWhitePlayerProfileId, fallbackProfileId);
@@ -539,11 +577,53 @@ public class EngineSettingsService {
         persistStore();
     }
 
-    private String createFallbackProfile(ManagedEngineDefinition defaultEngine) {
+    private ManagedEngineDefinition createCompatibilityFallbackEngine() {
+        UciEngineDefinition definition;
+        try {
+            definition = UciEngineInspector.inspect(defaultEnginePath);
+        } catch (Exception e) {
+            logger.warn("No responsive UCI engine was discovered in "
+                    + engineDiscoveryService.getDiscoveryDirectory()
+                    + ". Keeping the legacy fallback path " + defaultEnginePath
+                    + " so the application can still start: " + e.getMessage());
+            definition = new UciEngineDefinition(
+                    defaultEnginePath,
+                    fallbackEngineName(defaultEnginePath),
+                    "",
+                    Map.of());
+        }
+
+        String engineId = UUID.randomUUID().toString();
+        ManagedEngineDefinition managed = new ManagedEngineDefinition(
+                engineId,
+                definition.getEngineName(),
+                definition);
+        engines.put(engineId, managed);
+        return managed;
+    }
+
+    private ManagedProfile findDefaultProfileForEngine(ManagedEngineDefinition engine) {
+        LinkedHashMap<String, String> defaults = defaultOptionValues(engine.definition);
+        ManagedProfile firstForEngine = null;
+        for (ManagedProfile profile : profiles.values()) {
+            if (!profile.engineId.equals(engine.id)) {
+                continue;
+            }
+            if (firstForEngine == null) {
+                firstForEngine = profile;
+            }
+            if (profile.optionValues.equals(defaults)) {
+                return profile;
+            }
+        }
+        return firstForEngine;
+    }
+
+    private String createDefaultProfile(ManagedEngineDefinition engine) {
         EngineProfileDto dto = new EngineProfileDto();
-        dto.setName(defaultEngine.name + " · Default");
-        dto.setEngineId(defaultEngine.id);
-        dto.setOptionValues(defaultOptionValues(defaultEngine.definition));
+        dto.setName(engine.name + " · Default");
+        dto.setEngineId(engine.id);
+        dto.setOptionValues(defaultOptionValues(engine.definition));
 
         String id = UUID.randomUUID().toString();
         profiles.put(id, profileFromDto(id, dto));
@@ -838,21 +918,43 @@ public class EngineSettingsService {
         return result;
     }
 
+    private ManagedProfile validProfile(String id) {
+        return id == null ? null : profiles.get(id);
+    }
+
     private ManagedEngineDefinition engineForProfile(ManagedProfile profile) {
         return requireEngine(profile.engineId);
     }
 
     private ManagedEngineDefinition findEngineByPath(String enginePath) {
-        if (enginePath == null) {
+        if (enginePath == null || enginePath.isBlank()) {
             return null;
         }
-        String normalized = enginePath.trim();
         for (ManagedEngineDefinition engine : engines.values()) {
-            if (engine.definition.getEngine().equals(normalized)) {
+            if (sameEnginePath(engine.definition.getEngine(), enginePath)) {
                 return engine;
             }
         }
         return null;
+    }
+
+    private boolean sameEnginePath(String first, String second) {
+        return canonicalEnginePath(first).equals(canonicalEnginePath(second));
+    }
+
+    private String canonicalEnginePath(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        try {
+            Path path = Path.of(value.trim()).toAbsolutePath().normalize();
+            if (Files.exists(path)) {
+                return path.toRealPath().toString();
+            }
+            return path.toString();
+        } catch (Exception e) {
+            return value.trim();
+        }
     }
 
     private String resolveProfileId(String requested, String fallback) {
