@@ -37,6 +37,7 @@ public class AnalysisEvaluationService {
 
     private final UciGameService uciGameService;
     private final EngineSettingsService engineSettingsService;
+    private final EngineLineDisplayService engineLineDisplayService;
 
     private EvaluationEngine evaluationEngine;
     private String currentEvaluationEnginePath;
@@ -46,9 +47,11 @@ public class AnalysisEvaluationService {
 
     public AnalysisEvaluationService(
             UciGameService uciGameService,
-            EngineSettingsService engineSettingsService) {
+            EngineSettingsService engineSettingsService,
+            EngineLineDisplayService engineLineDisplayService) {
         this.uciGameService = uciGameService;
         this.engineSettingsService = engineSettingsService;
+        this.engineLineDisplayService = engineLineDisplayService;
     }
 
     public synchronized EngineEvaluationDto getEvaluation(int ply) {
@@ -99,12 +102,8 @@ public class AnalysisEvaluationService {
             List<EngineLineDto> lines = new ArrayList<>();
 
             for (EngineLine line : bestLines) {
-                double roundedEvaluation = Math.round(line.getEvaluation() * 100.0) / 100.0;
-                lines.add(new EngineLineDto(
-                        roundedEvaluation,
-                        line.getDepth(),
-                        line.getMateDistance(),
-                        line.getMoves()));
+                Game displayGame = Simulation.forkDummyFrom(game.getMoveList());
+                lines.add(engineLineDisplayService.toDto(displayGame, line));
             }
 
             EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, lines);
