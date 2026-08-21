@@ -42,6 +42,7 @@ public class AnalysisEvaluationService {
     private String currentEvaluationEnginePath;
     private Integer currentPly;
     private long lastSeenSettingsVersion = -1L;
+    private EngineEvaluationDto lastValidEvaluation;
 
     public AnalysisEvaluationService(
             UciGameService uciGameService,
@@ -79,10 +80,15 @@ public class AnalysisEvaluationService {
                 engine.clearChachedLines();
                 currentPly = ply;
                 lastSeenSettingsVersion = settingsVersion;
+                lastValidEvaluation = null;
             }
 
             List<EngineLine> bestLines = engine.getBestLines(game, engineConfig);
             if (bestLines == null || bestLines.isEmpty()) {
+                if (lastValidEvaluation != null) {
+                    return lastValidEvaluation;
+                }
+
                 EngineEvaluationDto result = new EngineEvaluationDto(0.0, 0.5, List.of());
                 result.setEngineName(engineSettingsService.getEvaluationEngineName());
                 return result;
@@ -103,6 +109,7 @@ public class AnalysisEvaluationService {
 
             EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, lines);
             result.setEngineName(engineSettingsService.getEvaluationEngineName());
+            lastValidEvaluation = result;
             return result;
         } catch (NoMoveFoundException | IOException e) {
             throw new IllegalStateException("Could not reconstruct analysis position for ply " + ply, e);
@@ -133,6 +140,7 @@ public class AnalysisEvaluationService {
         currentEvaluationEnginePath = null;
         currentPly = null;
         lastSeenSettingsVersion = -1L;
+        lastValidEvaluation = null;
     }
 
     private Game createReplayGame(List<Move> originalMoves, int ply)
@@ -229,6 +237,7 @@ public class AnalysisEvaluationService {
             evaluationEngine = createEvaluationEngine(configuredPath);
             currentPly = null;
             lastSeenSettingsVersion = -1L;
+            lastValidEvaluation = null;
         }
         return evaluationEngine;
     }
