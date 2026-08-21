@@ -65,7 +65,7 @@ public class AnalysisEvaluationService {
                 return terminalEvaluation;
             }
 
-            UciEngineConfig engineConfig = engineSettingsService.toEvaluationEngineConfig();
+            UciEngineConfig engineConfig = createInfiniteEvaluationConfig();
             EvaluationEngine engine = getEvaluationEngine();
             long settingsVersion = engineSettingsService.getEvaluationVersion();
 
@@ -111,6 +111,20 @@ public class AnalysisEvaluationService {
         } catch (Exception e) {
             throw new IllegalStateException("Could not evaluate analysis position for ply " + ply, e);
         }
+    }
+
+    /**
+     * Resolve the profile assigned under Defaults -> Evaluation and explicitly
+     * remove all finite-search limits. EvaluationUciEngine itself uses
+     * "go infinite"; keeping depth and move time at zero also prevents parser
+     * or future engine code from accidentally inheriting a DeepAnalysis limit.
+     */
+    private UciEngineConfig createInfiniteEvaluationConfig() {
+        String profileId = engineSettingsService.getDefaultEvaluationProfileId();
+        UciEngineConfig config = engineSettingsService.getConfig(profileId);
+        config.setDepth(0);
+        config.setMoveTimeSeconds(0);
+        return config;
     }
 
     public synchronized void stopEvaluation() {
