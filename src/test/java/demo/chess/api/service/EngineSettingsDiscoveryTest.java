@@ -111,6 +111,43 @@ class EngineSettingsDiscoveryTest {
         assertNotNull(secondScan.getFallbackProfileId());
     }
 
+    @Test
+    void deletingEngineRemovesAssociatedProfilesAndRepairsFallbackAssignments() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        createUciEngine(games.resolve("stockfish"), "Stockfish Test", 16);
+        createUciEngine(games.resolve("glaurung"), "Glaurung Test", 32);
+        configureProperties(games);
+
+        EngineSettingsService service = new EngineSettingsService(
+                new ObjectMapper(),
+                new EngineDiscoveryService());
+        EngineConfigOverviewDto before = service.getOverview();
+
+        EngineProfileDto oldFallbackProfile = before.getProfiles().stream()
+                .filter(profile -> profile.getId().equals(before.getFallbackProfileId()))
+                .findFirst()
+                .orElseThrow();
+        String deletedEngineId = oldFallbackProfile.getEngineId();
+
+        service.deleteEngine(deletedEngineId);
+        EngineConfigOverviewDto after = service.getOverview();
+
+        assertEquals(1, after.getEngines().size());
+        assertEquals(1, after.getProfiles().size());
+        assertTrue(after.getEngines().stream().noneMatch(engine -> engine.getId().equals(deletedEngineId)));
+        assertTrue(after.getProfiles().stream().noneMatch(profile -> profile.getEngineId().equals(deletedEngineId)));
+
+        EngineProfileDto newFallbackProfile = after.getProfiles().stream()
+                .filter(profile -> profile.getId().equals(after.getFallbackProfileId()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(after.getEngines().get(0).getId(), newFallbackProfile.getEngineId());
+        assertEquals(after.getFallbackProfileId(), after.getDefaults().getWhitePlayerProfileId());
+        assertEquals(after.getFallbackProfileId(), after.getDefaults().getBlackPlayerProfileId());
+        assertEquals(after.getFallbackProfileId(), after.getDefaults().getEvaluationProfileId());
+        assertEquals(after.getFallbackProfileId(), after.getDefaults().getDeepAnalysisProfileId());
+    }
+
     private void configureProperties(Path games) {
         previousDirectoryProperty = System.getProperty(DIRECTORY_PROPERTY);
         previousStoreProperty = System.getProperty(STORE_PROPERTY);
