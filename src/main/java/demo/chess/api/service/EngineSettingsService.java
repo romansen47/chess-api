@@ -240,12 +240,34 @@ public class EngineSettingsService {
 
     public synchronized void deleteEngine(String id) {
         ManagedEngineDefinition existing = requireEngine(id);
-        boolean used = profiles.values().stream().anyMatch(profile -> profile.engineId.equals(existing.id));
-        if (used) {
-            throw new IllegalArgumentException(
-                    "Engine is referenced by at least one profile and cannot be deleted");
-        }
+
+        List<String> associatedProfileIds = profiles.values().stream()
+                .filter(profile -> profile.engineId.equals(existing.id))
+                .map(profile -> profile.id)
+                .toList();
+
+        boolean whiteChanged = associatedProfileIds.contains(defaultWhitePlayerProfileId);
+        boolean blackChanged = associatedProfileIds.contains(defaultBlackPlayerProfileId);
+        boolean evaluationChanged = associatedProfileIds.contains(defaultEvaluationProfileId);
+
+        associatedProfileIds.forEach(profiles::remove);
         engines.remove(existing.id);
+
+        // Deleting an engine is a cascading operation. Any defaults or fallback
+        // that pointed to one of its profiles are repaired against the remaining
+        // registry. If the last engine is deleted, the compatibility fallback
+        // keeps the application operational.
+        ensureFallbackAndAssignments();
+
+        if (whiteChanged) {
+            whitePlayerVersion++;
+        }
+        if (blackChanged) {
+            blackPlayerVersion++;
+        }
+        if (evaluationChanged) {
+            evaluationVersion++;
+        }
         version++;
         persistStore();
     }
