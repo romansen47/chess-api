@@ -37,10 +37,15 @@ class EngineSettingsDiscoveryTest {
     }
 
     @Test
-    void discoversOnlyResponsiveUciEnginesAndPrefersStockfishAsFallback() throws Exception {
+    void discoversOnlyAllowedResponsiveUciEnginesAndPrefersStockfishAsFallback() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
         Path stockfish = createUciEngine(games.resolve("stockfish"), "Stockfish Test", 16);
         Path lc0 = createUciEngine(games.resolve("lc0"), "Lc0 Test", 64);
+
+        // This is intentionally a perfectly responsive UCI engine. It must still
+        // never be started/imported by auto-discovery because its name is not
+        // explicitly allowed.
+        createUciEngine(games.resolve("glaurung"), "Glaurung Test", 32);
         createNonUciExecutable(games.resolve("some-game"));
 
         try {
@@ -79,11 +84,12 @@ class EngineSettingsDiscoveryTest {
 
         assertTrue(overview.getEngines().stream().anyMatch(engine ->
                 engine.getEngine().equals(lc0.toAbsolutePath().normalize().toString())));
+        assertTrue(overview.getEngines().stream().noneMatch(engine -> engine.getEngine().endsWith("glaurung")));
         assertTrue(overview.getEngines().stream().noneMatch(engine -> engine.getEngine().endsWith("some-game")));
     }
 
     @Test
-    void manualScanAddsOnlyNewEnginesAndDoesNotChangeAssignments() throws Exception {
+    void manualScanAddsOnlyNewAllowedEnginesAndDoesNotChangeAssignments() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
         createUciEngine(games.resolve("stockfish"), "Stockfish Test", 16);
         configureProperties(games);
@@ -94,7 +100,8 @@ class EngineSettingsDiscoveryTest {
         EngineConfigOverviewDto before = service.getOverview();
         String fallbackBefore = before.getFallbackProfileId();
 
-        createUciEngine(games.resolve("new-engine"), "New Engine", 32);
+        createUciEngine(games.resolve("lc0-new"), "New Lc0 Engine", 32);
+        createUciEngine(games.resolve("new-engine"), "Ignored Engine", 48);
         EngineConfigOverviewDto after = service.discoverSystemEngines();
 
         assertEquals(2, after.getEngines().size());
@@ -104,6 +111,7 @@ class EngineSettingsDiscoveryTest {
         assertEquals(fallbackBefore, after.getDefaults().getBlackPlayerProfileId());
         assertEquals(fallbackBefore, after.getDefaults().getEvaluationProfileId());
         assertEquals(fallbackBefore, after.getDefaults().getDeepAnalysisProfileId());
+        assertTrue(after.getEngines().stream().noneMatch(engine -> engine.getEngine().endsWith("new-engine")));
 
         EngineConfigOverviewDto secondScan = service.discoverSystemEngines();
         assertEquals(2, secondScan.getEngines().size());
@@ -115,7 +123,7 @@ class EngineSettingsDiscoveryTest {
     void deletingEngineRemovesAssociatedProfilesAndRepairsFallbackAssignments() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
         createUciEngine(games.resolve("stockfish"), "Stockfish Test", 16);
-        createUciEngine(games.resolve("glaurung"), "Glaurung Test", 32);
+        createUciEngine(games.resolve("lc0"), "Lc0 Test", 32);
         configureProperties(games);
 
         EngineSettingsService service = new EngineSettingsService(
