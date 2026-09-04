@@ -6,6 +6,7 @@ import java.awt.Frame;
 import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
@@ -20,6 +21,10 @@ import org.springframework.stereotype.Service;
  * Since this application is normally used locally, the backend can instead
  * open the operating system's file chooser and return the real path to the
  * selected executable.
+ *
+ * When running inside WSL we prefer the Windows OpenFileDialog. This gives the
+ * user the normal Windows file manager while still returning a path that the
+ * Linux backend can execute. Outside WSL, AWT's native FileDialog is used.
  */
 @Service
 public class NativeEngineFilePickerService {
@@ -40,10 +45,101 @@ public class NativeEngineFilePickerService {
      *         chooser was cancelled
      */
     public synchronized String selectExecutable() {
+        if (isWsl()) {
+            try {
+                return selectExecutableWithWindowsDialog();
+            } catch (IOException e) {
+                if (GraphicsEnvironment.isHeadless()) {
+                    throw new IllegalStateException(
+                            "Could not open the Windows system file chooser from WSL: " + e.getMessage(), e);
+                }
+                // WSL interop can be disabled. In that case, fall back to the
+                // graphical Java dialog when a DISPLAY/WSLg session exists.
+            }
+        }
+
+        return selectExecutableWithAwtDialog();
+    }
+
+    private String selectExecutableWithWindowsDialog() throws IOException {
+        Path startDirectory = Files.isDirectory(lastDirectory) ? lastDirectory : initialDirectory;
+        String windowsStartDirectory = runWslPath("-w", startDirectory.toString());
+
+        String script = String.join("; ",
+                "Add-Type -AssemblyName System.Windows.Forms",
+                "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+                "$dialog.Title = 'UCI-Engine auswählen'",
+                "$dialog.CheckFileExists = $true",
+                "$dialog.Multiselect = $false",
+                "$dialog.Filter = 'Alle Dateien (*.*)|*.*'",
+                "$dialog.InitialDirectory = '" + escapePowerShellSingleQuoted(windowsStartDirectory) + "'",
+                "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; Write-Output $dialog.FileName }"
+        );
+
+        Process process = new ProcessBuilder(
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-STA",
+                "-Command",
+                script)
+                .redirectErrorStream(true)
+                .start();
+
+        String output;
+        try {
+            output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new IOException("PowerShell file chooser exited with code " + exitCode
+                        + (output.isBlank() ? "" : ": " + output));
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Windows file selection was interrupted", e);
+        }
+
+        if (output.isBlank()) {
+            return null;
+        }
+
+        String windowsPath = output.lines()
+                .filter(line -> !line.isBlank())
+                .reduce((first, second) -> second)
+                .orElse("")
+                .trim();
+        if (windowsPath.isBlank()) {
+            return null;
+        }
+
+        String linuxPath = runWslPath("-u", windowsPath);
+        return validateAndRemember(Path.of(linuxPath));
+    }
+
+    private String runWslPath(String direction, String value) throws IOException {
+        Process process = new ProcessBuilder("wslpath", direction, value)
+                .redirectErrorStream(true)
+                .start();
+        String output;
+        try {
+            output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            int exitCode = process.waitFor();
+            if (exitCode != 0 || output.isBlank()) {
+                throw new IOException("wslpath failed for '" + value + "'"
+                        + (output.isBlank() ? "" : ": " + output));
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Path conversion was interrupted", e);
+        }
+        return output;
+    }
+
+    private String selectExecutableWithAwtDialog() {
         if (GraphicsEnvironment.isHeadless()) {
             throw new IllegalStateException(
                     "No graphical desktop is available for the system file chooser. "
-                            + "Start the application in a graphical desktop session (for WSL, WSLg/DISPLAY must be available)."
+                            + "Start the application in a graphical desktop session."
             );
         }
 
@@ -69,19 +165,7 @@ public class NativeEngineFilePickerService {
                     return;
                 }
 
-                Path selected = Path.of(directoryName, fileName).toAbsolutePath().normalize();
-                if (!Files.isRegularFile(selected)) {
-                    throw new IllegalArgumentException("Selected engine is not a regular file: " + selected);
-                }
-                if (!Files.isExecutable(selected)) {
-                    throw new IllegalArgumentException("Selected engine is not executable: " + selected);
-                }
-
-                Path realPath = selected.toRealPath();
-                selectedPath.set(realPath.toString());
-                if (realPath.getParent() != null) {
-                    lastDirectory = realPath.getParent();
-                }
+                selectedPath.set(validateAndRemember(Path.of(directoryName, fileName)));
             } catch (IOException e) {
                 failure.set(new IllegalStateException("Could not resolve selected engine path: " + e.getMessage(), e));
             } catch (RuntimeException e) {
@@ -114,5 +198,30 @@ public class NativeEngineFilePickerService {
             throw failure.get();
         }
         return selectedPath.get();
+    }
+
+    private String validateAndRemember(Path selected) throws IOException {
+        Path normalized = selected.toAbsolutePath().normalize();
+        if (!Files.isRegularFile(normalized)) {
+            throw new IllegalArgumentException("Selected engine is not a regular file: " + normalized);
+        }
+        if (!Files.isExecutable(normalized)) {
+            throw new IllegalArgumentException("Selected engine is not executable: " + normalized);
+        }
+
+        Path realPath = normalized.toRealPath();
+        if (realPath.getParent() != null) {
+            lastDirectory = realPath.getParent();
+        }
+        return realPath.toString();
+    }
+
+    private boolean isWsl() {
+        String distroName = System.getenv("WSL_DISTRO_NAME");
+        return distroName != null && !distroName.isBlank();
+    }
+
+    private String escapePowerShellSingleQuoted(String value) {
+        return value.replace("'", "''");
     }
 }
