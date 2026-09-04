@@ -16,15 +16,20 @@ import demo.chess.api.dto.EngineDefinitionInspectRequestDto;
 import demo.chess.api.dto.EngineProfileAssignmentsDto;
 import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.service.EngineSettingsService;
+import demo.chess.api.service.NativeEngineFilePickerService;
 
 @RestController
 @RequestMapping("/api/engine-configs")
 public class EngineSettingsController {
 
     private final EngineSettingsService engineSettingsService;
+    private final NativeEngineFilePickerService nativeEngineFilePickerService;
 
-    public EngineSettingsController(EngineSettingsService engineSettingsService) {
+    public EngineSettingsController(
+            EngineSettingsService engineSettingsService,
+            NativeEngineFilePickerService nativeEngineFilePickerService) {
         this.engineSettingsService = engineSettingsService;
+        this.nativeEngineFilePickerService = nativeEngineFilePickerService;
     }
 
     @GetMapping
@@ -47,6 +52,21 @@ public class EngineSettingsController {
             @RequestBody EngineProfileAssignmentsDto assignments) {
         engineSettingsService.updateDefaultAssignments(assignments);
         return ResponseEntity.ok(engineSettingsService.getOverview());
+    }
+
+    /**
+     * Opens the native file chooser on the machine running the backend. The
+     * selected executable is inspected immediately so the frontend receives a
+     * complete UCI engine definition and never needs access to the absolute
+     * filesystem path itself.
+     */
+    @PostMapping("/engines/select")
+    public ResponseEntity<EngineDefinitionDto> selectEngine() {
+        String enginePath = nativeEngineFilePickerService.selectExecutable();
+        if (enginePath == null) {
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.ok(engineSettingsService.inspectEngineDefinition(enginePath, null));
     }
 
     @PostMapping("/engines/inspect")
