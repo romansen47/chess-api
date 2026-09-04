@@ -32,6 +32,11 @@ public class EngineSettingsController {
         return engineSettingsService.getOverview();
     }
 
+    @PostMapping("/discover")
+    public ResponseEntity<EngineConfigOverviewDto> discoverSystemEngines() {
+        return ResponseEntity.ok(engineSettingsService.discoverSystemEngines());
+    }
+
     @PostMapping("/reset")
     public ResponseEntity<EngineConfigOverviewDto> resetEngineSettings() {
         return ResponseEntity.ok(engineSettingsService.resetToFallbackDefaults());
