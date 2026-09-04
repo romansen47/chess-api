@@ -339,10 +339,6 @@ public class EngineSettingsService {
      */
     public synchronized EngineProfileDto updateProfile(String id, EngineProfileDto incoming) {
         ManagedProfile existing = requireProfile(id);
-        if (existing.id.equals(fallbackProfileId)) {
-            throw new IllegalArgumentException(
-                    "The fallback profile is fixed to its engine UCI defaults. Duplicate it to customize it.");
-        }
         if (incoming == null) {
             throw new IllegalArgumentException("Engine profile must not be null");
         }
