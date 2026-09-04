@@ -70,7 +70,14 @@ public class NativeEngineFilePickerService {
                 "Add-Type -AssemblyName System.Windows.Forms",
                 "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
                 "$dialog.Title = 'UCI-Engine auswählen'",
-                "$dialog.CheckFileExists = $true",
+                // Windows can browse \\wsl.localhost but its own file validation
+                // may reject Linux executables/symlinks as 'not found'. Therefore
+                // the dialog only selects a path. Linux validates the real file
+                // after the UNC path has been translated back into a WSL path.
+                "$dialog.CheckFileExists = $false",
+                "$dialog.CheckPathExists = $false",
+                "$dialog.ValidateNames = $false",
+                "$dialog.DereferenceLinks = $false",
                 "$dialog.Multiselect = $false",
                 "$dialog.Filter = 'Alle Dateien (*.*)|*.*'",
                 "$dialog.InitialDirectory = '" + escapePowerShellSingleQuoted(windowsStartDirectory) + "'",
