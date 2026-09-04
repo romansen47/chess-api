@@ -22,12 +22,17 @@ public class ComputerMoveController {
 
     private final ComputerMoveService computerMoveService;
 
+    /**
+     * Creates a new ComputerMoveController instance.
+     * @param computerMoveService the computer move service
+     */
     public ComputerMoveController(ComputerMoveService computerMoveService) {
         this.computerMoveService = computerMoveService;
     }
 
     /**
-     * Lässt die UCI-Engine für die aktuell am Zug befindliche Seite einen Zug ausführen.
+     * Performs the make computer move operation.
+     * @return the result of the operation
      */
     @PostMapping("/computer-move")
     public ResponseEntity<MoveResultDto> makeComputerMove() throws NoMoveFoundException, IOException, InterruptedException, ExecutionException {
@@ -54,7 +59,9 @@ public class ComputerMoveController {
     }
 
     /**
-     * Bricht eine gerade rechnende Player-Engine ab, ohne auf den Zug zu warten.
+     * Returns whether this object can cel computer move.
+     * @param side the side
+     * @return true when the condition is satisfied; otherwise false
      */
     @PostMapping("/computer-move/cancel")
     public ResponseEntity<Map<String, Object>> cancelComputerMove(@RequestParam String side) {
@@ -71,6 +78,11 @@ public class ComputerMoveController {
                 "side", color.name().toLowerCase(Locale.ROOT)));
     }
 
+    /**
+     * Parses the side.
+     * @param side the side
+     * @return the result of the operation
+     */
     private Color parseSide(String side) {
         if (side == null) {
             return null;

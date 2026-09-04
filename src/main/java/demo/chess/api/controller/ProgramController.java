@@ -25,10 +25,19 @@ public class ProgramController {
     private final ConfigurableApplicationContext applicationContext;
     private final AtomicBoolean terminationScheduled = new AtomicBoolean(false);
 
+    /**
+     * Creates a new ProgramController instance.
+     * @param applicationContext the application context
+     */
     public ProgramController(ConfigurableApplicationContext applicationContext) {
         this.applicationContext = applicationContext;
     }
 
+    /**
+     * Performs the terminate program operation.
+     * @param terminateHeader the terminate header
+     * @return the result of the operation
+     */
     @PostMapping("/terminate")
     public ResponseEntity<Map<String, Object>> terminateProgram(
             @RequestHeader(name = TERMINATE_HEADER, required = false) String terminateHeader) {
@@ -52,6 +61,9 @@ public class ProgramController {
                         "alreadyScheduled", !newlyScheduled));
     }
 
+    /**
+     * Performs the shutdown application operation.
+     */
     private void shutdownApplication() {
         try {
             Thread.sleep(SHUTDOWN_DELAY_MILLIS);

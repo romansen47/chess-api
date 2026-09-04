@@ -37,14 +37,25 @@ public class EngineDiscoveryService {
 
     private final Path discoveryDirectory;
 
+    /**
+     * Creates a new EngineDiscoveryService instance.
+     */
     public EngineDiscoveryService() {
         this.discoveryDirectory = resolveDiscoveryDirectory();
     }
 
+    /**
+     * Returns the discovery directory.
+     * @return the discovery directory
+     */
     public Path getDiscoveryDirectory() {
         return discoveryDirectory;
     }
 
+    /**
+     * Returns the preferred engine path.
+     * @return the preferred engine path
+     */
     public String getPreferredEnginePath() {
         return discoveryDirectory.resolve(PREFERRED_EXECUTABLE)
                 .toAbsolutePath()
@@ -52,6 +63,10 @@ public class EngineDiscoveryService {
                 .toString();
     }
 
+    /**
+     * Performs the discover operation.
+     * @return the result of the operation
+     */
     public List<UciEngineDefinition> discover() {
         if (!Files.isDirectory(discoveryDirectory)) {
             logger.info("Engine discovery directory does not exist: " + discoveryDirectory);
@@ -102,6 +117,11 @@ public class EngineDiscoveryService {
         return new ArrayList<>(definitionsByRealPath.values());
     }
 
+    /**
+     * Returns whether the allowed discovery candidate.
+     * @param path the path
+     * @return true when the condition is satisfied; otherwise false
+     */
     private boolean isAllowedDiscoveryCandidate(Path path) {
         Path fileName = path.getFileName();
         if (fileName == null) {
@@ -111,12 +131,20 @@ public class EngineDiscoveryService {
         return normalizedName.contains("stockfish") || normalizedName.contains("lc0");
     }
 
+    /**
+     * Returns whether this object can didate comparator.
+     * @return true when the condition is satisfied; otherwise false
+     */
     private Comparator<Path> candidateComparator() {
         return Comparator
                 .comparing((Path path) -> !PREFERRED_EXECUTABLE.equalsIgnoreCase(path.getFileName().toString()))
                 .thenComparing(path -> path.getFileName().toString(), String.CASE_INSENSITIVE_ORDER);
     }
 
+    /**
+     * Resolves the discovery directory.
+     * @return the result of the operation
+     */
     private Path resolveDiscoveryDirectory() {
         String configured = System.getProperty(DIRECTORY_PROPERTY);
         String value = configured == null || configured.isBlank()

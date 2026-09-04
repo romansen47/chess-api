@@ -29,6 +29,13 @@ public class GameController {
     private final UciGameService uciGameService;
     private final AnalysisReplayService analysisReplayService;
 
+    /**
+     * Creates a new GameController instance.
+     * @param gameService the game service
+     * @param gameLifecycleService the game lifecycle service
+     * @param uciGameService the uci game service
+     * @param analysisReplayService the analysis replay service
+     */
     public GameController(
             GameService gameService,
             GameLifecycleService gameLifecycleService,
@@ -41,7 +48,8 @@ public class GameController {
     }
 
     /**
-     * Liefert die aktuell verwendeten Einstellungen für neue Partien.
+     * Returns the game settings.
+     * @return the game settings
      */
     @GetMapping("/game-settings")
     public ResponseEntity<GameSettingsDto> getGameSettings() {
@@ -49,7 +57,9 @@ public class GameController {
     }
 
     /**
-     * Startet eine neue Partie mit den vom Frontend gewählten Einstellungen.
+     * Starts the new game.
+     * @param settings the settings
+     * @return the result of the operation
      */
     @PostMapping("/new-game")
     public ResponseEntity<GameSettingsDto> startNewGame(@RequestBody(required = false) GameSettingsDto settings) {
@@ -59,8 +69,10 @@ public class GameController {
     }
 
     /**
-     * Exportiert die aktuelle Analysequelle als PGN. Wenn zuvor eine PGN-Datei
-     * geladen wurde, wird diese Partie exportiert; ansonsten die aktuell gespielte Partie.
+     * Performs the export pgn game operation.
+     * @param whiteComputer the white computer
+     * @param blackComputer the black computer
+     * @return the result of the operation
      */
     @GetMapping(value = "/game/pgn", produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<?> exportPgnGame(
@@ -79,8 +91,9 @@ public class GameController {
     }
 
     /**
-     * Lädt eine PGN-Partie als separate, ruhende Analysepartie. Das aktuell laufende
-     * Game im GameService wird dabei nicht überschrieben.
+     * Performs the import pgn game operation.
+     * @param content the content
+     * @return the result of the operation
      */
     @PostMapping(
             value = "/game/pgn",

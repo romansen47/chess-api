@@ -67,6 +67,11 @@ public class EngineSettingsService {
     private long blackPlayerVersion = 1L;
     private long evaluationVersion = 1L;
 
+    /**
+     * Creates a new EngineSettingsService instance.
+     * @param objectMapper the object mapper
+     * @param engineDiscoveryService the engine discovery service
+     */
     public EngineSettingsService(ObjectMapper objectMapper, EngineDiscoveryService engineDiscoveryService) {
         this.objectMapper = objectMapper;
         this.engineDiscoveryService = engineDiscoveryService;
@@ -84,6 +89,10 @@ public class EngineSettingsService {
         ensureFallbackAndAssignments();
     }
 
+    /**
+     * Resets the to fallback defaults.
+     * @return the result of the operation
+     */
     public synchronized EngineConfigOverviewDto resetToFallbackDefaults() {
         engines.clear();
         profiles.clear();
@@ -109,9 +118,8 @@ public class EngineSettingsService {
     }
 
     /**
-     * Scans the configured system engine directory and adds only UCI engines
-     * that are not already registered. Existing engines, profiles and default
-     * assignments are left untouched.
+     * Performs the discover system engines operation.
+     * @return the result of the operation
      */
     public synchronized EngineConfigOverviewDto discoverSystemEngines() {
         int addedEngines = discoverSystemEnginesInternal();
@@ -122,6 +130,10 @@ public class EngineSettingsService {
         return getOverview();
     }
 
+    /**
+     * Returns the overview.
+     * @return the overview
+     */
     public synchronized EngineConfigOverviewDto getOverview() {
         List<EngineDefinitionDto> engineDtos = engines.values().stream()
                 .map(this::toDto)
@@ -139,6 +151,11 @@ public class EngineSettingsService {
                 version);
     }
 
+    /**
+     * Updates the default assignments.
+     * @param incoming the incoming
+     * @return the result of the operation
+     */
     public synchronized EngineProfileAssignmentsDto updateDefaultAssignments(EngineProfileAssignmentsDto incoming) {
         if (incoming == null) {
             throw new IllegalArgumentException("Default profile assignments must not be null");
@@ -177,6 +194,12 @@ public class EngineSettingsService {
         return currentAssignments();
     }
 
+    /**
+     * Performs the inspect engine definition operation.
+     * @param enginePath the engine path
+     * @param requestedName the requested name
+     * @return the result of the operation
+     */
     public synchronized EngineDefinitionDto inspectEngineDefinition(String enginePath, String requestedName) {
         try {
             UciEngineDefinition inspected = UciEngineInspector.inspect(enginePath);
@@ -192,6 +215,11 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Creates the engine.
+     * @param incoming the incoming
+     * @return the result of the operation
+     */
     public synchronized EngineDefinitionDto createEngine(EngineDefinitionDto incoming) {
         if (incoming == null) {
             throw new IllegalArgumentException("Engine definition must not be null");
@@ -216,6 +244,12 @@ public class EngineSettingsService {
         return toDto(managed);
     }
 
+    /**
+     * Updates the engine.
+     * @param id the id
+     * @param incoming the incoming
+     * @return the result of the operation
+     */
     public synchronized EngineDefinitionDto updateEngine(String id, EngineDefinitionDto incoming) {
         ManagedEngineDefinition existing = requireEngine(id);
         if (incoming == null) {
@@ -238,6 +272,10 @@ public class EngineSettingsService {
         return toDto(replacement);
     }
 
+    /**
+     * Deletes the engine.
+     * @param id the id
+     */
     public synchronized void deleteEngine(String id) {
         ManagedEngineDefinition existing = requireEngine(id);
 
@@ -272,6 +310,11 @@ public class EngineSettingsService {
         persistStore();
     }
 
+    /**
+     * Creates the profile.
+     * @param incoming the incoming
+     * @return the result of the operation
+     */
     public synchronized EngineProfileDto createProfile(EngineProfileDto incoming) {
         if (incoming == null) {
             throw new IllegalArgumentException("Engine profile must not be null");
@@ -288,6 +331,12 @@ public class EngineSettingsService {
         return toDto(profile);
     }
 
+    /**
+     * Updates the profile.
+     * @param id the id
+     * @param incoming the incoming
+     * @return the result of the operation
+     */
     public synchronized EngineProfileDto updateProfile(String id, EngineProfileDto incoming) {
         ManagedProfile existing = requireProfile(id);
         if (existing.id.equals(fallbackProfileId)) {
@@ -310,6 +359,10 @@ public class EngineSettingsService {
         return toDto(replacement);
     }
 
+    /**
+     * Deletes the profile.
+     * @param id the id
+     */
     public synchronized void deleteProfile(String id) {
         ManagedProfile existing = requireProfile(id);
         if (existing.id.equals(fallbackProfileId)) {
@@ -324,46 +377,96 @@ public class EngineSettingsService {
         persistStore();
     }
 
+    /**
+     * Performs the normalize profile id operation.
+     * @param profileId the profile id
+     * @return the result of the operation
+     */
     public synchronized String normalizeProfileId(String profileId) {
         return resolveProfileId(profileId, fallbackProfileId);
     }
 
+    /**
+     * Performs the normalize deep analysis profile id operation.
+     * @param profileId the profile id
+     * @return the result of the operation
+     */
     public synchronized String normalizeDeepAnalysisProfileId(String profileId) {
         return resolveProfileId(profileId, defaultDeepAnalysisProfileId);
     }
 
+    /**
+     * Returns the default white player profile id.
+     * @return the default white player profile id
+     */
     public synchronized String getDefaultWhitePlayerProfileId() {
         return defaultWhitePlayerProfileId;
     }
 
+    /**
+     * Returns the default black player profile id.
+     * @return the default black player profile id
+     */
     public synchronized String getDefaultBlackPlayerProfileId() {
         return defaultBlackPlayerProfileId;
     }
 
+    /**
+     * Returns the default evaluation profile id.
+     * @return the default evaluation profile id
+     */
     public synchronized String getDefaultEvaluationProfileId() {
         return defaultEvaluationProfileId;
     }
 
+    /**
+     * Returns the default deep analysis profile id.
+     * @return the default deep analysis profile id
+     */
     public synchronized String getDefaultDeepAnalysisProfileId() {
         return defaultDeepAnalysisProfileId;
     }
 
+    /**
+     * Returns the config.
+     * @param id the id
+     * @return the config
+     */
     public synchronized UciEngineConfig getConfig(String id) {
         return resolveRuntimeConfig(requireProfile(id), 0, 0);
     }
 
+    /**
+     * Returns the white player config.
+     * @return the white player config
+     */
     public synchronized UciEngineConfig getWhitePlayerConfig() {
         return resolveRuntimeConfig(requireProfile(defaultWhitePlayerProfileId), 0, 0);
     }
 
+    /**
+     * Returns the black player config.
+     * @return the black player config
+     */
     public synchronized UciEngineConfig getBlackPlayerConfig() {
         return resolveRuntimeConfig(requireProfile(defaultBlackPlayerProfileId), 0, 0);
     }
 
+    /**
+     * Performs the to evaluation engine config operation.
+     * @return the result of the operation
+     */
     public synchronized UciEngineConfig toEvaluationEngineConfig() {
         return resolveRuntimeConfig(requireProfile(defaultEvaluationProfileId), 0, 0);
     }
 
+    /**
+     * Returns the deep analysis config.
+     * @param profileId the profile id
+     * @param depth the depth
+     * @param moveTimeSeconds the move time seconds
+     * @return the deep analysis config
+     */
     public synchronized UciEngineConfig getDeepAnalysisConfig(
             String profileId,
             int depth,
@@ -374,30 +477,59 @@ public class EngineSettingsService {
         return resolveRuntimeConfig(requireProfile(resolved), safeDepth, safeMoveTimeSeconds);
     }
 
+    /**
+     * Returns the white player engine path.
+     * @return the white player engine path
+     */
     public synchronized String getWhitePlayerEnginePath() {
         return engineForProfile(requireProfile(defaultWhitePlayerProfileId)).definition.getEngine();
     }
 
+    /**
+     * Returns the black player engine path.
+     * @return the black player engine path
+     */
     public synchronized String getBlackPlayerEnginePath() {
         return engineForProfile(requireProfile(defaultBlackPlayerProfileId)).definition.getEngine();
     }
 
+    /**
+     * Returns the evaluation engine path.
+     * @return the evaluation engine path
+     */
     public synchronized String getEvaluationEnginePath() {
         return engineForProfile(requireProfile(defaultEvaluationProfileId)).definition.getEngine();
     }
 
+    /**
+     * Returns the white player engine name.
+     * @return the white player engine name
+     */
     public synchronized String getWhitePlayerEngineName() {
         return engineForProfile(requireProfile(defaultWhitePlayerProfileId)).definition.getEngineName();
     }
 
+    /**
+     * Returns the black player engine name.
+     * @return the black player engine name
+     */
     public synchronized String getBlackPlayerEngineName() {
         return engineForProfile(requireProfile(defaultBlackPlayerProfileId)).definition.getEngineName();
     }
 
+    /**
+     * Returns the evaluation engine name.
+     * @return the evaluation engine name
+     */
     public synchronized String getEvaluationEngineName() {
         return engineForProfile(requireProfile(defaultEvaluationProfileId)).definition.getEngineName();
     }
 
+    /**
+     * Returns the engine name.
+     * @param enginePath the engine path
+     * @return the engine name
+     */
     public synchronized String getEngineName(String enginePath) {
         ManagedEngineDefinition managed = findEngineByPath(enginePath);
         if (managed != null) {
@@ -410,26 +542,50 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Returns the version.
+     * @return the version
+     */
     public synchronized long getVersion() {
         return version;
     }
 
+    /**
+     * Returns the white player version.
+     * @return the white player version
+     */
     public synchronized long getWhitePlayerVersion() {
         return whitePlayerVersion;
     }
 
+    /**
+     * Returns the black player version.
+     * @return the black player version
+     */
     public synchronized long getBlackPlayerVersion() {
         return blackPlayerVersion;
     }
 
+    /**
+     * Returns the evaluation version.
+     * @return the evaluation version
+     */
     public synchronized long getEvaluationVersion() {
         return evaluationVersion;
     }
 
+    /**
+     * Returns the default engine path.
+     * @return the default engine path
+     */
     public String getDefaultEnginePath() {
         return defaultEnginePath;
     }
 
+    /**
+     * Performs the current assignments operation.
+     * @return the result of the operation
+     */
     private EngineProfileAssignmentsDto currentAssignments() {
         return new EngineProfileAssignmentsDto(
                 defaultWhitePlayerProfileId,
@@ -438,6 +594,11 @@ public class EngineSettingsService {
                 defaultDeepAnalysisProfileId);
     }
 
+    /**
+     * Performs the definition from dto operation.
+     * @param dto the dto
+     * @return the result of the operation
+     */
     private UciEngineDefinition definitionFromDto(EngineDefinitionDto dto) {
         if (dto.getEngine() == null || dto.getEngine().isBlank()) {
             throw new IllegalArgumentException("Engine path must not be blank");
@@ -467,6 +628,12 @@ public class EngineSettingsService {
                 options);
     }
 
+    /**
+     * Performs the profile from dto operation.
+     * @param id the id
+     * @param dto the dto
+     * @return the result of the operation
+     */
     private ManagedProfile profileFromDto(String id, EngineProfileDto dto) {
         if (dto.getEngineId() == null || dto.getEngineId().isBlank()) {
             throw new IllegalArgumentException("An engine must be selected before a profile can be created");
@@ -506,6 +673,13 @@ public class EngineSettingsService {
         return new ManagedProfile(id, name, engine.id, normalizedValues);
     }
 
+    /**
+     * Resolves the runtime config.
+     * @param profile the profile
+     * @param depth the depth
+     * @param moveTimeSeconds the move time seconds
+     * @return the result of the operation
+     */
     private UciEngineConfig resolveRuntimeConfig(
             ManagedProfile profile,
             int depth,
@@ -517,6 +691,11 @@ public class EngineSettingsService {
                 profile.optionValues);
     }
 
+    /**
+     * Performs the to dto operation.
+     * @param managed the managed
+     * @return the result of the operation
+     */
     private EngineDefinitionDto toDto(ManagedEngineDefinition managed) {
         EngineDefinitionDto dto = new EngineDefinitionDto();
         dto.setId(managed.id);
@@ -540,6 +719,11 @@ public class EngineSettingsService {
         return dto;
     }
 
+    /**
+     * Performs the to dto operation.
+     * @param managed the managed
+     * @return the result of the operation
+     */
     private EngineProfileDto toDto(ManagedProfile managed) {
         EngineProfileDto dto = new EngineProfileDto();
         dto.setId(managed.id);
@@ -549,6 +733,10 @@ public class EngineSettingsService {
         return dto;
     }
 
+    /**
+     * Performs the discover system engines internal operation.
+     * @return the result of the operation
+     */
     private int discoverSystemEnginesInternal() {
         int added = 0;
         for (UciEngineDefinition definition : engineDiscoveryService.discover()) {
@@ -568,6 +756,9 @@ public class EngineSettingsService {
         return added;
     }
 
+    /**
+     * Performs the ensure fallback and assignments operation.
+     */
     private void ensureFallbackAndAssignments() {
         ManagedProfile fallback = validProfile(fallbackProfileId);
         ManagedEngineDefinition fallbackEngine = fallback == null ? null : engines.get(fallback.engineId);
@@ -599,6 +790,10 @@ public class EngineSettingsService {
         persistStore();
     }
 
+    /**
+     * Creates the compatibility fallback engine.
+     * @return the result of the operation
+     */
     private ManagedEngineDefinition createCompatibilityFallbackEngine() {
         UciEngineDefinition definition;
         try {
@@ -624,6 +819,11 @@ public class EngineSettingsService {
         return managed;
     }
 
+    /**
+     * Finds the default profile for engine.
+     * @param engine the engine
+     * @return the result of the operation
+     */
     private ManagedProfile findDefaultProfileForEngine(ManagedEngineDefinition engine) {
         LinkedHashMap<String, String> defaults = defaultOptionValues(engine.definition);
         ManagedProfile firstForEngine = null;
@@ -641,6 +841,11 @@ public class EngineSettingsService {
         return firstForEngine;
     }
 
+    /**
+     * Creates the default profile.
+     * @param engine the engine
+     * @return the result of the operation
+     */
     private String createDefaultProfile(ManagedEngineDefinition engine) {
         EngineProfileDto dto = new EngineProfileDto();
         dto.setName(engine.name + " · Default");
@@ -652,6 +857,11 @@ public class EngineSettingsService {
         return id;
     }
 
+    /**
+     * Performs the default option values operation.
+     * @param definition the definition
+     * @return the result of the operation
+     */
     private LinkedHashMap<String, String> defaultOptionValues(UciEngineDefinition definition) {
         LinkedHashMap<String, String> result = new LinkedHashMap<>();
         for (Map.Entry<String, UciOption> entry : definition.getOptions().entrySet()) {
@@ -662,6 +872,9 @@ public class EngineSettingsService {
         return result;
     }
 
+    /**
+     * Loads the store.
+     */
     private void loadStore() {
         if (!Files.isRegularFile(storePath)) {
             return;
@@ -697,6 +910,10 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Loads the modern store.
+     * @param store the store
+     */
     private void loadModernStore(EngineConfigStoreDto store) {
         for (EngineDefinitionDto dto : store.getEngines()) {
             if (dto.getId() == null || dto.getId().isBlank()) {
@@ -722,6 +939,10 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Performs the seed assignment from legacy profile operation.
+     * @param dto the dto
+     */
     private void seedAssignmentFromLegacyProfile(EngineProfileDto dto) {
         if (dto.getLegacyType() == null || dto.getLegacyType().isBlank() || dto.getId() == null) {
             return;
@@ -754,6 +975,10 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Applies the legacy assignments.
+     * @param store the store
+     */
     private void applyLegacyAssignments(EngineConfigStoreDto store) {
         String legacyPlayer = validProfileId(store.getLegacyDefaultPlayerConfigId());
         String legacyEvaluation = validProfileId(store.getLegacyEvaluationConfigId());
@@ -776,6 +1001,10 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Performs the migrate legacy configs operation.
+     * @param legacyConfigs the legacy configs
+     */
     private void migrateLegacyConfigs(List<ManagedEngineConfigDto> legacyConfigs) {
         LinkedHashMap<String, String> engineIdsByPath = new LinkedHashMap<>();
 
@@ -842,6 +1071,11 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Performs the seed migrated assignment operation.
+     * @param profileId the profile id
+     * @param type the type
+     */
     private void seedMigratedAssignment(String profileId, EngineConfigType type) {
         switch (type) {
             case PLAYER -> {
@@ -865,6 +1099,11 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Performs the infer legacy type operation.
+     * @param dto the dto
+     * @return the result of the operation
+     */
     private EngineConfigType inferLegacyType(ManagedEngineConfigDto dto) {
         String name = dto.getName();
         if (name != null) {
@@ -879,6 +1118,9 @@ public class EngineSettingsService {
         return EngineConfigType.PLAYER;
     }
 
+    /**
+     * Performs the persist store operation.
+     */
     private void persistStore() {
         try {
             Path parent = storePath.getParent();
@@ -914,6 +1156,10 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Resolves the store path.
+     * @return the result of the operation
+     */
     private Path resolveStorePath() {
         String configured = System.getProperty(STORE_PROPERTY);
         if (configured != null && !configured.isBlank()) {
@@ -924,6 +1170,11 @@ public class EngineSettingsService {
                 .normalize();
     }
 
+    /**
+     * Performs the require engine operation.
+     * @param id the id
+     * @return the result of the operation
+     */
     private ManagedEngineDefinition requireEngine(String id) {
         ManagedEngineDefinition result = engines.get(id);
         if (result == null) {
@@ -932,6 +1183,11 @@ public class EngineSettingsService {
         return result;
     }
 
+    /**
+     * Performs the require profile operation.
+     * @param id the id
+     * @return the result of the operation
+     */
     private ManagedProfile requireProfile(String id) {
         ManagedProfile result = profiles.get(id);
         if (result == null) {
@@ -940,14 +1196,29 @@ public class EngineSettingsService {
         return result;
     }
 
+    /**
+     * Performs the valid profile operation.
+     * @param id the id
+     * @return the result of the operation
+     */
     private ManagedProfile validProfile(String id) {
         return id == null ? null : profiles.get(id);
     }
 
+    /**
+     * Performs the engine for profile operation.
+     * @param profile the profile
+     * @return the result of the operation
+     */
     private ManagedEngineDefinition engineForProfile(ManagedProfile profile) {
         return requireEngine(profile.engineId);
     }
 
+    /**
+     * Finds the engine by path.
+     * @param enginePath the engine path
+     * @return the result of the operation
+     */
     private ManagedEngineDefinition findEngineByPath(String enginePath) {
         if (enginePath == null || enginePath.isBlank()) {
             return null;
@@ -960,10 +1231,21 @@ public class EngineSettingsService {
         return null;
     }
 
+    /**
+     * Performs the same engine path operation.
+     * @param first the first
+     * @param second the second
+     * @return the result of the operation
+     */
     private boolean sameEnginePath(String first, String second) {
         return canonicalEnginePath(first).equals(canonicalEnginePath(second));
     }
 
+    /**
+     * Returns whether this object can onical engine path.
+     * @param value the value
+     * @return true when the condition is satisfied; otherwise false
+     */
     private String canonicalEnginePath(String value) {
         if (value == null || value.isBlank()) {
             return "";
@@ -979,6 +1261,12 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Resolves the profile id.
+     * @param requested the requested
+     * @param fallback the fallback
+     * @return the result of the operation
+     */
     private String resolveProfileId(String requested, String fallback) {
         String requestedId = validProfileId(requested);
         if (requestedId != null) {
@@ -994,10 +1282,20 @@ public class EngineSettingsService {
         throw new IllegalStateException("No engine profiles available");
     }
 
+    /**
+     * Performs the valid profile id operation.
+     * @param id the id
+     * @return the result of the operation
+     */
     private String validProfileId(String id) {
         return id != null && profiles.containsKey(id) ? id : null;
     }
 
+    /**
+     * Returns whether the assigned.
+     * @param profileId the profile id
+     * @return true when the condition is satisfied; otherwise false
+     */
     private boolean isAssigned(String profileId) {
         return Objects.equals(profileId, defaultWhitePlayerProfileId)
                 || Objects.equals(profileId, defaultBlackPlayerProfileId)
@@ -1005,6 +1303,10 @@ public class EngineSettingsService {
                 || Objects.equals(profileId, defaultDeepAnalysisProfileId);
     }
 
+    /**
+     * Performs the bump runtime versions operation.
+     * @param profileId the profile id
+     */
     private void bumpRuntimeVersions(String profileId) {
         if (profileId.equals(defaultWhitePlayerProfileId)) {
             whitePlayerVersion++;
@@ -1017,6 +1319,12 @@ public class EngineSettingsService {
         }
     }
 
+    /**
+     * Performs the display engine name operation.
+     * @param requestedName the requested name
+     * @param definition the definition
+     * @return the result of the operation
+     */
     private String displayEngineName(String requestedName, UciEngineDefinition definition) {
         if (requestedName != null && !requestedName.isBlank()) {
             return requestedName.trim();
@@ -1024,6 +1332,11 @@ public class EngineSettingsService {
         return definition.getEngineName();
     }
 
+    /**
+     * Performs the fallback engine name operation.
+     * @param path the path
+     * @return the result of the operation
+     */
     private String fallbackEngineName(String path) {
         if (path == null || path.isBlank()) {
             return "Engine";
@@ -1041,6 +1354,12 @@ public class EngineSettingsService {
         private final String name;
         private final UciEngineDefinition definition;
 
+        /**
+         * Creates a new ManagedEngineDefinition instance.
+         * @param id the id
+         * @param name the name
+         * @param definition the definition
+         */
         private ManagedEngineDefinition(String id, String name, UciEngineDefinition definition) {
             this.id = id;
             this.name = name;
@@ -1054,6 +1373,13 @@ public class EngineSettingsService {
         private final String engineId;
         private final LinkedHashMap<String, String> optionValues;
 
+        /**
+         * Creates a new ManagedProfile instance.
+         * @param id the id
+         * @param name the name
+         * @param engineId the engine id
+         * @param optionValues the option values
+         */
         private ManagedProfile(
                 String id,
                 String name,

@@ -14,11 +14,20 @@ public class ClockService {
     private final GameService gameService;
     private final EngineSettingsService engineSettingsService;
 
+    /**
+     * Creates a new ClockService instance.
+     * @param gameService the game service
+     * @param engineSettingsService the engine settings service
+     */
     public ClockService(GameService gameService, EngineSettingsService engineSettingsService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
     }
 
+    /**
+     * Returns the clock.
+     * @return the clock
+     */
     public ClockDto getClock() {
         Game game = gameService.getCurrentGame();
 
@@ -72,6 +81,13 @@ public class ClockService {
                 blackPlayerEngineName);
     }
 
+    /**
+     * Formats the time control.
+     * @param timeForEachPlayer the time for each player
+     * @param incrementForWhite the increment for white
+     * @param incrementForBlack the increment for black
+     * @return the result of the operation
+     */
     private String formatTimeControl(int timeForEachPlayer, int incrementForWhite, int incrementForBlack) {
         String base;
 

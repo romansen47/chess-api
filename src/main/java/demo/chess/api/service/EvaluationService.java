@@ -37,6 +37,11 @@ public class EvaluationService {
     private String currentEvaluationEnginePath;
     private long lastSeenSettingsVersion = -1L;
 
+    /**
+     * Creates a new EvaluationService instance.
+     * @param gameService the game service
+     * @param engineSettingsService the engine settings service
+     */
     public EvaluationService(GameService gameService, EngineSettingsService engineSettingsService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
@@ -45,12 +50,8 @@ public class EvaluationService {
     }
 
     /**
-     * Fragt die Engine einmalig nach der aktuellen Bewertung und den besten Varianten
-     * für das von GameService verwaltete Game.
-     *
-     * Die Engine läuft im Hintergrund weiter und verfeinert die Lines.
-     * Durch periodische Aufrufe (z.B. alle 2 Sekunden aus dem Frontend) erhältst du
-     * aktualisierte Lines.
+     * Returns the evaluation.
+     * @return the evaluation
      */
     public synchronized EngineEvaluationDto getEvaluation() {
         Game game = gameService.getCurrentGame();
@@ -119,11 +120,11 @@ public class EvaluationService {
 
 
     /**
-     * Bewertet ein isoliertes Analyse-/Replay-Game für eine feste Zeitspanne.
-     *
-     * Diese Methode ist bewusst synchron: Der aufrufende Analyse-Replay-Schritt
-     * blockiert so lange, bis die eingestellte Analysezeit abgelaufen ist und ein
-     * stabiler Snapshot aus dem Engine-Cache gelesen wurde.
+     * Evaluates the game for analysis.
+     * @param game the game
+     * @param engineConfig the engine config
+     * @param moveTimeMillis the move time millis
+     * @return the result of the operation
      */
     public synchronized EngineEvaluationDto evaluateGameForAnalysis(
             Game game,
@@ -175,10 +176,7 @@ public class EvaluationService {
     }
 
     /**
-     * Stops the evaluation engine for a clean new-game boundary.
-     *
-     * The engine is intentionally not recreated here. It is started lazily by the next
-     * evaluation request, so a disabled live evaluation stays disabled across a new game.
+     * Resets the for new game.
      */
     public synchronized void resetForNewGame() {
         logger.info("Resetting evaluation engine for new game");
@@ -189,6 +187,9 @@ public class EvaluationService {
         lastSeenSettingsVersion = -1L;
     }
 
+    /**
+     * Stops the live evaluation.
+     */
     public synchronized void stopLiveEvaluation() {
         logger.info("Stopping live evaluation engine");
         closeEvaluationEngine(evaluationEngine);
@@ -196,6 +197,10 @@ public class EvaluationService {
         lastSeenSettingsVersion = -1L;
     }
 
+    /**
+     * Returns the evaluation engine.
+     * @return the evaluation engine
+     */
     private synchronized EvaluationEngine getEvaluationEngine() {
         String configuredPath = engineSettingsService.getEvaluationEnginePath();
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
@@ -207,6 +212,11 @@ public class EvaluationService {
         return evaluationEngine;
     }
 
+    /**
+     * Creates the evaluation engine.
+     * @param enginePath the engine path
+     * @return the result of the operation
+     */
     private EvaluationEngine createEvaluationEngine(String enginePath) {
         logger.info("Initializing evaluation engine at path: " + enginePath);
         try {
@@ -220,6 +230,10 @@ public class EvaluationService {
         }
     }
 
+    /**
+     * Closes the evaluation engine.
+     * @param engine the engine
+     */
     private void closeEvaluationEngine(EvaluationEngine engine) {
         if (engine == null) {
             return;
@@ -237,17 +251,10 @@ public class EvaluationService {
     }
 
     /**
-     * Konvertiert eine UCI-Zugfolge (z.B. "e2e4 e7e5 g1f3") relativ zur aktuellen
-     * Partie in SAN-Notation (z.B. "e4 e5 Nf3").
-     *
-     * Idee analog zu deinem alten helper.convertToSan():
-     *  - Dummy-Game ab Startstellung erzeugen
-     *  - bereits gespielte Züge der aktuellen Partie nachspielen
-     *  - dann die Engine-Linie darauf anwenden
-     *  - aus der SAN Move-Liste nur die neu hinzugekommenen Züge zurückgeben
-     *
-     * Alle Exceptions werden innerhalb dieser Methode abgefangen, so dass sie
-     * keine checked Exceptions nach außen wirft.
+     * Converts the line to san.
+     * @param currentGame the current game
+     * @param uciMoves the uci moves
+     * @return the result of the operation
      */
     private String convertLineToSan(Game currentGame, String uciMoves) throws Exception {
         if (uciMoves == null || uciMoves.isBlank()) {
@@ -299,6 +306,12 @@ public class EvaluationService {
     }
 
 
+    /**
+     * Performs the to display san operation.
+     * @param game the game
+     * @param move the move
+     * @return the result of the operation
+     */
     private String toDisplaySan(Game game, Move move) {
         if (move == null || move.getSource() == null || move.getTarget() == null || move.getPiece() == null) {
             return "";
@@ -337,6 +350,12 @@ public class EvaluationService {
         return piecePrefix + sourceDisambiguation + captureMarker + targetName + postFix;
     }
 
+    /**
+     * Returns the source disambiguation.
+     * @param game the game
+     * @param move the move
+     * @return the source disambiguation
+     */
     private String getSourceDisambiguation(Game game, Move move) {
         Piece piece = move.getPiece();
         if (piece == null || piece.getType() == PieceType.PAWN || move.getTarget() == null) {
@@ -387,6 +406,11 @@ public class EvaluationService {
         return move.getSource().toString().substring(0, 1);
     }
 
+    /**
+     * Returns the piece prefix.
+     * @param piece the piece
+     * @return the piece prefix
+     */
     private String getPiecePrefix(Piece piece) {
         if (piece == null || piece.getType() == null || piece.getType() == PieceType.PAWN) {
             return "";
@@ -395,6 +419,12 @@ public class EvaluationService {
         return getUnicodeSymbol(piece.getType(), piece.getColor());
     }
 
+    /**
+     * Returns the unicode symbol.
+     * @param pieceType the piece type
+     * @param color the color
+     * @return the unicode symbol
+     */
     private String getUnicodeSymbol(PieceType pieceType, Color color) {
         if (pieceType == null || color == null) {
             return "";
@@ -437,11 +467,10 @@ public class EvaluationService {
     }
 
     /**
-     * Sucht im aktuellen Zug-Satz des gegebenen Games nach einem Zug,
-     * dessen UCI-Notation (Move.toString()) mit dem übergebenen String
-     * übereinstimmt.
-     *
-     * NoMoveFoundException wird hier explizit abgefangen.
+     * Finds the move by uci.
+     * @param game the game
+     * @param uci the uci
+     * @return the result of the operation
      */
     private Move findMoveByUci(Game game, String uci) {
         if (uci == null || uci.isBlank()) {
@@ -460,11 +489,9 @@ public class EvaluationService {
     }
 
     /**
-     * Eval-Bar-Funktion:
-     *
-     *   ans = 0.5 + atan(tan(pi/10) * eval) / pi
-     *
-     * Ergebnis in [0,1].
+     * Maps the eval to bar.
+     * @param eval the eval
+     * @return the result of the operation
      */
     private double mapEvalToBar(double eval) {
         double ans = 0.5 + Math.atan(Math.tan(Math.PI / 10d) * eval) / Math.PI;

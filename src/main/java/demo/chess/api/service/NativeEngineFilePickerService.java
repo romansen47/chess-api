@@ -33,6 +33,10 @@ public class NativeEngineFilePickerService {
     private final Path initialDirectory;
     private Path lastDirectory;
 
+    /**
+     * Creates a new NativeEngineFilePickerService instance.
+     * @param engineDiscoveryService the engine discovery service
+     */
     public NativeEngineFilePickerService(EngineDiscoveryService engineDiscoveryService) {
         Path discoveryDirectory = engineDiscoveryService.getDiscoveryDirectory();
         this.initialDirectory = Files.isDirectory(discoveryDirectory)
@@ -42,8 +46,8 @@ public class NativeEngineFilePickerService {
     }
 
     /**
-     * @return real path of the selected executable, or {@code null} when the
-     *         chooser was cancelled
+     * Performs the select executable operation.
+     * @return the result of the operation
      */
     public synchronized String selectExecutable() {
         if (isWsl()) {
@@ -62,6 +66,10 @@ public class NativeEngineFilePickerService {
         return selectExecutableWithAwtDialog();
     }
 
+    /**
+     * Performs the select executable with windows dialog operation.
+     * @return the result of the operation
+     */
     private String selectExecutableWithWindowsDialog() throws IOException {
         Path startDirectory = Files.isDirectory(lastDirectory) ? lastDirectory : initialDirectory;
         String windowsStartDirectory = runWslPath("-w", startDirectory.toString());
@@ -124,6 +132,11 @@ public class NativeEngineFilePickerService {
         return validateAndRemember(Path.of(linuxPath));
     }
 
+    /**
+     * Converts the windows path to linux.
+     * @param windowsPath the windows path
+     * @return the result of the operation
+     */
     private String convertWindowsPathToLinux(String windowsPath) throws IOException {
         String distroName = System.getenv("WSL_DISTRO_NAME");
         if (distroName != null && !distroName.isBlank()) {
@@ -143,6 +156,12 @@ public class NativeEngineFilePickerService {
         return runWslPath("-u", windowsPath);
     }
 
+    /**
+     * Performs the run wsl path operation.
+     * @param direction the direction
+     * @param value the value
+     * @return the result of the operation
+     */
     private String runWslPath(String direction, String value) throws IOException {
         Process process = new ProcessBuilder("wslpath", direction, value)
                 .redirectErrorStream(true)
@@ -162,6 +181,10 @@ public class NativeEngineFilePickerService {
         return output;
     }
 
+    /**
+     * Performs the select executable with awt dialog operation.
+     * @return the result of the operation
+     */
     private String selectExecutableWithAwtDialog() {
         if (GraphicsEnvironment.isHeadless()) {
             throw new IllegalStateException(
@@ -227,6 +250,11 @@ public class NativeEngineFilePickerService {
         return selectedPath.get();
     }
 
+    /**
+     * Validates the and remember.
+     * @param selected the selected
+     * @return the result of the operation
+     */
     private String validateAndRemember(Path selected) throws IOException {
         Path normalized = selected.toAbsolutePath().normalize();
         if (!Files.isRegularFile(normalized)) {
@@ -243,11 +271,20 @@ public class NativeEngineFilePickerService {
         return realPath.toString();
     }
 
+    /**
+     * Returns whether the wsl.
+     * @return true when the condition is satisfied; otherwise false
+     */
     private boolean isWsl() {
         String distroName = System.getenv("WSL_DISTRO_NAME");
         return distroName != null && !distroName.isBlank();
     }
 
+    /**
+     * Performs the escape power shell single quoted operation.
+     * @param value the value
+     * @return the result of the operation
+     */
     private String escapePowerShellSingleQuoted(String value) {
         return value.replace("'", "''");
     }

@@ -45,6 +45,12 @@ public class AnalysisEvaluationService {
     private long lastSeenSettingsVersion = -1L;
     private EngineEvaluationDto lastValidEvaluation;
 
+    /**
+     * Creates a new AnalysisEvaluationService instance.
+     * @param uciGameService the uci game service
+     * @param engineSettingsService the engine settings service
+     * @param engineLineDisplayService the engine line display service
+     */
     public AnalysisEvaluationService(
             UciGameService uciGameService,
             EngineSettingsService engineSettingsService,
@@ -54,6 +60,11 @@ public class AnalysisEvaluationService {
         this.engineLineDisplayService = engineLineDisplayService;
     }
 
+    /**
+     * Returns the evaluation.
+     * @param ply the ply
+     * @return the evaluation
+     */
     public synchronized EngineEvaluationDto getEvaluation(int ply) {
         List<Move> originalMoves = uciGameService.getAnalysisMoveListSnapshot();
         if (ply < 1 || ply > originalMoves.size()) {
@@ -120,10 +131,8 @@ public class AnalysisEvaluationService {
     }
 
     /**
-     * Resolve the profile assigned under Defaults -> Evaluation and explicitly
-     * remove all finite-search limits. EvaluationUciEngine itself uses
-     * "go infinite"; keeping depth and move time at zero also prevents parser
-     * or future engine code from accidentally inheriting a DeepAnalysis limit.
+     * Creates the infinite evaluation config.
+     * @return the result of the operation
      */
     private UciEngineConfig createInfiniteEvaluationConfig() {
         String profileId = engineSettingsService.getDefaultEvaluationProfileId();
@@ -133,6 +142,9 @@ public class AnalysisEvaluationService {
         return config;
     }
 
+    /**
+     * Stops the evaluation.
+     */
     public synchronized void stopEvaluation() {
         closeEvaluationEngine(evaluationEngine);
         evaluationEngine = null;
@@ -142,6 +154,12 @@ public class AnalysisEvaluationService {
         lastValidEvaluation = null;
     }
 
+    /**
+     * Creates the replay game.
+     * @param originalMoves the original moves
+     * @param ply the ply
+     * @return the result of the operation
+     */
     private Game createReplayGame(List<Move> originalMoves, int ply)
             throws NoMoveFoundException, IOException {
         Simulation replayGame = Simulation.createSimulation();
@@ -155,6 +173,11 @@ public class AnalysisEvaluationService {
         return replayGame;
     }
 
+    /**
+     * Evaluates the terminal position.
+     * @param game the game
+     * @return the result of the operation
+     */
     private EngineEvaluationDto evaluateTerminalPosition(Game game) {
         if (game == null) {
             return null;
@@ -168,6 +191,11 @@ public class AnalysisEvaluationService {
         return evaluateTerminalSimulationPosition(game);
     }
 
+    /**
+     * Evaluates the explicit terminal state.
+     * @param game the game
+     * @return the result of the operation
+     */
     private EngineEvaluationDto evaluateExplicitTerminalState(Game game) {
         State state = game.getState();
         if (state == null) {
@@ -191,6 +219,11 @@ public class AnalysisEvaluationService {
         return null;
     }
 
+    /**
+     * Evaluates the terminal simulation position.
+     * @param game the game
+     * @return the result of the operation
+     */
     private EngineEvaluationDto evaluateTerminalSimulationPosition(Game game) {
         Player playerToMove = game.getPlayer();
         if (playerToMove == null || playerToMove.getKing() == null || playerToMove.getKing().getField() == null) {
@@ -222,12 +255,22 @@ public class AnalysisEvaluationService {
                 : terminalEvaluation(100.0, 1.0);
     }
 
+    /**
+     * Performs the terminal evaluation operation.
+     * @param evaluation the evaluation
+     * @param bar the bar
+     * @return the result of the operation
+     */
     private EngineEvaluationDto terminalEvaluation(double evaluation, double bar) {
         EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, List.of());
         result.setEngineName(engineSettingsService.getEvaluationEngineName());
         return result;
     }
 
+    /**
+     * Returns the evaluation engine.
+     * @return the evaluation engine
+     */
     private EvaluationEngine getEvaluationEngine() {
         String configuredPath = engineSettingsService.getEvaluationEnginePath();
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
@@ -241,6 +284,11 @@ public class AnalysisEvaluationService {
         return evaluationEngine;
     }
 
+    /**
+     * Creates the evaluation engine.
+     * @param enginePath the engine path
+     * @return the result of the operation
+     */
     private EvaluationEngine createEvaluationEngine(String enginePath) {
         logger.info("Initializing analysis evaluation engine at path: " + enginePath);
         try {
@@ -252,6 +300,10 @@ public class AnalysisEvaluationService {
         }
     }
 
+    /**
+     * Closes the evaluation engine.
+     * @param engine the engine
+     */
     private void closeEvaluationEngine(EvaluationEngine engine) {
         if (engine == null) {
             return;
@@ -268,6 +320,11 @@ public class AnalysisEvaluationService {
         }
     }
 
+    /**
+     * Maps the eval to bar.
+     * @param evaluation the evaluation
+     * @return the result of the operation
+     */
     private double mapEvalToBar(double evaluation) {
         if (evaluation >= 99d) {
             return 1.0;

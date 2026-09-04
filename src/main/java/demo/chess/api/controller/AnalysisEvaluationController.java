@@ -16,10 +16,19 @@ public class AnalysisEvaluationController {
 
     private final AnalysisEvaluationService analysisEvaluationService;
 
+    /**
+     * Creates a new AnalysisEvaluationController instance.
+     * @param analysisEvaluationService the analysis evaluation service
+     */
     public AnalysisEvaluationController(AnalysisEvaluationService analysisEvaluationService) {
         this.analysisEvaluationService = analysisEvaluationService;
     }
 
+    /**
+     * Returns the evaluation.
+     * @param ply the ply
+     * @return the evaluation
+     */
     @GetMapping
     public ResponseEntity<?> getEvaluation(@RequestParam int ply) {
         try {
@@ -33,6 +42,10 @@ public class AnalysisEvaluationController {
         }
     }
 
+    /**
+     * Stops the evaluation.
+     * @return the result of the operation
+     */
     @PostMapping("/stop")
     public ResponseEntity<?> stopEvaluation() {
         analysisEvaluationService.stopEvaluation();

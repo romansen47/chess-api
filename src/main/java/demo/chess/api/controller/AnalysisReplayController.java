@@ -17,10 +17,19 @@ public class AnalysisReplayController {
 
     private final AnalysisReplayService analysisReplayService;
 
+    /**
+     * Creates a new AnalysisReplayController instance.
+     * @param analysisReplayService the analysis replay service
+     */
     public AnalysisReplayController(AnalysisReplayService analysisReplayService) {
         this.analysisReplayService = analysisReplayService;
     }
 
+    /**
+     * Performs the start operation.
+     * @param settings the settings
+     * @return the result of the operation
+     */
     @PostMapping("/start")
     public ResponseEntity<?> start(@RequestBody(required = false) AnalysisReplaySettingsDto settings) {
         try {
@@ -32,6 +41,10 @@ public class AnalysisReplayController {
         }
     }
 
+    /**
+     * Performs the next operation.
+     * @return the result of the operation
+     */
     @PostMapping("/next")
     public ResponseEntity<?> next() {
         try {
@@ -43,11 +56,19 @@ public class AnalysisReplayController {
         }
     }
 
+    /**
+     * Performs the state operation.
+     * @return the result of the operation
+     */
     @GetMapping("/state")
     public ResponseEntity<?> state() {
         return ResponseEntity.ok(analysisReplayService.state());
     }
 
+    /**
+     * Returns whether this object can cel.
+     * @return true when the condition is satisfied; otherwise false
+     */
     @PostMapping("/cancel")
     public ResponseEntity<?> cancel() {
         return ResponseEntity.ok(analysisReplayService.cancel());

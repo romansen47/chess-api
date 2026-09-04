@@ -29,12 +29,18 @@ public class MoveController {
 
     private final GameService gameService;
 
+    /**
+     * Creates a new MoveController instance.
+     * @param gameService the game service
+     */
     public MoveController(GameService gameService) {
         this.gameService = gameService;
     }
 
     /**
-     * Liefert alle legalen Ziele für ein gegebenes Ausgangsfeld (z.B. "e2").
+     * Returns the possible moves.
+     * @param from the from
+     * @return the possible moves
      */
     @GetMapping("/possible-moves")
     public ResponseEntity<PossibleMovesResponse> getPossibleMoves(
@@ -58,6 +64,10 @@ public class MoveController {
         return ResponseEntity.ok(new PossibleMovesResponse(from, targets));
     }
 
+    /**
+     * Returns the board.
+     * @return the board
+     */
     @GetMapping("/board")
     public ResponseEntity<BoardDto> getBoard() {
     	BoardDto board = gameService.getBoardView();
@@ -65,9 +75,9 @@ public class MoveController {
     }
 
     /**
-     * Führt einen Zug aus ("from" -> "to").
-     * Nach erfolgreichem Aufruf ist der Game-Zustand im Backend fortgeschrieben
-     * und der nächste Spieler ist am Zug.
+     * Performs the make move operation.
+     * @param request the request
+     * @return the result of the operation
      */
     @PostMapping("/move")
     public ResponseEntity<MoveResultDto> makeMove(@RequestBody MoveRequestDto request) {
@@ -140,8 +150,10 @@ public class MoveController {
     }
 
     /**
-     * Im alten Code hast du DisplayedField-Liste durchsucht.
-     * Hier mappen wir "e2" -> file/rank und holen direkt vom Board.
+     * Maps the square to field.
+     * @param board the board
+     * @param square the square
+     * @return the result of the operation
      */
     private Field mapSquareToField(Board board, String square) {
         if (square == null || square.length() != 2) {
@@ -160,6 +172,12 @@ public class MoveController {
         return board.getField(file, rank);
     }
 
+    /**
+     * Performs the same field operation.
+     * @param a the a
+     * @param b the b
+     * @return the result of the operation
+     */
     private boolean sameField(Field a, Field b) {
         return a.getFile() == b.getFile() && a.getRank() == b.getRank();
     }

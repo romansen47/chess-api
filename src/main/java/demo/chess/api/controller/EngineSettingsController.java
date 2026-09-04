@@ -25,6 +25,11 @@ public class EngineSettingsController {
     private final EngineSettingsService engineSettingsService;
     private final NativeEngineFilePickerService nativeEngineFilePickerService;
 
+    /**
+     * Creates a new EngineSettingsController instance.
+     * @param engineSettingsService the engine settings service
+     * @param nativeEngineFilePickerService the native engine file picker service
+     */
     public EngineSettingsController(
             EngineSettingsService engineSettingsService,
             NativeEngineFilePickerService nativeEngineFilePickerService) {
@@ -32,21 +37,38 @@ public class EngineSettingsController {
         this.nativeEngineFilePickerService = nativeEngineFilePickerService;
     }
 
+    /**
+     * Returns the overview.
+     * @return the overview
+     */
     @GetMapping
     public EngineConfigOverviewDto getOverview() {
         return engineSettingsService.getOverview();
     }
 
+    /**
+     * Performs the discover system engines operation.
+     * @return the result of the operation
+     */
     @PostMapping("/discover")
     public ResponseEntity<EngineConfigOverviewDto> discoverSystemEngines() {
         return ResponseEntity.ok(engineSettingsService.discoverSystemEngines());
     }
 
+    /**
+     * Resets the engine settings.
+     * @return the result of the operation
+     */
     @PostMapping("/reset")
     public ResponseEntity<EngineConfigOverviewDto> resetEngineSettings() {
         return ResponseEntity.ok(engineSettingsService.resetToFallbackDefaults());
     }
 
+    /**
+     * Updates the defaults.
+     * @param assignments the assignments
+     * @return the result of the operation
+     */
     @PutMapping("/defaults")
     public ResponseEntity<EngineConfigOverviewDto> updateDefaults(
             @RequestBody EngineProfileAssignmentsDto assignments) {
@@ -55,10 +77,8 @@ public class EngineSettingsController {
     }
 
     /**
-     * Opens the native file chooser on the machine running the backend. The
-     * selected executable is inspected immediately so the frontend receives a
-     * complete UCI engine definition and never needs access to the absolute
-     * filesystem path itself.
+     * Performs the select engine operation.
+     * @return the result of the operation
      */
     @PostMapping("/engines/select")
     public ResponseEntity<EngineDefinitionDto> selectEngine() {
@@ -69,6 +89,11 @@ public class EngineSettingsController {
         return ResponseEntity.ok(engineSettingsService.inspectEngineDefinition(enginePath, null));
     }
 
+    /**
+     * Performs the inspect engine operation.
+     * @param request the request
+     * @return the result of the operation
+     */
     @PostMapping("/engines/inspect")
     public ResponseEntity<EngineDefinitionDto> inspectEngine(
             @RequestBody EngineDefinitionInspectRequestDto request) {
@@ -78,12 +103,9 @@ public class EngineSettingsController {
     }
 
     /**
-     * Imports a UCI engine definition from the executable itself.
-     *
-     * UCI option defaults are capabilities reported by the engine and are not
-     * user configuration. Therefore the client supplied option map is ignored
-     * here and the executable is inspected again before the definition is
-     * persisted. Concrete option values belong to EngineProfileDto.
+     * Creates the engine.
+     * @param engine the engine
+     * @return the result of the operation
      */
     @PostMapping("/engines")
     public ResponseEntity<EngineDefinitionDto> createEngine(
@@ -99,9 +121,10 @@ public class EngineSettingsController {
     }
 
     /**
-     * Existing engine definitions keep the UCI metadata/options that were read
-     * from the binary when the engine was imported. Only the user-facing name
-     * may be changed. Engine parameters are configured exclusively in profiles.
+     * Updates the engine.
+     * @param id the id
+     * @param engine the engine
+     * @return the result of the operation
      */
     @PutMapping("/engines/{id}")
     public ResponseEntity<EngineDefinitionDto> updateEngine(
@@ -127,18 +150,34 @@ public class EngineSettingsController {
         return ResponseEntity.ok(engineSettingsService.updateEngine(id, safeUpdate));
     }
 
+    /**
+     * Deletes the engine.
+     * @param id the id
+     * @return the result of the operation
+     */
     @DeleteMapping("/engines/{id}")
     public ResponseEntity<Void> deleteEngine(@PathVariable String id) {
         engineSettingsService.deleteEngine(id);
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Creates the profile.
+     * @param profile the profile
+     * @return the result of the operation
+     */
     @PostMapping("/profiles")
     public ResponseEntity<EngineProfileDto> createProfile(
             @RequestBody EngineProfileDto profile) {
         return ResponseEntity.ok(engineSettingsService.createProfile(profile));
     }
 
+    /**
+     * Updates the profile.
+     * @param id the id
+     * @param profile the profile
+     * @return the result of the operation
+     */
     @PutMapping("/profiles/{id}")
     public ResponseEntity<EngineProfileDto> updateProfile(
             @PathVariable String id,
@@ -146,6 +185,11 @@ public class EngineSettingsController {
         return ResponseEntity.ok(engineSettingsService.updateProfile(id, profile));
     }
 
+    /**
+     * Deletes the profile.
+     * @param id the id
+     * @return the result of the operation
+     */
     @DeleteMapping("/profiles/{id}")
     public ResponseEntity<Void> deleteProfile(@PathVariable String id) {
         engineSettingsService.deleteProfile(id);

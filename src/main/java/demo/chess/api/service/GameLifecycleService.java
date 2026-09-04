@@ -11,6 +11,12 @@ public class GameLifecycleService {
     private final ComputerMoveService computerMoveService;
     private final EvaluationService evaluationService;
 
+    /**
+     * Creates a new GameLifecycleService instance.
+     * @param gameService the game service
+     * @param computerMoveService the computer move service
+     * @param evaluationService the evaluation service
+     */
     public GameLifecycleService(
             GameService gameService,
             ComputerMoveService computerMoveService,
@@ -21,14 +27,9 @@ public class GameLifecycleService {
     }
 
     /**
-     * Starts a new game with a clean engine lifecycle boundary.
-     *
-     * Existing player engines are stopped before the GameService swaps the current game
-     * instance and stay dormant until a computer move actually needs them. The evaluation
-     * engine is stopped and stays dormant until the next evaluation request.
-     * Player-engine reset is deliberately able to
-     * cancel an in-flight computer move instead of waiting for it to finish.
-     * GameService.applyMoveIfCurrent(...) protects the new game from stale results.
+     * Starts the new game.
+     * @param settings the settings
+     * @return the result of the operation
      */
     public synchronized GameSettingsDto startNewGame(GameSettingsDto settings) {
         computerMoveService.resetForNewGame();

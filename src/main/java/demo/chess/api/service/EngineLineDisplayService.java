@@ -26,6 +26,12 @@ import demo.chess.game.Game;
 @Service
 public class EngineLineDisplayService {
 
+    /**
+     * Performs the to dto operation.
+     * @param currentGame the current game
+     * @param line the line
+     * @return the result of the operation
+     */
     public EngineLineDto toDto(Game currentGame, EngineLine line) {
         if (line == null) {
             return new EngineLineDto(0.0, 0, null, "", List.of());
@@ -42,6 +48,12 @@ public class EngineLineDisplayService {
                 displayData.positions);
     }
 
+    /**
+     * Converts the engine line.
+     * @param currentGame the current game
+     * @param uciMoves the uci moves
+     * @return the result of the operation
+     */
     private EngineLineDisplayData convertEngineLine(Game currentGame, String uciMoves) {
         if (uciMoves == null || uciMoves.isBlank()) {
             return new EngineLineDisplayData(
@@ -91,6 +103,11 @@ public class EngineLineDisplayService {
         }
     }
 
+    /**
+     * Performs the to position string operation.
+     * @param game the game
+     * @return the result of the operation
+     */
     private String toPositionString(Game game) {
         if (game == null || game.getChessBoard() == null) {
             return "";
@@ -110,6 +127,11 @@ public class EngineLineDisplayService {
         return position.toString();
     }
 
+    /**
+     * Performs the to position char operation.
+     * @param piece the piece
+     * @return the result of the operation
+     */
     private char toPositionChar(Piece piece) {
         if (piece == null || piece.getType() == null) {
             return '.';
@@ -144,6 +166,12 @@ public class EngineLineDisplayService {
                 : pieceChar;
     }
 
+    /**
+     * Finds the move by uci.
+     * @param game the game
+     * @param uci the uci
+     * @return the result of the operation
+     */
     private Move findMoveByUci(Game game, String uci) {
         if (game == null || uci == null || uci.isBlank()) {
             return null;
@@ -161,6 +189,12 @@ public class EngineLineDisplayService {
         return null;
     }
 
+    /**
+     * Performs the to display san operation.
+     * @param game the game
+     * @param move the move
+     * @return the result of the operation
+     */
     private String toDisplaySan(Game game, Move move) {
         if (move == null
                 || move.getSource() == null
@@ -202,6 +236,12 @@ public class EngineLineDisplayService {
         return piecePrefix + sourceDisambiguation + captureMarker + targetName + postFix;
     }
 
+    /**
+     * Returns the source disambiguation.
+     * @param game the game
+     * @param move the move
+     * @return the source disambiguation
+     */
     private String getSourceDisambiguation(Game game, Move move) {
         Piece piece = move.getPiece();
         if (piece == null || piece.getType() == PieceType.PAWN || move.getTarget() == null) {
@@ -251,6 +291,11 @@ public class EngineLineDisplayService {
         return move.getSource().toString().substring(0, 1);
     }
 
+    /**
+     * Returns the piece prefix.
+     * @param piece the piece
+     * @return the piece prefix
+     */
     private String getPiecePrefix(Piece piece) {
         if (piece == null || piece.getType() == null || piece.getType() == PieceType.PAWN) {
             return "";
@@ -259,6 +304,12 @@ public class EngineLineDisplayService {
         return getUnicodeSymbol(piece.getType(), piece.getColor());
     }
 
+    /**
+     * Returns the unicode symbol.
+     * @param pieceType the piece type
+     * @param color the color
+     * @return the unicode symbol
+     */
     private String getUnicodeSymbol(PieceType pieceType, Color color) {
         if (pieceType == null || color == null) {
             return "";
@@ -304,6 +355,11 @@ public class EngineLineDisplayService {
         private final String moves;
         private final List<String> positions;
 
+        /**
+         * Creates a new EngineLineDisplayData instance.
+         * @param moves the moves
+         * @param positions the positions
+         */
         private EngineLineDisplayData(String moves, List<String> positions) {
             this.moves = moves;
             this.positions = positions;

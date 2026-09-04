@@ -40,6 +40,13 @@ public class AnalysisReplayService {
     private final UciGameService uciGameService;
     private AnalysisReplaySession session;
 
+    /**
+     * Creates a new AnalysisReplayService instance.
+     * @param gameService the game service
+     * @param engineSettingsService the engine settings service
+     * @param evaluationService the evaluation service
+     * @param uciGameService the uci game service
+     */
     public AnalysisReplayService(
             GameService gameService,
             EngineSettingsService engineSettingsService,
@@ -51,6 +58,11 @@ public class AnalysisReplayService {
         this.uciGameService = uciGameService;
     }
 
+    /**
+     * Performs the start operation.
+     * @param settings the settings
+     * @return the result of the operation
+     */
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
             throws NoMoveFoundException, IOException {
         closeSessionEngine();
@@ -88,6 +100,10 @@ public class AnalysisReplayService {
         return toStepDto(newSession, false, null, null, null, 0.0, 0.5, 0, "Analysis replay started.");
     }
 
+    /**
+     * Performs the next operation.
+     * @return the result of the operation
+     */
     public synchronized AnalysisReplayStepDto next() throws NoMoveFoundException, IOException {
         if (session == null || !session.active) {
             return inactiveStep("No active analysis replay.");
@@ -140,6 +156,10 @@ public class AnalysisReplayService {
                 done ? "Analysis replay finished." : null);
     }
 
+    /**
+     * Performs the state operation.
+     * @return the result of the operation
+     */
     public synchronized AnalysisReplayStepDto state() {
         if (session == null) {
             return inactiveStep("No active analysis replay.");
@@ -157,6 +177,10 @@ public class AnalysisReplayService {
                 null);
     }
 
+    /**
+     * Returns whether this object can cel.
+     * @return true when the condition is satisfied; otherwise false
+     */
     public synchronized AnalysisReplayStepDto cancel() {
         if (session == null) {
             return inactiveStep("No active analysis replay.");
@@ -176,6 +200,11 @@ public class AnalysisReplayService {
                 "Analysis replay cancelled.");
     }
 
+    /**
+     * Creates the deep analysis engine.
+     * @param enginePath the engine path
+     * @return the result of the operation
+     */
     private DeepAnalysisEngineSelection createDeepAnalysisEngine(String enginePath) {
         String effectivePath = enginePath == null || enginePath.isBlank()
                 ? engineSettingsService.getDefaultEnginePath()
@@ -189,6 +218,11 @@ public class AnalysisReplayService {
         }
     }
 
+    /**
+     * Performs the analyze current replay position operation.
+     * @param source the source
+     * @return the result of the operation
+     */
     private AnalysisEvaluation analyzeCurrentReplayPosition(AnalysisReplaySession source)  throws NoMoveFoundException{
         AnalysisEvaluation terminalEvaluation = evaluateTerminalPosition(source);
         if (terminalEvaluation != null) {
@@ -238,6 +272,11 @@ public class AnalysisReplayService {
         }
     }
 
+    /**
+     * Evaluates the terminal position.
+     * @param source the source
+     * @return the result of the operation
+     */
     private AnalysisEvaluation evaluateTerminalPosition(AnalysisReplaySession source) {
         if (source == null || source.replayGame == null) {
             return null;
@@ -251,6 +290,11 @@ public class AnalysisReplayService {
         return evaluateTerminalSimulationPosition(source);
     }
 
+    /**
+     * Evaluates the explicit terminal state.
+     * @param source the source
+     * @return the result of the operation
+     */
     private AnalysisEvaluation evaluateExplicitTerminalState(AnalysisReplaySession source) {
         State state = source.replayGame.getState();
         if (state == null) {
@@ -274,6 +318,11 @@ public class AnalysisReplayService {
         return null;
     }
 
+    /**
+     * Evaluates the terminal simulation position.
+     * @param source the source
+     * @return the result of the operation
+     */
     private AnalysisEvaluation evaluateTerminalSimulationPosition(AnalysisReplaySession source) {
         Player playerToMove = source.replayGame.getPlayer();
         if (playerToMove == null || playerToMove.getKing() == null || playerToMove.getKing().getField() == null) {
@@ -307,6 +356,12 @@ public class AnalysisReplayService {
         return new AnalysisEvaluation(100.0, 1.0, latestDepth(source), List.of());
     }
 
+    /**
+     * Converts the engine line.
+     * @param currentGame the current game
+     * @param uciMoves the uci moves
+     * @return the result of the operation
+     */
     private EngineLineDisplayData convertEngineLine(Game currentGame, String uciMoves) {
         if (uciMoves == null || uciMoves.isBlank()) {
             return new EngineLineDisplayData("", currentGame != null ? List.of(toPositionString(currentGame)) : List.of());
@@ -350,6 +405,11 @@ public class AnalysisReplayService {
         }
     }
 
+    /**
+     * Performs the to position string operation.
+     * @param game the game
+     * @return the result of the operation
+     */
     private String toPositionString(Game game) {
         if (game == null || game.getChessBoard() == null) {
             return "";
@@ -369,6 +429,11 @@ public class AnalysisReplayService {
         return position.toString();
     }
 
+    /**
+     * Performs the to position char operation.
+     * @param piece the piece
+     * @return the result of the operation
+     */
     private char toPositionChar(Piece piece) {
         if (piece == null || piece.getType() == null) {
             return '.';
@@ -401,6 +466,12 @@ public class AnalysisReplayService {
         return piece.getColor() == Color.WHITE ? Character.toUpperCase(pieceChar) : pieceChar;
     }
 
+    /**
+     * Finds the move by uci.
+     * @param game the game
+     * @param uci the uci
+     * @return the result of the operation
+     */
     private Move findMoveByUci(Game game, String uci) {
         if (game == null || uci == null || uci.isBlank()) {
             return null;
@@ -418,6 +489,12 @@ public class AnalysisReplayService {
         return null;
     }
 
+    /**
+     * Performs the to display san operation.
+     * @param game the game
+     * @param move the move
+     * @return the result of the operation
+     */
     private String toDisplaySan(Game game, Move move) {
         if (move == null || move.getSource() == null || move.getTarget() == null || move.getPiece() == null) {
             return "";
@@ -456,6 +533,12 @@ public class AnalysisReplayService {
         return piecePrefix + sourceDisambiguation + captureMarker + targetName + postFix;
     }
 
+    /**
+     * Returns the source disambiguation.
+     * @param game the game
+     * @param move the move
+     * @return the source disambiguation
+     */
     private String getSourceDisambiguation(Game game, Move move) {
         Piece piece = move.getPiece();
         if (piece == null || piece.getType() == PieceType.PAWN || move.getTarget() == null) {
@@ -505,6 +588,11 @@ public class AnalysisReplayService {
         return move.getSource().toString().substring(0, 1);
     }
 
+    /**
+     * Returns the piece prefix.
+     * @param piece the piece
+     * @return the piece prefix
+     */
     private String getPiecePrefix(Piece piece) {
         if (piece == null || piece.getType() == null || piece.getType() == PieceType.PAWN) {
             return "";
@@ -513,6 +601,12 @@ public class AnalysisReplayService {
         return getUnicodeSymbol(piece.getType(), piece.getColor());
     }
 
+    /**
+     * Returns the unicode symbol.
+     * @param pieceType the piece type
+     * @param color the color
+     * @return the unicode symbol
+     */
     private String getUnicodeSymbol(PieceType pieceType, Color color) {
         if (pieceType == null || color == null) {
             return "";
@@ -554,6 +648,11 @@ public class AnalysisReplayService {
         }
     }
 
+    /**
+     * Maps the eval to bar.
+     * @param eval the eval
+     * @return the result of the operation
+     */
     private double mapEvalToBar(double eval) {
         if (eval >= 99d) {
             return 1.0;
@@ -564,6 +663,11 @@ public class AnalysisReplayService {
         return 0.5 + Math.atan(Math.tan(Math.PI / 10.0) * eval) / Math.PI;
     }
 
+    /**
+     * Performs the latest evaluation operation.
+     * @param source the source
+     * @return the result of the operation
+     */
     private double latestEvaluation(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
             return 0.0;
@@ -571,6 +675,11 @@ public class AnalysisReplayService {
         return source.profile.get(source.profile.size() - 1).getEvaluation();
     }
 
+    /**
+     * Performs the latest bar operation.
+     * @param source the source
+     * @return the result of the operation
+     */
     private double latestBar(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
             return 0.5;
@@ -578,6 +687,11 @@ public class AnalysisReplayService {
         return source.profile.get(source.profile.size() - 1).getBar();
     }
 
+    /**
+     * Performs the latest depth operation.
+     * @param source the source
+     * @return the result of the operation
+     */
     private int latestDepth(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
             return 0;
@@ -585,6 +699,11 @@ public class AnalysisReplayService {
         return source.profile.get(source.profile.size() - 1).getDepth();
     }
 
+    /**
+     * Performs the inactive step operation.
+     * @param message the message
+     * @return the result of the operation
+     */
     private AnalysisReplayStepDto inactiveStep(String message) {
         return new AnalysisReplayStepDto(
                 false,
@@ -603,6 +722,19 @@ public class AnalysisReplayService {
                 message);
     }
 
+    /**
+     * Performs the to step dto operation.
+     * @param source the source
+     * @param done the done
+     * @param from the from
+     * @param to the to
+     * @param san the san
+     * @param evaluation the evaluation
+     * @param bar the bar
+     * @param depth the depth
+     * @param message the message
+     * @return the result of the operation
+     */
     private AnalysisReplayStepDto toStepDto(
             AnalysisReplaySession source,
             boolean done,
@@ -631,6 +763,9 @@ public class AnalysisReplayService {
                 message);
     }
 
+    /**
+     * Closes the session engine.
+     */
     private void closeSessionEngine() {
         if (session == null || session.engine == null) {
             return;
@@ -640,6 +775,10 @@ public class AnalysisReplayService {
         safeStop(session.engine);
     }
 
+    /**
+     * Performs the safe stop operation.
+     * @param engine the engine
+     */
     private void safeStop(DeepAnalysisEngine engine) {
         if (engine == null) {
             return;
@@ -654,6 +793,11 @@ public class AnalysisReplayService {
         private final DeepAnalysisEngine engine;
         private final String enginePath;
 
+        /**
+         * Creates a new DeepAnalysisEngineSelection instance.
+         * @param engine the engine
+         * @param enginePath the engine path
+         */
         private DeepAnalysisEngineSelection(DeepAnalysisEngine engine, String enginePath) {
             this.engine = engine;
             this.enginePath = enginePath;
@@ -664,6 +808,11 @@ public class AnalysisReplayService {
         private final String moves;
         private final List<String> positions;
 
+        /**
+         * Creates a new EngineLineDisplayData instance.
+         * @param moves the moves
+         * @param positions the positions
+         */
         private EngineLineDisplayData(String moves, List<String> positions) {
             this.moves = moves;
             this.positions = positions != null ? positions : List.of();
@@ -676,6 +825,13 @@ public class AnalysisReplayService {
         private final int depth;
         private final List<EngineLineDto> lines;
 
+        /**
+         * Creates a new AnalysisEvaluation instance.
+         * @param evaluation the evaluation
+         * @param bar the bar
+         * @param depth the depth
+         * @param lines the lines
+         */
         private AnalysisEvaluation(double evaluation, double bar, int depth, List<EngineLineDto> lines) {
             this.evaluation = evaluation;
             this.bar = bar;
@@ -694,6 +850,14 @@ public class AnalysisReplayService {
         private int currentPly = 0;
         private boolean active = true;
 
+        /**
+         * Creates a new AnalysisReplaySession instance.
+         * @param originalMoves the original moves
+         * @param replayGame the replay game
+         * @param engine the engine
+         * @param engineConfig the engine config
+         * @param engineName the engine name
+         */
         private AnalysisReplaySession(
                 List<Move> originalMoves,
                 Game replayGame,

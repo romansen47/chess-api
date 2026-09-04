@@ -35,6 +35,11 @@ public class ComputerMoveService {
     private long whitePlayerEngineGeneration;
     private long blackPlayerEngineGeneration;
 
+    /**
+     * Creates a new ComputerMoveService instance.
+     * @param gameService the game service
+     * @param engineSettingsService the engine settings service
+     */
     public ComputerMoveService(GameService gameService, EngineSettingsService engineSettingsService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
@@ -45,6 +50,10 @@ public class ComputerMoveService {
         this.blackPlayerEngine = null;
     }
 
+    /**
+     * Performs the make computer move operation.
+     * @return the result of the operation
+     */
     public MoveResultDto makeComputerMove() throws NoMoveFoundException, IOException, InterruptedException, ExecutionException {
         Game game = gameService.getCurrentGame();
 
@@ -98,12 +107,7 @@ public class ComputerMoveService {
     }
 
     /**
-     * Stops any existing player engines for a clean new-game boundary.
-     *
-     * A new game must be able to cancel a currently thinking engine instead of waiting
-     * for the old move to finish. Engine generations invalidate in-flight computer
-     * moves before they can be applied to the current game. Engines stay dormant until
-     * the next computer move actually needs them.
+     * Resets the for new game.
      */
     public synchronized void resetForNewGame() {
         logger.info("Resetting player engines for new game");
@@ -123,9 +127,8 @@ public class ComputerMoveService {
     }
 
     /**
-     * Cancels a currently running computer move for the selected side, closes the
-     * underlying UCI process and invalidates the in-flight engine generation. The
-     * engine stays stopped until a later computer move actually needs it again.
+     * Returns whether this object can cel player engine.
+     * @param color the color
      */
     public synchronized void cancelPlayerEngine(Color color) {
         if (color == Color.WHITE) {
@@ -147,13 +150,18 @@ public class ComputerMoveService {
     }
 
     /**
-     * Compatibility wrapper for older callers. The engine is no longer restricted to black;
-     * it moves for whichever side is currently to move.
+     * Performs the make black computer move operation.
+     * @return the result of the operation
      */
     public MoveResultDto makeBlackComputerMove() throws NoMoveFoundException, IOException, InterruptedException, ExecutionException {
         return makeComputerMove();
     }
 
+    /**
+     * Returns the player engine snapshot.
+     * @param color the color
+     * @return the player engine snapshot
+     */
     private synchronized PlayerEngineSnapshot getPlayerEngineSnapshot(Color color) {
         if (color == Color.WHITE) {
             EngineConfig config = engineSettingsService.getWhitePlayerConfig();
@@ -186,12 +194,22 @@ public class ComputerMoveService {
                 blackPlayerEngineGeneration);
     }
 
+    /**
+     * Returns whether the player engine generation changed.
+     * @param color the color
+     * @param generation the generation
+     * @return true when the condition is satisfied; otherwise false
+     */
     private synchronized boolean isPlayerEngineGenerationChanged(Color color, long generation) {
         return color == Color.WHITE
                 ? whitePlayerEngineGeneration != generation
                 : blackPlayerEngineGeneration != generation;
     }
 
+    /**
+     * Computes the r move cancelled result.
+     * @return the result of the operation
+     */
     private MoveResultDto computerMoveCancelledResult() {
         Game game = gameService.getCurrentGame();
         String sideToMove = game != null ? sideToMove(game) : null;
@@ -200,6 +218,12 @@ public class ComputerMoveService {
                 gameService.getCurrentPositionString(), gameState);
     }
 
+    /**
+     * Creates the player engine.
+     * @param enginePath the engine path
+     * @param label the label
+     * @return the result of the operation
+     */
     private PlayerEngine createPlayerEngine(String enginePath, String label) {
         logger.info("Initializing " + label + " engine at path: " + enginePath);
         try {
@@ -213,6 +237,11 @@ public class ComputerMoveService {
         }
     }
 
+    /**
+     * Closes the player engine.
+     * @param engine the engine
+     * @param label the label
+     */
     private void closePlayerEngine(PlayerEngine engine, String label) {
         if (engine == null) {
             return;
@@ -224,6 +253,11 @@ public class ComputerMoveService {
         }
     }
 
+    /**
+     * Performs the last san operation.
+     * @param game the game
+     * @return the result of the operation
+     */
     private String lastSan(Game game) {
         List<String> sanMoves = game.getSanMoveList();
         if (sanMoves == null || sanMoves.isEmpty()) {
@@ -232,6 +266,11 @@ public class ComputerMoveService {
         return sanMoves.get(sanMoves.size() - 1);
     }
 
+    /**
+     * Performs the side to move operation.
+     * @param game the game
+     * @return the result of the operation
+     */
     private String sideToMove(Game game) {
         return game.getPlayer() != null && game.getPlayer().getColor() != null
                 ? game.getPlayer().getColor().name().toLowerCase(Locale.ROOT)
@@ -243,6 +282,12 @@ public class ComputerMoveService {
         private final EngineConfig config;
         private final long generation;
 
+        /**
+         * Creates a new PlayerEngineSnapshot instance.
+         * @param engine the engine
+         * @param config the config
+         * @param generation the generation
+         */
         private PlayerEngineSnapshot(PlayerEngine engine, EngineConfig config, long generation) {
             this.engine = engine;
             this.config = config;

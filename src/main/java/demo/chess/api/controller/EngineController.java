@@ -16,10 +16,18 @@ public class EngineController {
 
     private final EvaluationService evaluationService;
 
+    /**
+     * Creates a new EngineController instance.
+     * @param evaluationService the evaluation service
+     */
     public EngineController(EvaluationService evaluationService) {
         this.evaluationService = evaluationService;
     }
 
+    /**
+     * Returns the evaluation.
+     * @return the evaluation
+     */
     @GetMapping("/eval")
     public ResponseEntity<?> getEvaluation() {
         try {
@@ -34,6 +42,10 @@ public class EngineController {
         }
     }
 
+    /**
+     * Stops the evaluation.
+     * @return the result of the operation
+     */
     @PostMapping("/eval/stop")
     public ResponseEntity<?> stopEvaluation() {
         evaluationService.stopLiveEvaluation();

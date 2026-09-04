@@ -14,10 +14,18 @@ public class ClockController {
 
     private final ClockService clockService;
 
+    /**
+     * Creates a new ClockController instance.
+     * @param clockService the clock service
+     */
     public ClockController(ClockService clockService) {
         this.clockService = clockService;
     }
 
+    /**
+     * Returns the clock.
+     * @return the clock
+     */
     @GetMapping("/clock")
     public ResponseEntity<ClockDto> getClock() {
         return ResponseEntity.ok(clockService.getClock());

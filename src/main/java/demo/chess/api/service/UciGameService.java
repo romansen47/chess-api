@@ -44,11 +44,21 @@ public class UciGameService {
     private Game importedAnalysisGame;
     private Map<String, String> importedPgnTags = new LinkedHashMap<>();
 
+    /**
+     * Creates a new UciGameService instance.
+     * @param gameService the game service
+     * @param engineSettingsService the engine settings service
+     */
     public UciGameService(GameService gameService, EngineSettingsService engineSettingsService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
     }
 
+    /**
+     * Performs the import game operation.
+     * @param content the content
+     * @return the result of the operation
+     */
     public synchronized UciGameDto importGame(String content) throws NoMoveFoundException, IOException {
         List<String> uciMoves = gameLoader.parsePgnMoveList(content);
 
@@ -73,6 +83,12 @@ public class UciGameService {
                 playerName(pgnTags.get("Black"), "Black"));
     }
 
+    /**
+     * Performs the export game operation.
+     * @param whiteComputerControlled the white computer controlled
+     * @param blackComputerControlled the black computer controlled
+     * @return the result of the operation
+     */
     public synchronized String exportGame(boolean whiteComputerControlled, boolean blackComputerControlled)
             throws NoMoveFoundException, IOException {
         return gameSaver.toPgn(
@@ -80,6 +96,10 @@ public class UciGameService {
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled));
     }
 
+    /**
+     * Returns the analysis move list snapshot.
+     * @return the analysis move list snapshot
+     */
     public synchronized List<Move> getAnalysisMoveListSnapshot() {
         if (importedAnalysisGame != null) {
             return new ArrayList<>(importedAnalysisGame.getMoveList());
@@ -87,15 +107,27 @@ public class UciGameService {
         return gameService.getMoveListSnapshot();
     }
 
+    /**
+     * Returns whether this object has the imported game.
+     * @return true when the condition is satisfied; otherwise false
+     */
     public synchronized boolean hasImportedGame() {
         return importedAnalysisGame != null;
     }
 
+    /**
+     * Clears the imported game.
+     */
     public synchronized void clearImportedGame() {
         importedAnalysisGame = null;
         importedPgnTags = new LinkedHashMap<>();
     }
 
+    /**
+     * Creates the move dtos.
+     * @param originalMoves the original moves
+     * @return the result of the operation
+     */
     private List<UciGameMoveDto> createMoveDtos(List<Move> originalMoves)
             throws NoMoveFoundException, IOException {
         List<UciGameMoveDto> result = new ArrayList<>();
@@ -123,6 +155,12 @@ public class UciGameService {
         return result;
     }
 
+    /**
+     * Returns the pgn tags for export.
+     * @param whiteComputerControlled the white computer controlled
+     * @param blackComputerControlled the black computer controlled
+     * @return the pgn tags for export
+     */
     private Map<String, String> getPgnTagsForExport(
             boolean whiteComputerControlled,
             boolean blackComputerControlled) {
@@ -146,6 +184,13 @@ public class UciGameService {
         return tags;
     }
 
+    /**
+     * Performs the player name for export operation.
+     * @param game the game
+     * @param color the color
+     * @param computerControlled the computer controlled
+     * @return the result of the operation
+     */
     private String playerNameForExport(Game game, Color color, boolean computerControlled) {
         String fallback = color == Color.WHITE ? "White" : "Black";
 
@@ -165,6 +210,12 @@ public class UciGameService {
         return playerName(gamePlayerName, fallback);
     }
 
+    /**
+     * Performs the player name operation.
+     * @param name the name
+     * @param fallback the fallback
+     * @return the result of the operation
+     */
     private String playerName(String name, String fallback) {
         if (name == null || name.isBlank()
                 || "ChessGame".equals(name)
@@ -174,6 +225,11 @@ public class UciGameService {
         return name;
     }
 
+    /**
+     * Performs the game result operation.
+     * @param game the game
+     * @return the result of the operation
+     */
     private String gameResult(Game game) {
         if (game == null || game.getState() == null) {
             return "*";
@@ -197,6 +253,11 @@ public class UciGameService {
         return "*";
     }
 
+    /**
+     * Performs the to position string operation.
+     * @param game the game
+     * @return the result of the operation
+     */
     private String toPositionString(Game game) {
         Board board = game.getChessBoard();
         StringBuilder position = new StringBuilder(64);
@@ -212,6 +273,11 @@ public class UciGameService {
         return position.toString();
     }
 
+    /**
+     * Performs the to position char operation.
+     * @param piece the piece
+     * @return the result of the operation
+     */
     private char toPositionChar(Piece piece) {
         if (piece == null || piece.getType() == null) {
             return '.';

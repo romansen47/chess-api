@@ -46,6 +46,9 @@ public class GameService {
      */
     private GameSettingsDto gameSettings;
 
+    /**
+     * Creates a new GameService instance.
+     */
     public GameService() {
         this.gameSettings = createDefaultGameSettings();
         this.game = createGame(
@@ -55,15 +58,17 @@ public class GameService {
     }
 
     /**
-     * Startet eine komplett neue Partie mit den bisher gespeicherten Einstellungen.
+     * Starts the new game.
+     * @return the result of the operation
      */
     public synchronized GameSettingsDto startNewGame() {
         return startNewGame(this.gameSettings);
     }
 
     /**
-     * Startet eine komplett neue Partie mit den übergebenen Einstellungen.
-     * Wird von /api/new-game aufgerufen.
+     * Starts the new game.
+     * @param settings the settings
+     * @return the result of the operation
      */
     public synchronized GameSettingsDto startNewGame(GameSettingsDto settings) {
         GameSettingsDto normalizedSettings = normalizeGameSettings(settings);
@@ -78,19 +83,25 @@ public class GameService {
     }
 
     /**
-     * Liefert die aktuellen Einstellungen für neue Partien.
+     * Returns the game settings.
+     * @return the game settings
      */
     public synchronized GameSettingsDto getGameSettings() {
         return copyGameSettings(this.gameSettings);
     }
 
     /**
-     * Liefert die aktuelle Partie.
+     * Returns the current game.
+     * @return the current game
      */
     public synchronized Game getCurrentGame() {
         return game;
     }
 
+    /**
+     * Creates the default game settings.
+     * @return the result of the operation
+     */
     private GameSettingsDto createDefaultGameSettings() {
         return new GameSettingsDto(
                 DEFAULT_TIME_SECONDS,
@@ -101,6 +112,11 @@ public class GameService {
                 0);
     }
 
+    /**
+     * Performs the normalize game settings operation.
+     * @param settings the settings
+     * @return the result of the operation
+     */
     private GameSettingsDto normalizeGameSettings(GameSettingsDto settings) {
         GameSettingsDto source = settings != null ? settings : this.gameSettings;
         if (source == null) {
@@ -128,6 +144,11 @@ public class GameService {
                 nextVersion);
     }
 
+    /**
+     * Performs the copy game settings operation.
+     * @param settings the settings
+     * @return the result of the operation
+     */
     private GameSettingsDto copyGameSettings(GameSettingsDto settings) {
         if (settings == null) {
             return createDefaultGameSettings();
@@ -142,6 +163,13 @@ public class GameService {
                 settings.getVersion());
     }
 
+    /**
+     * Creates the game.
+     * @param timeSeconds the time seconds
+     * @param whiteIncrementSeconds the white increment seconds
+     * @param blackIncrementSeconds the black increment seconds
+     * @return the result of the operation
+     */
     private Game createGame(int timeSeconds, int whiteIncrementSeconds, int blackIncrementSeconds) {
         Game createdGame = new ChessAdmin().chessGame(timeSeconds);
 
@@ -153,6 +181,12 @@ public class GameService {
         return createdGame;
     }
 
+    /**
+     * Sets the up clocks.
+     * @param chessGame the chess game
+     * @param whiteIncrementSeconds the white increment seconds
+     * @param blackIncrementSeconds the black increment seconds
+     */
     private void setupClocks(Game chessGame, int whiteIncrementSeconds, int blackIncrementSeconds) {
         chessGame.getWhitePlayer().setupClock(
                 chessGame.getTimeForEachPlayer(),
@@ -173,6 +207,10 @@ public class GameService {
                 });
     }
 
+    /**
+     * Stops the clocks.
+     * @param chessGame the chess game
+     */
     private void stopClocks(Game chessGame) {
         if (chessGame.getWhitePlayer().getChessClock().isStarted()
                 && !chessGame.getWhitePlayer().getChessClock().isStopped()) {
@@ -186,11 +224,9 @@ public class GameService {
     }
 
     /**
-     * Führt einen bereits bestimmten legalen Move im aktuellen Game aus.
-     *
-     * Diese Methode ist bewusst separat von applyMove(String, String, String):
-     * menschliche Züge kommen aus dem REST-Request als from/to, Engine-Züge
-     * kommen bereits als Move-Instanz aus PlayerUciEngine.getBestMove(...).
+     * Applies the move.
+     * @param move the move
+     * @return the result of the operation
      */
     public synchronized Move applyMove(Move move) throws NoMoveFoundException, IOException {
         if (move == null) {
@@ -202,9 +238,10 @@ public class GameService {
 
 
     /**
-     * Applies an engine move only if the game instance used for the calculation is
-     * still the active game. This protects a newly started game from a late engine
-     * response that was calculated for the previous game.
+     * Applies the move if current.
+     * @param expectedGame the expected game
+     * @param move the move
+     * @return the result of the operation
      */
     public synchronized boolean applyMoveIfCurrent(Game expectedGame, Move move) throws NoMoveFoundException, IOException {
         if (expectedGame == null || expectedGame != this.game) {
@@ -215,20 +252,11 @@ public class GameService {
     }
 
     /**
-     * Führt einen Zug aus ("from" -> "to").
-     *
-     * Wir suchen in den legalen Zügen des aktuellen Spielers nach einem Move,
-     * dessen Source-/Target-Feldnamen den algebraischen Koordinaten entsprechen
-     * (z.B. "e2" -> "e4"), und rufen dann game.apply(move) auf.
-     *
-     * @param from      z.B. "e2"
-     * @param to        z.B. "e4"
-     * @param promotion optionales Promotions-Kürzel oder Name ("q", "r", "b", "n",
-     *                  "queen", "rook", "bishop", "knight"). Wird nur bei
-     *                  Promotionszügen ausgewertet.
-     * @return der ausgeführte Move
-     * @throws NoMoveFoundException wenn kein legaler Zug gefunden wurde
-     * @throws IOException          wenn beim Anwenden des Zuges ein Fehler auftritt
+     * Applies the move.
+     * @param from the from
+     * @param to the to
+     * @param promotion the promotion
+     * @return the result of the operation
      */
     public synchronized Move applyMove(String from, String to, String promotion)
             throws NoMoveFoundException, IOException {
@@ -267,6 +295,14 @@ public class GameService {
         return applyMove(selected);
     }
 
+    /**
+     * Performs the select move for promotion operation.
+     * @param matchingMoves the matching moves
+     * @param promotion the promotion
+     * @param from the from
+     * @param to the to
+     * @return the result of the operation
+     */
     private Move selectMoveForPromotion(List<Move> matchingMoves, String promotion, String from, String to)
             throws NoMoveFoundException {
 
@@ -296,6 +332,11 @@ public class GameService {
                 "No legal promotion move for " + from + " -> " + to + " with promotion " + promotion);
     }
 
+    /**
+     * Performs the normalize promotion operation.
+     * @param promotion the promotion
+     * @return the result of the operation
+     */
     private String normalizePromotion(String promotion) {
         if (promotion == null || promotion.isBlank()) {
             return null;
@@ -322,12 +363,8 @@ public class GameService {
     }
 
     /**
-     * Liefert die aktuelle Brettstellung als kompakten 64-Zeichen-String.
-     *
-     * Reihenfolge: a8 bis h8, dann a7 bis h7, ... bis a1 bis h1.
-     * Weiße Figuren werden groß geschrieben, schwarze klein, leere Felder als '.'.
-     * Beispiel Startstellung:
-     * rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR
+     * Returns the current position string.
+     * @return the current position string
      */
     public synchronized String getCurrentPositionString() {
         Board board = game.getChessBoard();
@@ -344,6 +381,11 @@ public class GameService {
         return position.toString();
     }
 
+    /**
+     * Performs the to position char operation.
+     * @param piece the piece
+     * @return the result of the operation
+     */
     private char toPositionChar(Piece piece) {
         if (piece == null || piece.getType() == null) {
             return '.';
@@ -380,25 +422,26 @@ public class GameService {
     }
 
     /**
-     * Erzeugt eine einfache, UI-neutrale View des aktuellen Bretts.
-     *
-     * Es werden nur Farbe, Figurentyp und Feldname übertragen, keine Layout-Infos.
-     * Diese Methode wird vom REST-Controller (z.B. /api/board) verwendet.
+     * Returns the move list snapshot.
+     * @return the move list snapshot
      */
     public synchronized List<Move> getMoveListSnapshot() {
         return new ArrayList<>(game.getMoveList());
     }
 
     /**
-     * Erzeugt eine einfache, UI-neutrale View des aktuellen Bretts.
-     *
-     * Es werden nur Farbe, Figurentyp und Feldname übertragen, keine Layout-Infos.
-     * Diese Methode wird vom REST-Controller (z.B. /api/board) verwendet.
+     * Returns the board view.
+     * @return the board view
      */
     public synchronized BoardDto getBoardView() {
         return getBoardView(game);
     }
 
+    /**
+     * Returns the board view.
+     * @param sourceGame the source game
+     * @return the board view
+     */
     public BoardDto getBoardView(Game sourceGame) {
         Board board = sourceGame.getChessBoard();
         List<PieceDto> pieces = new ArrayList<>();
