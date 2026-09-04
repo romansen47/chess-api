@@ -30,12 +30,18 @@ class EngineSettingsDiscoveryTest {
     private String previousDirectoryProperty;
     private String previousStoreProperty;
 
+    /**
+     * Performs the restore properties operation.
+     */
     @AfterEach
     void restoreProperties() {
         restoreProperty(DIRECTORY_PROPERTY, previousDirectoryProperty);
         restoreProperty(STORE_PROPERTY, previousStoreProperty);
     }
 
+    /**
+     * Performs the discovers only allowed responsive uci engines and prefers stockfish as fallback operation.
+     */
     @Test
     void discoversOnlyAllowedResponsiveUciEnginesAndPrefersStockfishAsFallback() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
@@ -88,6 +94,9 @@ class EngineSettingsDiscoveryTest {
         assertTrue(overview.getEngines().stream().noneMatch(engine -> engine.getEngine().endsWith("some-game")));
     }
 
+    /**
+     * Performs the manual scan adds only new allowed engines and does not change assignments operation.
+     */
     @Test
     void manualScanAddsOnlyNewAllowedEnginesAndDoesNotChangeAssignments() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
@@ -119,6 +128,9 @@ class EngineSettingsDiscoveryTest {
         assertNotNull(secondScan.getFallbackProfileId());
     }
 
+    /**
+     * Performs the deleting engine removes associated profiles and repairs fallback assignments operation.
+     */
     @Test
     void deletingEngineRemovesAssociatedProfilesAndRepairsFallbackAssignments() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
@@ -156,6 +168,10 @@ class EngineSettingsDiscoveryTest {
         assertEquals(after.getFallbackProfileId(), after.getDefaults().getDeepAnalysisProfileId());
     }
 
+    /**
+     * Performs the configure properties operation.
+     * @param games the games
+     */
     private void configureProperties(Path games) {
         previousDirectoryProperty = System.getProperty(DIRECTORY_PROPERTY);
         previousStoreProperty = System.getProperty(STORE_PROPERTY);
@@ -163,6 +179,13 @@ class EngineSettingsDiscoveryTest {
         System.setProperty(STORE_PROPERTY, tempDir.resolve("engine-configs.json").toString());
     }
 
+    /**
+     * Creates the uci engine.
+     * @param path the path
+     * @param name the name
+     * @param hashDefault the hash default
+     * @return the result of the operation
+     */
     private Path createUciEngine(Path path, String name, int hashDefault) throws IOException {
         String script = "#!/bin/sh\n"
                 + "while IFS= read -r command; do\n"
@@ -181,11 +204,20 @@ class EngineSettingsDiscoveryTest {
         return path;
     }
 
+    /**
+     * Creates the non uci executable.
+     * @param path the path
+     */
     private void createNonUciExecutable(Path path) throws IOException {
         Files.writeString(path, "#!/bin/sh\necho not-a-uci-engine\n", StandardCharsets.UTF_8);
         assertTrue(path.toFile().setExecutable(true, false) || Files.isExecutable(path));
     }
 
+    /**
+     * Performs the restore property operation.
+     * @param name the name
+     * @param value the value
+     */
     private void restoreProperty(String name, String value) {
         if (value == null) {
             System.clearProperty(name);
