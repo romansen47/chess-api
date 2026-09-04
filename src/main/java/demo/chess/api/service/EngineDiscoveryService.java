@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.apache.commons.logging.Log;
@@ -19,10 +20,11 @@ import demo.chess.definitions.engines.UciEngineInspector;
 /**
  * Discovers executable UCI engines from a system directory.
  *
- * File names are deliberately not used as proof that a candidate is a chess
- * engine. Every executable must successfully complete the UCI handshake via
- * {@link UciEngineInspector}. Symlinks that resolve to the same executable are
- * de-duplicated by their real path.
+ * For safety, automatic discovery only considers executables whose file name
+ * contains "stockfish" or "lc0" (case-insensitive). This name filter is
+ * applied before any candidate process is started. Matching candidates still
+ * have to complete the UCI handshake via {@link UciEngineInspector}.
+ * Symlinks that resolve to the same executable are de-duplicated by real path.
  */
 @Service
 public class EngineDiscoveryService {
@@ -61,6 +63,7 @@ public class EngineDiscoveryService {
             candidates = stream
                     .filter(Files::isRegularFile)
                     .filter(Files::isExecutable)
+                    .filter(this::isAllowedDiscoveryCandidate)
                     .sorted(candidateComparator())
                     .toList();
         } catch (IOException e) {
@@ -91,7 +94,7 @@ public class EngineDiscoveryService {
                 logger.info("Discovered UCI engine " + inspected.getEngineName()
                         + " at " + normalizedCandidate);
             } catch (Exception e) {
-                logger.debug("Ignoring executable that is not a responsive UCI engine: "
+                logger.debug("Ignoring allowed discovery candidate that is not a responsive UCI engine: "
                         + normalizedCandidate + " (" + e.getMessage() + ")");
             }
         }
@@ -99,9 +102,18 @@ public class EngineDiscoveryService {
         return new ArrayList<>(definitionsByRealPath.values());
     }
 
+    private boolean isAllowedDiscoveryCandidate(Path path) {
+        Path fileName = path.getFileName();
+        if (fileName == null) {
+            return false;
+        }
+        String normalizedName = fileName.toString().toLowerCase(Locale.ROOT);
+        return normalizedName.contains("stockfish") || normalizedName.contains("lc0");
+    }
+
     private Comparator<Path> candidateComparator() {
         return Comparator
-                .comparing((Path path) -> !PREFERRED_EXECUTABLE.equals(path.getFileName().toString()))
+                .comparing((Path path) -> !PREFERRED_EXECUTABLE.equalsIgnoreCase(path.getFileName().toString()))
                 .thenComparing(path -> path.getFileName().toString(), String.CASE_INSENSITIVE_ORDER);
     }
 
