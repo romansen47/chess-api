@@ -9,6 +9,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.stereotype.Service;
@@ -112,8 +113,27 @@ public class NativeEngineFilePickerService {
             return null;
         }
 
-        String linuxPath = runWslPath("-u", windowsPath);
+        String linuxPath = convertWindowsPathToLinux(windowsPath);
         return validateAndRemember(Path.of(linuxPath));
+    }
+
+    private String convertWindowsPathToLinux(String windowsPath) throws IOException {
+        String distroName = System.getenv("WSL_DISTRO_NAME");
+        if (distroName != null && !distroName.isBlank()) {
+            String normalized = windowsPath.replace('/', '\\');
+            String lower = normalized.toLowerCase(Locale.ROOT);
+            String localhostPrefix = ("\\\\wsl.localhost\\" + distroName + "\\").toLowerCase(Locale.ROOT);
+            String legacyPrefix = ("\\\\wsl$\\" + distroName + "\\").toLowerCase(Locale.ROOT);
+
+            if (lower.startsWith(localhostPrefix)) {
+                return "/" + normalized.substring(localhostPrefix.length()).replace('\\', '/');
+            }
+            if (lower.startsWith(legacyPrefix)) {
+                return "/" + normalized.substring(legacyPrefix.length()).replace('\\', '/');
+            }
+        }
+
+        return runWslPath("-u", windowsPath);
     }
 
     private String runWslPath(String direction, String value) throws IOException {
