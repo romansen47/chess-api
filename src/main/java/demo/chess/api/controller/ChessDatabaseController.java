@@ -1,10 +1,12 @@
 package demo.chess.api.controller;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -57,10 +59,10 @@ public class ChessDatabaseController {
     }
 
     /**
-     * Imports one PGN file into the embedded database.
+     * Uploads one PGN file and starts its database import in the background.
      *
      * @param file uploaded PGN file
-     * @return completed import result
+     * @return initial import job state
      */
     @PostMapping(
             value = "/import",
@@ -71,10 +73,49 @@ public class ChessDatabaseController {
             return ResponseEntity.badRequest().body("Choose a non-empty PGN file.");
         }
 
+        try (InputStream inputStream = file.getInputStream()) {
+            ChessDatabaseDtos.ImportJob job = chessDatabaseService.startImport(
+                    file.getOriginalFilename(),
+                    inputStream);
+            return ResponseEntity.status(HttpStatus.ACCEPTED).body(job);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().body("Could not start chess database import: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Returns current progress for one database import.
+     *
+     * @param importId import identifier
+     * @return import job state
+     */
+    @GetMapping(
+            value = "/imports/{importId}",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> getImport(@PathVariable String importId) {
         try {
-            return ResponseEntity.ok(chessDatabaseService.importPgn(file.getInputStream()));
-        } catch (SQLException | IOException e) {
-            return ResponseEntity.internalServerError().body("Chess database import failed: " + e.getMessage());
+            return ResponseEntity.ok(chessDatabaseService.getImportJob(importId));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * Requests controlled cancellation of one running database import.
+     *
+     * @param importId import identifier
+     * @return current import job state
+     */
+    @PostMapping(
+            value = "/imports/{importId}/cancel",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> cancelImport(@PathVariable String importId) {
+        try {
+            return ResponseEntity.ok(chessDatabaseService.cancelImport(importId));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
         }
     }
 
