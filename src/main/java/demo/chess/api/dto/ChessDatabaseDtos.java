@@ -50,6 +50,35 @@ public final class ChessDatabaseDtos {
     }
 
     /**
+     * Observable background import job.
+     *
+     * @param id job identifier
+     * @param fileName source file name
+     * @param status RUNNING, COMPLETE, CANCELLED or FAILED
+     * @param totalBytes total source size
+     * @param bytesRead bytes consumed by the importer
+     * @param processedGames number of PGN games processed
+     * @param importedGames successfully staged or published games
+     * @param skippedGames skipped games
+     * @param totalPlies staged or published half-moves
+     * @param elapsedMillis elapsed import time
+     * @param message optional result or error message
+     */
+    public record ImportJob(
+            String id,
+            String fileName,
+            String status,
+            long totalBytes,
+            long bytesRead,
+            long processedGames,
+            long importedGames,
+            long skippedGames,
+            long totalPlies,
+            long elapsedMillis,
+            String message) {
+    }
+
+    /**
      * Game search request payload.
      *
      * @param white white player fragment
