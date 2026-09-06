@@ -1,7 +1,9 @@
 package demo.chess.api.service;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -90,6 +92,39 @@ public class ChessDatabaseService {
                     0L,
                     0L,
                     e.getMessage());
+        }
+    }
+
+    /**
+     * Imports one PGN supplied by the normal single-game loader into the local database.
+     *
+     * <p>The synchronous import uses the same database import lock as bulk imports so
+     * the two write paths cannot race each other. Duplicate filtering is handled by
+     * the database module itself.</p>
+     *
+     * @param content complete PGN text
+     * @return database import result
+     */
+    public ImportResult importSingleGame(String content) throws SQLException, IOException {
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("PGN content must not be blank.");
+        }
+
+        String importId = UUID.randomUUID().toString();
+        if (!activeImportId.compareAndSet(null, importId)) {
+            throw new IllegalStateException("Another chess database import is already running.");
+        }
+
+        byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+        try (InputStream inputStream = new ByteArrayInputStream(bytes)) {
+            return database().importPgn(
+                    importId,
+                    inputStream,
+                    bytes.length,
+                    null,
+                    () -> false);
+        } finally {
+            activeImportId.compareAndSet(importId, null);
         }
     }
 
