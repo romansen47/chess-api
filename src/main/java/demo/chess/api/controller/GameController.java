@@ -1,8 +1,10 @@
 package demo.chess.api.controller;
 
 import java.io.IOException;
+import java.sql.SQLException;
 
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 import demo.chess.api.dto.GameSettingsDto;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.api.service.AnalysisReplayService;
+import demo.chess.api.service.ChessDatabaseService;
 import demo.chess.api.service.GameLifecycleService;
 import demo.chess.api.service.GameService;
 import demo.chess.api.service.UciGameService;
@@ -28,6 +31,7 @@ public class GameController {
     private final GameLifecycleService gameLifecycleService;
     private final UciGameService uciGameService;
     private final AnalysisReplayService analysisReplayService;
+    private final ChessDatabaseService chessDatabaseService;
 
     /**
      * Creates a new GameController instance.
@@ -35,16 +39,19 @@ public class GameController {
      * @param gameLifecycleService the game lifecycle service
      * @param uciGameService the uci game service
      * @param analysisReplayService the analysis replay service
+     * @param chessDatabaseService the local chess database service
      */
     public GameController(
             GameService gameService,
             GameLifecycleService gameLifecycleService,
             UciGameService uciGameService,
-            AnalysisReplayService analysisReplayService) {
+            AnalysisReplayService analysisReplayService,
+            ChessDatabaseService chessDatabaseService) {
         this.gameService = gameService;
         this.gameLifecycleService = gameLifecycleService;
         this.uciGameService = uciGameService;
         this.analysisReplayService = analysisReplayService;
+        this.chessDatabaseService = chessDatabaseService;
     }
 
     /**
@@ -91,9 +98,10 @@ public class GameController {
     }
 
     /**
-     * Performs the import pgn game operation.
-     * @param content the content
-     * @return the result of the operation
+     * Imports one PGN game for analysis and stores it in the local database.
+     *
+     * @param content complete PGN content
+     * @return imported analysis game
      */
     @PostMapping(
             value = "/game/pgn",
@@ -103,10 +111,15 @@ public class GameController {
         analysisReplayService.cancel();
 
         try {
+            chessDatabaseService.importSingleGame(content);
             UciGameDto importedGame = uciGameService.importGame(content);
             return ResponseEntity.ok(importedGame);
-        } catch (NoMoveFoundException e) {
+        } catch (NoMoveFoundException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (SQLException e) {
+            return ResponseEntity.internalServerError().body("Database error while importing PGN game");
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body("I/O error while importing PGN game");
         }
