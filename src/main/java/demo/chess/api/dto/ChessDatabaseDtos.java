@@ -55,6 +55,7 @@ public final class ChessDatabaseDtos {
      * @param id job identifier
      * @param fileName source file name
      * @param status RUNNING, COMPLETE, CANCELLED or FAILED
+     * @param phase current import phase
      * @param totalBytes total source size
      * @param bytesRead bytes consumed by the importer
      * @param processedGames number of PGN games processed
@@ -68,6 +69,7 @@ public final class ChessDatabaseDtos {
             String id,
             String fileName,
             String status,
+            String phase,
             long totalBytes,
             long bytesRead,
             long processedGames,
