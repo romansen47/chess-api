@@ -369,6 +369,17 @@ public class ChessDatabaseService {
     }
 
     /**
+     * Coarse-grained import phases exposed to the UI.
+     */
+    private enum ImportPhase {
+        READING_PGN,
+        FINALIZING_DATABASE,
+        COMPLETE,
+        CANCELLED,
+        FAILED
+    }
+
+    /**
      * Mutable thread-safe-enough state for one single-worker import job.
      */
     private static final class ImportJobState {
@@ -376,8 +387,10 @@ public class ChessDatabaseService {
         private final String id;
         private final String fileName;
         private final long totalBytes;
+        private final long startedNanos = System.nanoTime();
 
         private volatile String status = "RUNNING";
+        private volatile ImportPhase phase = ImportPhase.READING_PGN;
         private volatile long bytesRead;
         private volatile long processedGames;
         private volatile long importedGames;
@@ -398,6 +411,10 @@ public class ChessDatabaseService {
 
         /**
          * Applies a running database progress snapshot.
+         *
+         * <p>The database module reports progress while consuming the PGN stream. Once
+         * the complete source has been consumed but the job is still running, the
+         * importer is in its atomic database finalization step.</p>
          */
         private void updateProgress(ImportProgress progress) {
             bytesRead = progress.bytesRead();
@@ -406,6 +423,12 @@ public class ChessDatabaseService {
             skippedGames = progress.skippedGames();
             totalPlies = progress.totalPlies();
             elapsedMillis = progress.elapsedMillis();
+
+            if ("RUNNING".equals(status)) {
+                phase = totalBytes > 0L && bytesRead >= totalBytes
+                        ? ImportPhase.FINALIZING_DATABASE
+                        : ImportPhase.READING_PGN;
+            }
         }
 
         /**
@@ -427,6 +450,7 @@ public class ChessDatabaseService {
             totalPlies = result.totalPlies();
             elapsedMillis = result.elapsedMillis();
             bytesRead = totalBytes;
+            phase = ImportPhase.COMPLETE;
             message = "Import complete.";
             status = "COMPLETE";
         }
@@ -435,6 +459,8 @@ public class ChessDatabaseService {
          * Marks the job cancelled after staged data was removed.
          */
         private void cancelled() {
+            elapsedMillis = elapsedSinceStartMillis();
+            phase = ImportPhase.CANCELLED;
             message = "Import cancelled. No games from this import were added to the active database.";
             status = "CANCELLED";
         }
@@ -443,8 +469,24 @@ public class ChessDatabaseService {
          * Marks the job failed after staged data was removed.
          */
         private void failed(String failureMessage) {
+            elapsedMillis = elapsedSinceStartMillis();
+            phase = ImportPhase.FAILED;
             message = "Import failed: " + failureMessage;
             status = "FAILED";
+        }
+
+        /**
+         * Returns live elapsed time even while the database finalization callback is quiet.
+         */
+        private long currentElapsedMillis() {
+            return "RUNNING".equals(status) ? elapsedSinceStartMillis() : elapsedMillis;
+        }
+
+        /**
+         * Returns elapsed time from the monotonic job start clock.
+         */
+        private long elapsedSinceStartMillis() {
+            return Math.max(0L, (System.nanoTime() - startedNanos) / 1_000_000L);
         }
 
         /**
@@ -455,13 +497,14 @@ public class ChessDatabaseService {
                     id,
                     fileName,
                     status,
+                    phase.name(),
                     totalBytes,
                     bytesRead,
                     processedGames,
                     importedGames,
                     skippedGames,
                     totalPlies,
-                    elapsedMillis,
+                    currentElapsedMillis(),
                     message);
         }
     }
