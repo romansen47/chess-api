@@ -1,5 +1,8 @@
 package demo.chess.api.controller;
 
+import java.util.Map;
+
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -77,29 +80,48 @@ public class EngineSettingsController {
     }
 
     /**
-     * Performs the select engine operation.
-     * @return the result of the operation
+     * Opens the backend machine's native file chooser and inspects the selected engine.
+     * @return the inspected engine, no content when cancelled, or a readable error payload
      */
     @PostMapping("/engines/select")
-    public ResponseEntity<EngineDefinitionDto> selectEngine() {
-        String enginePath = nativeEngineFilePickerService.selectExecutable();
-        if (enginePath == null) {
-            return ResponseEntity.noContent().build();
+    public ResponseEntity<?> selectEngine() {
+        try {
+            String enginePath = nativeEngineFilePickerService.selectExecutable();
+            if (enginePath == null) {
+                return ResponseEntity.noContent().build();
+            }
+            return ResponseEntity.ok(engineSettingsService.inspectEngineDefinition(enginePath, null));
+        } catch (RuntimeException e) {
+            return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR, e);
         }
-        return ResponseEntity.ok(engineSettingsService.inspectEngineDefinition(enginePath, null));
     }
 
     /**
-     * Performs the inspect engine operation.
+     * Inspects an engine at an explicitly supplied executable path.
      * @param request the request
-     * @return the result of the operation
+     * @return the inspected engine or a readable validation error payload
      */
     @PostMapping("/engines/inspect")
-    public ResponseEntity<EngineDefinitionDto> inspectEngine(
+    public ResponseEntity<?> inspectEngine(
             @RequestBody EngineDefinitionInspectRequestDto request) {
-        return ResponseEntity.ok(engineSettingsService.inspectEngineDefinition(
-                request.getEngine(),
-                request.getName()));
+        try {
+            if (request == null || request.getEngine() == null || request.getEngine().isBlank()) {
+                throw new IllegalArgumentException("Engine executable path must not be blank");
+            }
+            return ResponseEntity.ok(engineSettingsService.inspectEngineDefinition(
+                    request.getEngine(),
+                    request.getName()));
+        } catch (RuntimeException e) {
+            return errorResponse(HttpStatus.BAD_REQUEST, e);
+        }
+    }
+
+    private ResponseEntity<Map<String, String>> errorResponse(HttpStatus status, RuntimeException error) {
+        String message = error.getMessage();
+        if (message == null || message.isBlank()) {
+            message = error.getClass().getSimpleName();
+        }
+        return ResponseEntity.status(status).body(Map.of("message", message));
     }
 
     /**
