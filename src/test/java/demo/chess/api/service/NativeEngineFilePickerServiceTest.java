@@ -1,6 +1,7 @@
 package demo.chess.api.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -39,5 +40,15 @@ class NativeEngineFilePickerServiceTest {
         assertEquals(
                 NativeEngineFilePickerService.DesktopPlatform.LINUX,
                 NativeEngineFilePickerService.detectPlatform("Linux", null));
+    }
+
+    @Test
+    void windowsDialogUsesTopMostOwner() {
+        String script = NativeEngineFilePickerService.buildWindowsDialogScript("C:\\engines", false);
+
+        assertTrue(script.contains("$owner.TopMost = $true"));
+        assertTrue(script.contains("$owner.BringToFront()"));
+        assertTrue(script.contains("$owner.Activate()"));
+        assertTrue(script.contains("$dialog.ShowDialog($owner)"));
     }
 }
