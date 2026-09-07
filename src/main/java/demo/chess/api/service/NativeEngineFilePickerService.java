@@ -202,26 +202,25 @@ public class NativeEngineFilePickerService {
             try {
                 owner = new Frame();
                 owner.setUndecorated(true);
-                owner.setAlwaysOnTop(true);
                 owner.setSize(1, 1);
                 owner.setLocationRelativeTo(null);
+                owner.setAutoRequestFocus(true);
                 owner.setVisible(true);
+
+                // On Windows the owner must first be brought to the foreground.
+                // Only then may it become always-on-top; owned dialogs inherit
+                // that state and are therefore shown in front of the browser.
                 owner.toFront();
                 owner.requestFocus();
+                owner.setAlwaysOnTop(true);
 
                 dialog = new FileDialog(owner, "UCI-Engine auswählen", FileDialog.LOAD);
-                dialog.setAlwaysOnTop(true);
+                dialog.setAutoRequestFocus(true);
                 Path startDirectory = Files.isDirectory(lastDirectory) ? lastDirectory : initialDirectory;
                 dialog.setDirectory(startDirectory.toString());
                 dialog.setFilenameFilter((directory, name) -> {
                     Path candidate = directory.toPath().resolve(name);
                     return Files.isRegularFile(candidate) && Files.isExecutable(candidate);
-                });
-
-                FileDialog dialogToFocus = dialog;
-                EventQueue.invokeLater(() -> {
-                    dialogToFocus.toFront();
-                    dialogToFocus.requestFocus();
                 });
                 dialog.setVisible(true);
 
