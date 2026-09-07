@@ -1,5 +1,6 @@
 package demo.chess.api.service;
 
+import java.awt.AWTError;
 import java.awt.EventQueue;
 import java.awt.FileDialog;
 import java.awt.Frame;
@@ -9,7 +10,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -24,21 +24,14 @@ import org.springframework.stereotype.Service;
  * open the operating system's file chooser and return the real path to the
  * selected executable.
  *
- * Windows uses the native Windows Forms file chooser through PowerShell. WSL
- * uses the same chooser and translates the selected Windows path back to a
- * Linux path. macOS uses AppleScript's native choose-file dialog. Linux
- * prefers zenity or kdialog and falls back to AWT only when a graphical Java
- * environment is available.
+ * When running inside WSL we prefer the Windows OpenFileDialog. This gives the
+ * user the normal Windows file manager while still returning a path that the
+ * Linux backend can execute. Outside WSL, AWT's native FileDialog is used and
+ * therefore lets Java select the appropriate desktop dialog for Windows,
+ * macOS and graphical Linux environments.
  */
 @Service
 public class NativeEngineFilePickerService {
-
-    enum DesktopPlatform {
-        WINDOWS,
-        WSL,
-        MACOS,
-        LINUX
-    }
 
     private final Path initialDirectory;
     private Path lastDirectory;
@@ -56,232 +49,80 @@ public class NativeEngineFilePickerService {
     }
 
     /**
-     * Opens the native engine executable picker for the current platform.
+     * Opens the native engine executable picker.
      * @return the selected executable path, or {@code null} when cancelled
      */
     public synchronized String selectExecutable() {
-        DesktopPlatform platform = detectPlatform(
-                System.getProperty("os.name"),
-                System.getenv("WSL_DISTRO_NAME"));
-
-        try {
-            return switch (platform) {
-                case WINDOWS -> selectExecutableWithWindowsDialog(false);
-                case WSL -> selectExecutableWithWindowsDialog(true);
-                case MACOS -> selectExecutableWithMacDialog();
-                case LINUX -> selectExecutableWithLinuxDialog();
-            };
-        } catch (IOException e) {
-            throw new IllegalStateException(
-                    "Could not open the system file chooser: " + e.getMessage(), e);
+        if (isWsl()) {
+            try {
+                return selectExecutableWithWindowsDialog();
+            } catch (IOException e) {
+                if (GraphicsEnvironment.isHeadless()) {
+                    throw new IllegalStateException(
+                            "Could not open the Windows system file chooser from WSL: " + e.getMessage(), e);
+                }
+                // WSL interop can be disabled. In that case, fall back to the
+                // graphical Java dialog when a DISPLAY/WSLg session exists.
+            }
         }
+
+        return selectExecutableWithAwtDialog();
     }
 
-    static DesktopPlatform detectPlatform(String osName, String wslDistroName) {
-        if (wslDistroName != null && !wslDistroName.isBlank()) {
-            return DesktopPlatform.WSL;
-        }
-
-        String normalizedOsName = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
-        if (normalizedOsName.startsWith("mac") || normalizedOsName.contains("darwin")) {
-            return DesktopPlatform.MACOS;
-        }
-        if (normalizedOsName.startsWith("windows")) {
-            return DesktopPlatform.WINDOWS;
-        }
-        return DesktopPlatform.LINUX;
-    }
-
-    private String selectExecutableWithWindowsDialog(boolean runningInWsl) throws IOException {
+    private String selectExecutableWithWindowsDialog() throws IOException {
         Path startDirectory = getStartDirectory();
-        String pickerStartDirectory = runningInWsl
-                ? runWslPath("-w", startDirectory.toString())
-                : startDirectory.toString();
+        String windowsStartDirectory = runWslPath("-w", startDirectory.toString());
 
-        String script = buildWindowsDialogScript(pickerStartDirectory, runningInWsl);
-        Process process = startPowerShell(script);
-        String output = waitForProcess(process, "Windows file chooser");
+        String script = String.join("; ",
+                "Add-Type -AssemblyName System.Windows.Forms",
+                "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+                "$dialog.Title = 'UCI-Engine auswählen'",
+                // Windows can browse \\wsl.localhost but its own file validation
+                // may reject Linux executables/symlinks as 'not found'. Therefore
+                // the dialog only selects a path. Linux validates the real file
+                // after the UNC path has been translated back into a WSL path.
+                "$dialog.CheckFileExists = $false",
+                "$dialog.CheckPathExists = $false",
+                "$dialog.ValidateNames = $false",
+                "$dialog.DereferenceLinks = $false",
+                "$dialog.Multiselect = $false",
+                "$dialog.Filter = 'Alle Dateien (*.*)|*.*'",
+                "$dialog.InitialDirectory = '" + escapePowerShellSingleQuoted(windowsStartDirectory) + "'",
+                "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { "
+                        + "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
+                        + "Write-Output $dialog.FileName }"
+        );
+
+        Process process = new ProcessBuilder(
+                "powershell.exe",
+                "-NoProfile",
+                "-NonInteractive",
+                "-STA",
+                "-Command",
+                script)
+                .redirectErrorStream(true)
+                .start();
+
+        String output;
+        try {
+            output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new IOException("PowerShell file chooser exited with code " + exitCode
+                        + (output.isBlank() ? "" : ": " + output));
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Windows file selection was interrupted", e);
+        }
+
         String windowsPath = lastNonBlankLine(output);
         if (windowsPath == null) {
             return null;
         }
 
-        if (runningInWsl) {
-            return validateAndRemember(Path.of(convertWindowsPathToLinux(windowsPath)));
-        }
-        return validateAndRemember(Path.of(windowsPath));
-    }
-
-    static String buildWindowsDialogScript(String pickerStartDirectory, boolean runningInWsl) {
-        String validateSelectedPath = runningInWsl ? "$false" : "$true";
-        return String.join("; ",
-                "Add-Type -AssemblyName System.Windows.Forms",
-                "Add-Type -AssemblyName System.Drawing",
-                "$owner = New-Object System.Windows.Forms.Form",
-                "$owner.ShowInTaskbar = $false",
-                "$owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None",
-                "$owner.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen",
-                "$owner.Size = New-Object System.Drawing.Size(1, 1)",
-                "$owner.Opacity = 0",
-                "$owner.TopMost = $true",
-                "$owner.Show()",
-                "$owner.BringToFront()",
-                "$owner.Activate()",
-                "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
-                "$dialog.Title = 'Select UCI engine'",
-                "$dialog.CheckFileExists = " + validateSelectedPath,
-                "$dialog.CheckPathExists = " + validateSelectedPath,
-                "$dialog.ValidateNames = " + validateSelectedPath,
-                "$dialog.DereferenceLinks = " + validateSelectedPath,
-                "$dialog.Multiselect = $false",
-                "$dialog.Filter = 'All files (*.*)|*.*'",
-                "$dialog.InitialDirectory = '" + escapePowerShellSingleQuoted(pickerStartDirectory) + "'",
-                "try { if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { "
-                        + "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
-                        + "Write-Output $dialog.FileName } } finally { $owner.Close(); $owner.Dispose() }"
-        );
-    }
-
-    private Process startPowerShell(String script) throws IOException {
-        IOException firstFailure = null;
-        for (String executable : List.of("powershell.exe", "pwsh.exe")) {
-            try {
-                return new ProcessBuilder(
-                        executable,
-                        "-NoProfile",
-                        "-NonInteractive",
-                        "-STA",
-                        "-Command",
-                        script)
-                        .redirectErrorStream(true)
-                        .start();
-            } catch (IOException e) {
-                if (firstFailure == null) {
-                    firstFailure = e;
-                }
-            }
-        }
-
-        throw new IOException(
-                "Neither powershell.exe nor pwsh.exe could be started",
-                firstFailure);
-    }
-
-    private String selectExecutableWithMacDialog() throws IOException {
-        Path startDirectory = getStartDirectory();
-        String script = "set selectedFile to choose file with prompt \"Select UCI engine\" "
-                + "default location POSIX file \""
-                + escapeAppleScriptString(startDirectory.toString())
-                + "\"\nPOSIX path of selectedFile";
-
-        Process process = new ProcessBuilder("osascript", "-e", script)
-                .redirectErrorStream(true)
-                .start();
-
-        String output;
-        int exitCode;
-        try {
-            output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            exitCode = process.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("macOS file selection was interrupted", e);
-        }
-
-        if (exitCode != 0) {
-            String normalizedOutput = output.toLowerCase(Locale.ROOT);
-            if (normalizedOutput.contains("user canceled") || normalizedOutput.contains("-128")) {
-                return null;
-            }
-            throw new IOException("macOS file chooser exited with code " + exitCode
-                    + (output.isBlank() ? "" : ": " + output));
-        }
-
-        String selectedPath = lastNonBlankLine(output);
-        return selectedPath == null ? null : validateAndRemember(Path.of(selectedPath));
-    }
-
-    private String selectExecutableWithLinuxDialog() throws IOException {
-        Path startDirectory = getStartDirectory();
-
-        if (isCommandAvailable("zenity")) {
-            String selectedPath = runLinuxPicker(
-                    List.of(
-                            "zenity",
-                            "--file-selection",
-                            "--title=Select UCI engine",
-                            "--filename=" + startDirectory.toString() + "/"),
-                    "zenity");
-            return selectedPath == null ? null : validateAndRemember(Path.of(selectedPath));
-        }
-
-        if (isCommandAvailable("kdialog")) {
-            String selectedPath = runLinuxPicker(
-                    List.of(
-                            "kdialog",
-                            "--title",
-                            "Select UCI engine",
-                            "--getopenfilename",
-                            startDirectory.toString()),
-                    "kdialog");
-            return selectedPath == null ? null : validateAndRemember(Path.of(selectedPath));
-        }
-
-        if (!GraphicsEnvironment.isHeadless()) {
-            return selectExecutableWithAwtDialog();
-        }
-
-        throw new IllegalStateException(
-                "No graphical Linux file chooser is available. Install zenity or kdialog, "
-                        + "or enter the engine executable path manually.");
-    }
-
-    private String runLinuxPicker(List<String> command, String pickerName) throws IOException {
-        Process process = new ProcessBuilder(command)
-                .redirectErrorStream(true)
-                .start();
-
-        String output;
-        int exitCode;
-        try {
-            output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            exitCode = process.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException(pickerName + " file selection was interrupted", e);
-        }
-
-        if (exitCode == 1) {
-            return null;
-        }
-        if (exitCode != 0) {
-            throw new IOException(pickerName + " file chooser exited with code " + exitCode
-                    + (output.isBlank() ? "" : ": " + output));
-        }
-        return lastNonBlankLine(output);
-    }
-
-    private boolean isCommandAvailable(String command) {
-        String pathValue = System.getenv("PATH");
-        if (pathValue == null || pathValue.isBlank()) {
-            return false;
-        }
-
-        String separator = System.getProperty("path.separator", ":");
-        for (String directory : pathValue.split(java.util.regex.Pattern.quote(separator))) {
-            if (directory.isBlank()) {
-                continue;
-            }
-            try {
-                Path candidate = Path.of(directory, command);
-                if (Files.isRegularFile(candidate) && Files.isExecutable(candidate)) {
-                    return true;
-                }
-            } catch (RuntimeException ignored) {
-                // Ignore malformed PATH entries and continue searching.
-            }
-        }
-        return false;
+        String linuxPath = convertWindowsPathToLinux(windowsPath);
+        return validateAndRemember(Path.of(linuxPath));
     }
 
     private String convertWindowsPathToLinux(String windowsPath) throws IOException {
@@ -322,37 +163,11 @@ public class NativeEngineFilePickerService {
         return output;
     }
 
-    private String waitForProcess(Process process, String description) throws IOException {
-        try {
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
-            int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                throw new IOException(description + " exited with code " + exitCode
-                        + (output.isBlank() ? "" : ": " + output));
-            }
-            return output;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException(description + " was interrupted", e);
-        }
-    }
-
-    private String lastNonBlankLine(String output) {
-        if (output == null || output.isBlank()) {
-            return null;
-        }
-        return output.lines()
-                .filter(line -> !line.isBlank())
-                .reduce((first, second) -> second)
-                .map(String::trim)
-                .filter(line -> !line.isBlank())
-                .orElse(null);
-    }
-
     private String selectExecutableWithAwtDialog() {
         if (GraphicsEnvironment.isHeadless()) {
             throw new IllegalStateException(
-                    "No graphical desktop is available for the system file chooser."
+                    "No graphical desktop is available for the system file chooser. "
+                            + "Enter the engine executable path manually instead."
             );
         }
 
@@ -363,12 +178,27 @@ public class NativeEngineFilePickerService {
             Frame owner = null;
             try {
                 owner = new Frame();
-                FileDialog dialog = new FileDialog(owner, "Select UCI engine", FileDialog.LOAD);
+                owner.setUndecorated(true);
+                owner.setAlwaysOnTop(true);
+                owner.setSize(1, 1);
+                owner.setLocationRelativeTo(null);
+                owner.setVisible(true);
+                owner.toFront();
+                owner.requestFocus();
+
+                FileDialog dialog = new FileDialog(owner, "UCI-Engine auswählen", FileDialog.LOAD);
+                dialog.setAlwaysOnTop(true);
                 Path startDirectory = getStartDirectory();
                 dialog.setDirectory(startDirectory.toString());
                 dialog.setFilenameFilter((directory, name) -> {
                     Path candidate = directory.toPath().resolve(name);
                     return Files.isRegularFile(candidate) && Files.isExecutable(candidate);
+                });
+
+                FileDialog dialogToFocus = dialog;
+                EventQueue.invokeLater(() -> {
+                    dialogToFocus.toFront();
+                    dialogToFocus.requestFocus();
                 });
                 dialog.setVisible(true);
 
@@ -379,8 +209,14 @@ public class NativeEngineFilePickerService {
                 }
 
                 selectedPath.set(validateAndRemember(Path.of(directoryName, fileName)));
+            } catch (AWTError e) {
+                failure.set(new IllegalStateException(
+                        "No graphical desktop is available for the system file chooser. "
+                                + "Enter the engine executable path manually instead.",
+                        e));
             } catch (IOException e) {
-                failure.set(new IllegalStateException("Could not resolve selected engine path: " + e.getMessage(), e));
+                failure.set(new IllegalStateException(
+                        "Could not resolve selected engine path: " + e.getMessage(), e));
             } catch (RuntimeException e) {
                 failure.set(e);
             } finally {
@@ -403,6 +239,12 @@ public class NativeEngineFilePickerService {
             Throwable cause = e.getCause();
             if (cause instanceof RuntimeException runtimeException) {
                 throw runtimeException;
+            }
+            if (cause instanceof AWTError awtError) {
+                throw new IllegalStateException(
+                        "No graphical desktop is available for the system file chooser. "
+                                + "Enter the engine executable path manually instead.",
+                        awtError);
             }
             throw new IllegalStateException("Could not open the system file chooser", cause);
         }
@@ -433,11 +275,24 @@ public class NativeEngineFilePickerService {
         return realPath.toString();
     }
 
-    private static String escapePowerShellSingleQuoted(String value) {
-        return value.replace("'", "''");
+    private String lastNonBlankLine(String output) {
+        if (output == null || output.isBlank()) {
+            return null;
+        }
+        return output.lines()
+                .filter(line -> !line.isBlank())
+                .reduce((first, second) -> second)
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .orElse(null);
     }
 
-    private String escapeAppleScriptString(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    private boolean isWsl() {
+        String distroName = System.getenv("WSL_DISTRO_NAME");
+        return distroName != null && !distroName.isBlank();
+    }
+
+    private String escapePowerShellSingleQuoted(String value) {
+        return value.replace("'", "''");
     }
 }
