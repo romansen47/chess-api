@@ -104,6 +104,10 @@ public class GameController {
     /**
      * Imports exactly one PGN game for analysis and stores it in the local database.
      *
+     * <p>The PGN splitter is used only to validate the number of games. Once the
+     * payload has been accepted as a single game, the original request content is
+     * forwarded unchanged to the database and analysis import paths.</p>
+     *
      * @param content complete PGN content
      * @return imported analysis game
      */
@@ -124,12 +128,11 @@ public class GameController {
                     "gameCount", games.size()));
         }
 
-        String singleGame = games.get(0);
         analysisReplayService.cancel();
 
         try {
-            chessDatabaseService.importSingleGame(singleGame);
-            UciGameDto importedGame = uciGameService.importGame(singleGame);
+            chessDatabaseService.importSingleGame(content);
+            UciGameDto importedGame = uciGameService.importGame(content);
             return ResponseEntity.ok(importedGame);
         } catch (NoMoveFoundException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
