@@ -198,14 +198,30 @@ public class NativeEngineFilePickerService {
 
         Runnable pickerTask = () -> {
             Frame owner = null;
+            FileDialog dialog = null;
             try {
                 owner = new Frame();
-                FileDialog dialog = new FileDialog(owner, "UCI-Engine auswählen", FileDialog.LOAD);
+                owner.setUndecorated(true);
+                owner.setAlwaysOnTop(true);
+                owner.setSize(1, 1);
+                owner.setLocationRelativeTo(null);
+                owner.setVisible(true);
+                owner.toFront();
+                owner.requestFocus();
+
+                dialog = new FileDialog(owner, "UCI-Engine auswählen", FileDialog.LOAD);
+                dialog.setAlwaysOnTop(true);
                 Path startDirectory = Files.isDirectory(lastDirectory) ? lastDirectory : initialDirectory;
                 dialog.setDirectory(startDirectory.toString());
                 dialog.setFilenameFilter((directory, name) -> {
                     Path candidate = directory.toPath().resolve(name);
                     return Files.isRegularFile(candidate) && Files.isExecutable(candidate);
+                });
+
+                FileDialog dialogToFocus = dialog;
+                EventQueue.invokeLater(() -> {
+                    dialogToFocus.toFront();
+                    dialogToFocus.requestFocus();
                 });
                 dialog.setVisible(true);
 
@@ -221,6 +237,9 @@ public class NativeEngineFilePickerService {
             } catch (RuntimeException e) {
                 failure.set(e);
             } finally {
+                if (dialog != null) {
+                    dialog.dispose();
+                }
                 if (owner != null) {
                     owner.dispose();
                 }
