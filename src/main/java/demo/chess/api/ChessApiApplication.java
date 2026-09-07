@@ -11,6 +11,8 @@ public class ChessApiApplication {
      * @param args the args
      */
     public static void main(String[] args) {
-        SpringApplication.run(ChessApiApplication.class, args);
+        SpringApplication application = new SpringApplication(ChessApiApplication.class);
+        application.setHeadless(false);
+        application.run(args);
     }
 }

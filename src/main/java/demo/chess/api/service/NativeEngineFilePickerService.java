@@ -198,9 +198,24 @@ public class NativeEngineFilePickerService {
 
         Runnable pickerTask = () -> {
             Frame owner = null;
+            FileDialog dialog = null;
             try {
                 owner = new Frame();
-                FileDialog dialog = new FileDialog(owner, "UCI-Engine auswählen", FileDialog.LOAD);
+                owner.setUndecorated(true);
+                owner.setSize(1, 1);
+                owner.setLocationRelativeTo(null);
+                owner.setAutoRequestFocus(true);
+                owner.setVisible(true);
+
+                // On Windows the owner must first be brought to the foreground.
+                // Only then may it become always-on-top; owned dialogs inherit
+                // that state and are therefore shown in front of the browser.
+                owner.toFront();
+                owner.requestFocus();
+                owner.setAlwaysOnTop(true);
+
+                dialog = new FileDialog(owner, "UCI-Engine auswählen", FileDialog.LOAD);
+                dialog.setAutoRequestFocus(true);
                 Path startDirectory = Files.isDirectory(lastDirectory) ? lastDirectory : initialDirectory;
                 dialog.setDirectory(startDirectory.toString());
                 dialog.setFilenameFilter((directory, name) -> {
@@ -221,6 +236,9 @@ public class NativeEngineFilePickerService {
             } catch (RuntimeException e) {
                 failure.set(e);
             } finally {
+                if (dialog != null) {
+                    dialog.dispose();
+                }
                 if (owner != null) {
                     owner.dispose();
                 }
