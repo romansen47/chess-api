@@ -83,11 +83,11 @@ public class NativeEngineFilePickerService {
         }
 
         String normalizedOsName = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
-        if (normalizedOsName.contains("win")) {
-            return DesktopPlatform.WINDOWS;
-        }
-        if (normalizedOsName.contains("mac") || normalizedOsName.contains("darwin")) {
+        if (normalizedOsName.startsWith("mac") || normalizedOsName.contains("darwin")) {
             return DesktopPlatform.MACOS;
+        }
+        if (normalizedOsName.startsWith("windows")) {
+            return DesktopPlatform.WINDOWS;
         }
         return DesktopPlatform.LINUX;
     }
