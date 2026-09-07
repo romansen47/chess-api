@@ -98,23 +98,7 @@ public class NativeEngineFilePickerService {
                 ? runWslPath("-w", startDirectory.toString())
                 : startDirectory.toString();
 
-        String validateSelectedPath = runningInWsl ? "$false" : "$true";
-        String script = String.join("; ",
-                "Add-Type -AssemblyName System.Windows.Forms",
-                "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
-                "$dialog.Title = 'Select UCI engine'",
-                "$dialog.CheckFileExists = " + validateSelectedPath,
-                "$dialog.CheckPathExists = " + validateSelectedPath,
-                "$dialog.ValidateNames = " + validateSelectedPath,
-                "$dialog.DereferenceLinks = " + validateSelectedPath,
-                "$dialog.Multiselect = $false",
-                "$dialog.Filter = 'All files (*.*)|*.*'",
-                "$dialog.InitialDirectory = '" + escapePowerShellSingleQuoted(pickerStartDirectory) + "'",
-                "if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { "
-                        + "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
-                        + "Write-Output $dialog.FileName }"
-        );
-
+        String script = buildWindowsDialogScript(pickerStartDirectory, runningInWsl);
         Process process = startPowerShell(script);
         String output = waitForProcess(process, "Windows file chooser");
         String windowsPath = lastNonBlankLine(output);
@@ -126,6 +110,36 @@ public class NativeEngineFilePickerService {
             return validateAndRemember(Path.of(convertWindowsPathToLinux(windowsPath)));
         }
         return validateAndRemember(Path.of(windowsPath));
+    }
+
+    static String buildWindowsDialogScript(String pickerStartDirectory, boolean runningInWsl) {
+        String validateSelectedPath = runningInWsl ? "$false" : "$true";
+        return String.join("; ",
+                "Add-Type -AssemblyName System.Windows.Forms",
+                "Add-Type -AssemblyName System.Drawing",
+                "$owner = New-Object System.Windows.Forms.Form",
+                "$owner.ShowInTaskbar = $false",
+                "$owner.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None",
+                "$owner.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen",
+                "$owner.Size = New-Object System.Drawing.Size(1, 1)",
+                "$owner.Opacity = 0",
+                "$owner.TopMost = $true",
+                "$owner.Show()",
+                "$owner.BringToFront()",
+                "$owner.Activate()",
+                "$dialog = New-Object System.Windows.Forms.OpenFileDialog",
+                "$dialog.Title = 'Select UCI engine'",
+                "$dialog.CheckFileExists = " + validateSelectedPath,
+                "$dialog.CheckPathExists = " + validateSelectedPath,
+                "$dialog.ValidateNames = " + validateSelectedPath,
+                "$dialog.DereferenceLinks = " + validateSelectedPath,
+                "$dialog.Multiselect = $false",
+                "$dialog.Filter = 'All files (*.*)|*.*'",
+                "$dialog.InitialDirectory = '" + escapePowerShellSingleQuoted(pickerStartDirectory) + "'",
+                "try { if ($dialog.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { "
+                        + "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; "
+                        + "Write-Output $dialog.FileName } } finally { $owner.Close(); $owner.Dispose() }"
+        );
     }
 
     private Process startPowerShell(String script) throws IOException {
@@ -419,7 +433,7 @@ public class NativeEngineFilePickerService {
         return realPath.toString();
     }
 
-    private String escapePowerShellSingleQuoted(String value) {
+    private static String escapePowerShellSingleQuoted(String value) {
         return value.replace("'", "''");
     }
 
