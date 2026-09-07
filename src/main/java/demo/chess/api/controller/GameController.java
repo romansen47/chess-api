@@ -2,6 +2,8 @@ package demo.chess.api.controller;
 
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -22,6 +24,7 @@ import demo.chess.api.service.GameLifecycleService;
 import demo.chess.api.service.GameService;
 import demo.chess.api.service.UciGameService;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
+import demo.chess.load.GameLoader;
 
 @RestController
 @RequestMapping("/api")
@@ -32,6 +35,7 @@ public class GameController {
     private final UciGameService uciGameService;
     private final AnalysisReplayService analysisReplayService;
     private final ChessDatabaseService chessDatabaseService;
+    private final GameLoader gameLoader = new GameLoader();
 
     /**
      * Creates a new GameController instance.
@@ -98,7 +102,11 @@ public class GameController {
     }
 
     /**
-     * Imports one PGN game for analysis and stores it in the local database.
+     * Imports exactly one PGN game for analysis and stores it in the local database.
+     *
+     * <p>The PGN splitter is used only to validate the number of games. Once the
+     * payload has been accepted as a single game, the original request content is
+     * forwarded unchanged to the database and analysis import paths.</p>
      *
      * @param content complete PGN content
      * @return imported analysis game
@@ -108,6 +116,18 @@ public class GameController {
             consumes = MediaType.TEXT_PLAIN_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> importPgnGame(@RequestBody(required = false) String content) {
+        List<String> games = gameLoader.splitPgnGames(content);
+        if (games.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "code", "PGN_NO_GAME",
+                    "gameCount", 0));
+        }
+        if (games.size() > 1) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "code", "PGN_MULTIPLE_GAMES",
+                    "gameCount", games.size()));
+        }
+
         analysisReplayService.cancel();
 
         try {
