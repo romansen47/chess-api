@@ -26,11 +26,11 @@ import demo.chess.game.impl.Simulation;
  * Evaluates original-game and temporary variation positions while the UI is in
  * analysis mode.
  *
- * <p>The configured default evaluation profile is deliberately used here
- * instead of the deep-analysis profile. The engine stays alive while the same
- * logical position is polled so the infinite UCI search can refine its cached
- * result. Selecting a different original ply or variation resets that search
- * cleanly.</p>
+ * <p>The active runtime evaluation profile is deliberately used here instead
+ * of the deep-analysis profile. The engine stays alive while the same logical
+ * position is polled so the infinite UCI search can refine its cached result.
+ * Selecting a different original ply, variation or runtime evaluation profile
+ * resets that search cleanly.</p>
  */
 @Service
 public class AnalysisEvaluationService {
@@ -39,7 +39,7 @@ public class AnalysisEvaluationService {
 
     private final UciGameService uciGameService;
     private final AnalysisVariationService analysisVariationService;
-    private final EngineSettingsService engineSettingsService;
+    private final EngineRuntimeSelectionService engineRuntimeSelectionService;
     private final EngineLineDisplayService engineLineDisplayService;
 
     private EvaluationEngine evaluationEngine;
@@ -52,17 +52,17 @@ public class AnalysisEvaluationService {
      * Creates a new AnalysisEvaluationService instance.
      * @param uciGameService the uci game service
      * @param analysisVariationService the analysis variation service
-     * @param engineSettingsService the engine settings service
+     * @param engineRuntimeSelectionService runtime engine profile selections
      * @param engineLineDisplayService the engine line display service
      */
     public AnalysisEvaluationService(
             UciGameService uciGameService,
             AnalysisVariationService analysisVariationService,
-            EngineSettingsService engineSettingsService,
+            EngineRuntimeSelectionService engineRuntimeSelectionService,
             EngineLineDisplayService engineLineDisplayService) {
         this.uciGameService = uciGameService;
         this.analysisVariationService = analysisVariationService;
-        this.engineSettingsService = engineSettingsService;
+        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
         this.engineLineDisplayService = engineLineDisplayService;
     }
 
@@ -124,7 +124,7 @@ public class AnalysisEvaluationService {
 
         UciEngineConfig engineConfig = createInfiniteEvaluationConfig();
         EvaluationEngine engine = getEvaluationEngine();
-        long settingsVersion = engineSettingsService.getEvaluationVersion();
+        long settingsVersion = engineRuntimeSelectionService.getEvaluationVersion();
 
         if (!positionKey.equals(currentPositionKey)
                 || settingsVersion != lastSeenSettingsVersion) {
@@ -145,7 +145,7 @@ public class AnalysisEvaluationService {
             }
 
             EngineEvaluationDto result = new EngineEvaluationDto(0.0, 0.5, List.of());
-            result.setEngineName(engineSettingsService.getEvaluationEngineName());
+            result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
             return result;
         }
 
@@ -159,7 +159,7 @@ public class AnalysisEvaluationService {
         }
 
         EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, lines);
-        result.setEngineName(engineSettingsService.getEvaluationEngineName());
+        result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
         lastValidEvaluation = result;
         return result;
     }
@@ -169,8 +169,7 @@ public class AnalysisEvaluationService {
      * @return the result of the operation
      */
     private UciEngineConfig createInfiniteEvaluationConfig() {
-        String profileId = engineSettingsService.getDefaultEvaluationProfileId();
-        UciEngineConfig config = engineSettingsService.getConfig(profileId);
+        UciEngineConfig config = engineRuntimeSelectionService.getEvaluationConfig();
         config.setDepth(0);
         config.setMoveTimeSeconds(0);
         return config;
@@ -297,7 +296,7 @@ public class AnalysisEvaluationService {
      */
     private EngineEvaluationDto terminalEvaluation(double evaluation, double bar) {
         EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, List.of());
-        result.setEngineName(engineSettingsService.getEvaluationEngineName());
+        result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
         return result;
     }
 
@@ -306,7 +305,7 @@ public class AnalysisEvaluationService {
      * @return the evaluation engine
      */
     private EvaluationEngine getEvaluationEngine() {
-        String configuredPath = engineSettingsService.getEvaluationEnginePath();
+        String configuredPath = engineRuntimeSelectionService.getEvaluationEnginePath();
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
             closeEvaluationEngine(evaluationEngine);
             currentEvaluationEnginePath = configuredPath;
