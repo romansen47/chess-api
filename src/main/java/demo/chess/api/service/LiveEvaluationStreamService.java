@@ -2,6 +2,7 @@ package demo.chess.api.service;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.commons.logging.Log;
@@ -9,10 +10,8 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import demo.chess.api.dto.EngineEvaluationDto;
-
 /**
- * Keeps the browser-facing SSE connections for normal live evaluation.
+ * Keeps the browser-facing SSE connections for the normal live-evaluation bar.
  * Engine threads never send to these emitters directly; callers publish from
  * a separate worker so slow clients cannot block UCI output processing.
  */
@@ -58,17 +57,23 @@ public class LiveEvaluationStreamService {
     }
 
     /**
-     * Publishes one selected depth snapshot to all current subscribers.
-     * @param evaluation evaluation DTO
+     * Publishes one selected bar update to all current subscribers.
+     * @param evaluation evaluation in pawns
+     * @param bar normalized white share of the bar
      * @param depth search depth
      */
-    public void publish(EngineEvaluationDto evaluation, int depth) {
+    public void publish(double evaluation, double bar, int depth) {
+        Map<String, Object> payload = Map.of(
+                "eval", evaluation,
+                "bar", bar,
+                "depth", depth);
+
         for (SseEmitter emitter : emitters) {
             try {
                 emitter.send(SseEmitter.event()
                         .id(Integer.toString(depth))
-                        .name("evaluation")
-                        .data(evaluation));
+                        .name("bar")
+                        .data(payload));
             } catch (IOException | IllegalStateException e) {
                 emitters.remove(emitter);
                 try {
