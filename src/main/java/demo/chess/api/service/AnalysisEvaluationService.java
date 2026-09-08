@@ -8,6 +8,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.stereotype.Service;
 
+import demo.chess.api.dto.AnalysisVariationRequestDto;
 import demo.chess.api.dto.EngineEvaluationDto;
 import demo.chess.api.dto.EngineLineDto;
 import demo.chess.definitions.engines.EngineLine;
@@ -22,13 +23,14 @@ import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
 
 /**
- * Evaluates an arbitrary position from the currently loaded/played game while
- * the UI is in analysis mode.
+ * Evaluates original-game and temporary variation positions while the UI is in
+ * analysis mode.
  *
- * The configured default evaluation profile is deliberately used here instead
- * of the deep-analysis profile. The engine stays alive while the same ply is
- * polled so the infinite UCI search can refine its cached result. Selecting a
- * different ply resets that search cleanly.
+ * <p>The configured default evaluation profile is deliberately used here
+ * instead of the deep-analysis profile. The engine stays alive while the same
+ * logical position is polled so the infinite UCI search can refine its cached
+ * result. Selecting a different original ply or variation resets that search
+ * cleanly.</p>
  */
 @Service
 public class AnalysisEvaluationService {
@@ -36,32 +38,36 @@ public class AnalysisEvaluationService {
     private static final Log logger = LogFactory.getLog(AnalysisEvaluationService.class);
 
     private final UciGameService uciGameService;
+    private final AnalysisVariationService analysisVariationService;
     private final EngineSettingsService engineSettingsService;
     private final EngineLineDisplayService engineLineDisplayService;
 
     private EvaluationEngine evaluationEngine;
     private String currentEvaluationEnginePath;
-    private Integer currentPly;
+    private String currentPositionKey;
     private long lastSeenSettingsVersion = -1L;
     private EngineEvaluationDto lastValidEvaluation;
 
     /**
      * Creates a new AnalysisEvaluationService instance.
      * @param uciGameService the uci game service
+     * @param analysisVariationService the analysis variation service
      * @param engineSettingsService the engine settings service
      * @param engineLineDisplayService the engine line display service
      */
     public AnalysisEvaluationService(
             UciGameService uciGameService,
+            AnalysisVariationService analysisVariationService,
             EngineSettingsService engineSettingsService,
             EngineLineDisplayService engineLineDisplayService) {
         this.uciGameService = uciGameService;
+        this.analysisVariationService = analysisVariationService;
         this.engineSettingsService = engineSettingsService;
         this.engineLineDisplayService = engineLineDisplayService;
     }
 
     /**
-     * Returns the evaluation.
+     * Returns the evaluation for one original-game ply.
      * @param ply the ply
      * @return the evaluation
      */
@@ -74,53 +80,7 @@ public class AnalysisEvaluationService {
 
         try {
             Game game = createReplayGame(originalMoves, ply);
-            EngineEvaluationDto terminalEvaluation = evaluateTerminalPosition(game);
-            if (terminalEvaluation != null) {
-                stopEvaluation();
-                return terminalEvaluation;
-            }
-
-            UciEngineConfig engineConfig = createInfiniteEvaluationConfig();
-            EvaluationEngine engine = getEvaluationEngine();
-            long settingsVersion = engineSettingsService.getEvaluationVersion();
-
-            if (currentPly == null
-                    || currentPly.intValue() != ply
-                    || settingsVersion != lastSeenSettingsVersion) {
-                try {
-                    engine.stopEvaluation();
-                } catch (Exception ignored) {
-                }
-                engine.clearChachedLines();
-                currentPly = ply;
-                lastSeenSettingsVersion = settingsVersion;
-                lastValidEvaluation = null;
-            }
-
-            List<EngineLine> bestLines = engine.getBestLines(game, engineConfig);
-            if (bestLines == null || bestLines.isEmpty()) {
-                if (lastValidEvaluation != null) {
-                    return lastValidEvaluation;
-                }
-
-                EngineEvaluationDto result = new EngineEvaluationDto(0.0, 0.5, List.of());
-                result.setEngineName(engineSettingsService.getEvaluationEngineName());
-                return result;
-            }
-
-            double evaluation = bestLines.get(0).getEvaluation();
-            double bar = mapEvalToBar(evaluation);
-            List<EngineLineDto> lines = new ArrayList<>();
-
-            for (EngineLine line : bestLines) {
-                Game displayGame = Simulation.forkDummyFrom(game.getMoveList());
-                lines.add(engineLineDisplayService.toDto(displayGame, line));
-            }
-
-            EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, lines);
-            result.setEngineName(engineSettingsService.getEvaluationEngineName());
-            lastValidEvaluation = result;
-            return result;
+            return evaluateGame(game, "ply:" + ply);
         } catch (NoMoveFoundException | IOException e) {
             throw new IllegalStateException("Could not reconstruct analysis position for ply " + ply, e);
         } catch (RuntimeException e) {
@@ -128,6 +88,80 @@ public class AnalysisEvaluationService {
         } catch (Exception e) {
             throw new IllegalStateException("Could not evaluate analysis position for ply " + ply, e);
         }
+    }
+
+    /**
+     * Returns the evaluation for a stateless temporary variation.
+     * @param request anchor ply plus variation moves
+     * @return the evaluation
+     */
+    public synchronized EngineEvaluationDto getVariationEvaluation(AnalysisVariationRequestDto request) {
+        if (request == null) {
+            throw new IllegalArgumentException("Analysis variation request must not be null");
+        }
+
+        List<String> moves = request.getMoves() != null ? request.getMoves() : List.of();
+        String positionKey = "variation:" + request.getAnchorPly() + ":" + String.join(" ", moves);
+
+        try {
+            Game game = analysisVariationService.createVariationGame(request.getAnchorPly(), moves);
+            return evaluateGame(game, positionKey);
+        } catch (NoMoveFoundException | IOException e) {
+            throw new IllegalStateException("Could not reconstruct analysis variation", e);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not evaluate analysis variation", e);
+        }
+    }
+
+    private EngineEvaluationDto evaluateGame(Game game, String positionKey) throws Exception {
+        EngineEvaluationDto terminalEvaluation = evaluateTerminalPosition(game);
+        if (terminalEvaluation != null) {
+            stopEvaluation();
+            return terminalEvaluation;
+        }
+
+        UciEngineConfig engineConfig = createInfiniteEvaluationConfig();
+        EvaluationEngine engine = getEvaluationEngine();
+        long settingsVersion = engineSettingsService.getEvaluationVersion();
+
+        if (!positionKey.equals(currentPositionKey)
+                || settingsVersion != lastSeenSettingsVersion) {
+            try {
+                engine.stopEvaluation();
+            } catch (Exception ignored) {
+            }
+            engine.clearChachedLines();
+            currentPositionKey = positionKey;
+            lastSeenSettingsVersion = settingsVersion;
+            lastValidEvaluation = null;
+        }
+
+        List<EngineLine> bestLines = engine.getBestLines(game, engineConfig);
+        if (bestLines == null || bestLines.isEmpty()) {
+            if (lastValidEvaluation != null) {
+                return lastValidEvaluation;
+            }
+
+            EngineEvaluationDto result = new EngineEvaluationDto(0.0, 0.5, List.of());
+            result.setEngineName(engineSettingsService.getEvaluationEngineName());
+            return result;
+        }
+
+        double evaluation = bestLines.get(0).getEvaluation();
+        double bar = mapEvalToBar(evaluation);
+        List<EngineLineDto> lines = new ArrayList<>();
+
+        for (EngineLine line : bestLines) {
+            Game displayGame = Simulation.forkDummyFrom(game.getMoveList());
+            lines.add(engineLineDisplayService.toDto(displayGame, line));
+        }
+
+        EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, lines);
+        result.setEngineName(engineSettingsService.getEvaluationEngineName());
+        lastValidEvaluation = result;
+        return result;
     }
 
     /**
@@ -149,7 +183,7 @@ public class AnalysisEvaluationService {
         closeEvaluationEngine(evaluationEngine);
         evaluationEngine = null;
         currentEvaluationEnginePath = null;
-        currentPly = null;
+        currentPositionKey = null;
         lastSeenSettingsVersion = -1L;
         lastValidEvaluation = null;
     }
@@ -277,7 +311,7 @@ public class AnalysisEvaluationService {
             closeEvaluationEngine(evaluationEngine);
             currentEvaluationEnginePath = configuredPath;
             evaluationEngine = createEvaluationEngine(configuredPath);
-            currentPly = null;
+            currentPositionKey = null;
             lastSeenSettingsVersion = -1L;
             lastValidEvaluation = null;
         }
