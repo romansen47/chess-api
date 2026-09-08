@@ -5,17 +5,19 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineEvaluationDto;
 import demo.chess.api.dto.EngineLineDto;
+import demo.chess.definitions.Color;
+import demo.chess.definitions.PieceType;
 import demo.chess.definitions.engines.EngineConfig;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.EvaluationEngine;
-import demo.chess.definitions.Color;
-import demo.chess.definitions.PieceType;
-import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.definitions.engines.UciEngineConfig;
+import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Castling;
 import demo.chess.definitions.moves.EnPassant;
@@ -24,9 +26,6 @@ import demo.chess.definitions.moves.Promotion;
 import demo.chess.definitions.pieces.Piece;
 import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 @Service
 public class EvaluationService {
@@ -64,27 +63,6 @@ public class EvaluationService {
     }
 
     /**
-     * Ensures that infinite live evaluation is running for the current game position.
-     */
-    public synchronized void startLiveEvaluation() {
-        Game game = gameService.getCurrentGame();
-        EngineConfig engineConfig = engineRuntimeSelectionService.getEvaluationConfig();
-        EvaluationEngine engine = getEvaluationEngine();
-        long settingsVersion = engineRuntimeSelectionService.getEvaluationVersion();
-
-        if (settingsVersion != lastSeenSettingsVersion) {
-            engine.clearChachedLines();
-            lastSeenSettingsVersion = settingsVersion;
-        }
-
-        try {
-            engine.getBestLines(game, engineConfig);
-        } catch (Exception e) {
-            logger.error("Engine error while starting live evaluation: " + e.getMessage());
-        }
-    }
-
-    /**
      * Returns the evaluation.
      * @return the evaluation
      */
@@ -104,12 +82,10 @@ public class EvaluationService {
         List<EngineLine> bestLines;
 
         try {
-            // Engine-Lines mit Bewertung, Suchtiefe, optionaler Mattdistanz und UCI-Zugfolge
             bestLines = engine.getBestLines(game, engineConfig);
         } catch (Exception e) {
             logger.error("Engine error while getting best lines: " + e.getMessage());
             e.printStackTrace();
-            // Neutraler Fallback, falls die Engine zickt
             return new EngineEvaluationDto(0.0, 0.5, List.of());
         }
 
@@ -117,13 +93,11 @@ public class EvaluationService {
         logger.debug("Engine returned lines size=" + size);
 
         if (bestLines == null || bestLines.isEmpty()) {
-            // z.B. Partie ist matt/remis oder Engine hat noch nichts geliefert
             return new EngineEvaluationDto(0.0, 0.5, List.of());
         }
 
-        List<Move> moveSnapshot = new ArrayList<>(game.getMoveList());
         return toEvaluationDto(
-                moveSnapshot,
+                game,
                 bestLines,
                 engineRuntimeSelectionService.getEvaluationEngineName());
     }
@@ -207,8 +181,9 @@ public class EvaluationService {
     }
 
     /**
-     * Receives one completed engine depth. Only the requested SSE depths are
-     * queued, and all DTO/SAN conversion happens away from the UCI reader thread.
+     * Receives one completed engine depth. The UCI reader thread only copies the
+     * tiny scalar values required by the bar and queues the actual SSE send on a
+     * separate worker.
      * @param positionKey move-list key of the evaluated position
      * @param lines immutable engine-line snapshot
      */
@@ -217,15 +192,15 @@ public class EvaluationService {
             return;
         }
 
-        int depth = lines.get(0).getDepth();
+        EngineLine principalLine = lines.get(0);
+        int depth = principalLine.getDepth();
         if (!shouldPushDepth(depth)) {
             return;
         }
 
-        List<EngineLine> snapshot = List.copyOf(lines);
-        String engineName = engineRuntimeSelectionService.getEvaluationEngineName();
+        double evaluation = principalLine.getEvaluation();
         liveEvaluationPushExecutor.execute(
-                () -> publishEvaluationSnapshot(positionKey, snapshot, engineName));
+                () -> publishBarSnapshot(positionKey, evaluation, depth));
     }
 
     /**
@@ -237,32 +212,33 @@ public class EvaluationService {
     }
 
     /**
-     * Converts and publishes one exact engine-depth snapshot if the game has not
-     * moved on in the meantime.
+     * Publishes one bar-only snapshot if the game has not moved on meanwhile.
+     * @param positionKey move-list key of the evaluated position
+     * @param evaluation evaluation in pawns
+     * @param depth search depth
      */
-    private void publishEvaluationSnapshot(
-            String positionKey,
-            List<EngineLine> lines,
-            String engineName) {
+    private void publishBarSnapshot(String positionKey, double evaluation, int depth) {
         try {
             Game currentGame = gameService.getCurrentGame();
-            List<Move> moveSnapshot = new ArrayList<>(currentGame.getMoveList());
-            if (!positionKey.equals(moveSnapshot.toString())) {
+            if (!positionKey.equals(currentGame.getMoveList().toString())) {
                 return;
             }
 
-            EngineEvaluationDto evaluation = toEvaluationDto(moveSnapshot, lines, engineName);
-            liveEvaluationStreamService.publish(evaluation, lines.get(0).getDepth());
+            liveEvaluationStreamService.publish(
+                    evaluation,
+                    mapEvalToBar(evaluation),
+                    depth);
         } catch (Exception e) {
-            logger.debug("Could not publish live evaluation SSE snapshot: " + e.getMessage());
+            logger.debug("Could not publish live evaluation bar SSE snapshot: " + e.getMessage());
         }
     }
 
     /**
-     * Converts one engine-line snapshot into the normal frontend DTO.
+     * Converts one normal polled engine-line snapshot into the frontend DTO.
+     * This path intentionally remains independent of the SSE bar updates.
      */
     private EngineEvaluationDto toEvaluationDto(
-            List<Move> moveSnapshot,
+            Game game,
             List<EngineLine> bestLines,
             String engineName) {
         double eval = bestLines.get(0).getEvaluation();
@@ -277,7 +253,7 @@ public class EvaluationService {
             String movesSan;
 
             try {
-                movesSan = convertLineToSan(Simulation.forkDummyFrom(moveSnapshot), movesUci);
+                movesSan = convertLineToSan(Simulation.forkDummyFrom(game.getMoveList()), movesUci);
             } catch (Exception ex) {
                 logger.error("convertLineToSan failed, fallback to UCI: " + ex.getMessage());
                 movesSan = movesUci;
@@ -376,8 +352,6 @@ public class EvaluationService {
 
                 Move toApply = findMoveByUci(tmpGame, token);
                 if (toApply == null) {
-                    // Sobald ein Zug nicht gefunden wird, abbrechen;
-                    // bis dahin ist die SAN-Repräsentation korrekt.
                     break;
                 }
 
@@ -394,9 +368,7 @@ public class EvaluationService {
 
             return sb.length() > 0 ? sb.toString() : uciMoves;
         } catch (Exception ex) {
-            // Sammelfang für IOException, NoMoveFoundException etc.
             logger.error("convertLineToSan inner failure: " + ex.getMessage());
-            // Fallback: falls irgendetwas schief geht, UCI-Notation anzeigen
             return uciMoves;
         }
     }
