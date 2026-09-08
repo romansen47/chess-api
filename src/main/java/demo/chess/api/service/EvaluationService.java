@@ -2,6 +2,8 @@ package demo.chess.api.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.springframework.stereotype.Service;
 
@@ -34,6 +36,8 @@ public class EvaluationService {
     private final GameService gameService;
     private EvaluationEngine evaluationEngine;
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
+    private final LiveEvaluationStreamService liveEvaluationStreamService;
+    private final ExecutorService liveEvaluationPushExecutor;
     private String currentEvaluationEnginePath;
     private long lastSeenSettingsVersion = -1L;
 
@@ -41,14 +45,43 @@ public class EvaluationService {
      * Creates a new EvaluationService instance.
      * @param gameService the game service
      * @param engineRuntimeSelectionService runtime engine profile selections
+     * @param liveEvaluationStreamService SSE stream publisher
      */
     public EvaluationService(
             GameService gameService,
-            EngineRuntimeSelectionService engineRuntimeSelectionService) {
+            EngineRuntimeSelectionService engineRuntimeSelectionService,
+            LiveEvaluationStreamService liveEvaluationStreamService) {
         this.gameService = gameService;
         this.engineRuntimeSelectionService = engineRuntimeSelectionService;
+        this.liveEvaluationStreamService = liveEvaluationStreamService;
         this.currentEvaluationEnginePath = engineRuntimeSelectionService.getEvaluationEnginePath();
         this.evaluationEngine = null;
+        this.liveEvaluationPushExecutor = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "live-evaluation-sse-publisher");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    /**
+     * Ensures that infinite live evaluation is running for the current game position.
+     */
+    public synchronized void startLiveEvaluation() {
+        Game game = gameService.getCurrentGame();
+        EngineConfig engineConfig = engineRuntimeSelectionService.getEvaluationConfig();
+        EvaluationEngine engine = getEvaluationEngine();
+        long settingsVersion = engineRuntimeSelectionService.getEvaluationVersion();
+
+        if (settingsVersion != lastSeenSettingsVersion) {
+            engine.clearChachedLines();
+            lastSeenSettingsVersion = settingsVersion;
+        }
+
+        try {
+            engine.getBestLines(game, engineConfig);
+        } catch (Exception e) {
+            logger.error("Engine error while starting live evaluation: " + e.getMessage());
+        }
     }
 
     /**
@@ -88,35 +121,11 @@ public class EvaluationService {
             return new EngineEvaluationDto(0.0, 0.5, List.of());
         }
 
-        // Hauptbewertung (erste Linie)
-        double eval = bestLines.get(0).getEvaluation();
-        double bar = mapEvalToBar(eval);
-
-        List<EngineLineDto> lines = new ArrayList<>();
-        for (EngineLine line : bestLines) {
-            double lineEval = line.getEvaluation();
-            int depth = line.getDepth();
-            Integer mateDistance = line.getMateDistance();
-            String movesUci = line.getMoves();
-            String movesSan;
-
-            // UCI → SAN, Exceptions werden hier abgefangen
-            try {
-                movesSan = convertLineToSan(Simulation.forkDummyFrom(game.getMoveList()), movesUci);
-            } catch (Exception ex) {
-                logger.error("convertLineToSan failed, fallback to UCI: " + ex.getMessage());
-                ex.printStackTrace();
-                movesSan = movesUci;
-            }
-
-            double roundedEval = Math.round(lineEval * 100.0) / 100.0;
-
-            lines.add(new EngineLineDto(roundedEval, depth, mateDistance, movesSan));
-        }
-
-        EngineEvaluationDto result = new EngineEvaluationDto(eval, bar, lines);
-        result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
-        return result;
+        List<Move> moveSnapshot = new ArrayList<>(game.getMoveList());
+        return toEvaluationDto(
+                moveSnapshot,
+                bestLines,
+                engineRuntimeSelectionService.getEvaluationEngineName());
     }
 
     /**
@@ -198,6 +207,92 @@ public class EvaluationService {
     }
 
     /**
+     * Receives one completed engine depth. Only the requested SSE depths are
+     * queued, and all DTO/SAN conversion happens away from the UCI reader thread.
+     * @param positionKey move-list key of the evaluated position
+     * @param lines immutable engine-line snapshot
+     */
+    private void handleEvaluationUpdate(String positionKey, List<EngineLine> lines) {
+        if (lines == null || lines.isEmpty() || !liveEvaluationStreamService.hasSubscribers()) {
+            return;
+        }
+
+        int depth = lines.get(0).getDepth();
+        if (!shouldPushDepth(depth)) {
+            return;
+        }
+
+        List<EngineLine> snapshot = List.copyOf(lines);
+        String engineName = engineRuntimeSelectionService.getEvaluationEngineName();
+        liveEvaluationPushExecutor.execute(
+                () -> publishEvaluationSnapshot(positionKey, snapshot, engineName));
+    }
+
+    /**
+     * Push schedule requested for the SSE experiment: 5, 10, 15 and every
+     * completed depth after 15.
+     */
+    private boolean shouldPushDepth(int depth) {
+        return depth == 5 || depth == 10 || depth >= 15;
+    }
+
+    /**
+     * Converts and publishes one exact engine-depth snapshot if the game has not
+     * moved on in the meantime.
+     */
+    private void publishEvaluationSnapshot(
+            String positionKey,
+            List<EngineLine> lines,
+            String engineName) {
+        try {
+            Game currentGame = gameService.getCurrentGame();
+            List<Move> moveSnapshot = new ArrayList<>(currentGame.getMoveList());
+            if (!positionKey.equals(moveSnapshot.toString())) {
+                return;
+            }
+
+            EngineEvaluationDto evaluation = toEvaluationDto(moveSnapshot, lines, engineName);
+            liveEvaluationStreamService.publish(evaluation, lines.get(0).getDepth());
+        } catch (Exception e) {
+            logger.debug("Could not publish live evaluation SSE snapshot: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Converts one engine-line snapshot into the normal frontend DTO.
+     */
+    private EngineEvaluationDto toEvaluationDto(
+            List<Move> moveSnapshot,
+            List<EngineLine> bestLines,
+            String engineName) {
+        double eval = bestLines.get(0).getEvaluation();
+        double bar = mapEvalToBar(eval);
+
+        List<EngineLineDto> lines = new ArrayList<>();
+        for (EngineLine line : bestLines) {
+            double lineEval = line.getEvaluation();
+            int depth = line.getDepth();
+            Integer mateDistance = line.getMateDistance();
+            String movesUci = line.getMoves();
+            String movesSan;
+
+            try {
+                movesSan = convertLineToSan(Simulation.forkDummyFrom(moveSnapshot), movesUci);
+            } catch (Exception ex) {
+                logger.error("convertLineToSan failed, fallback to UCI: " + ex.getMessage());
+                movesSan = movesUci;
+            }
+
+            double roundedEval = Math.round(lineEval * 100.0) / 100.0;
+            lines.add(new EngineLineDto(roundedEval, depth, mateDistance, movesSan));
+        }
+
+        EngineEvaluationDto result = new EngineEvaluationDto(eval, bar, lines);
+        result.setEngineName(engineName);
+        return result;
+    }
+
+    /**
      * Returns the evaluation engine.
      * @return the evaluation engine
      */
@@ -222,6 +317,7 @@ public class EvaluationService {
         try {
             EvaluationUciEngine engine = new EvaluationUciEngine(enginePath);
             engine.setManagementLabel("evaluation");
+            engine.setEvaluationUpdateListener(this::handleEvaluationUpdate);
             return engine;
         } catch (Exception e) {
             logger.error("Could not start evaluation engine: " + e.getMessage());
@@ -422,7 +518,7 @@ public class EvaluationService {
      * Returns the unicode symbol.
      * @param pieceType the piece type
      * @param color the color
-     * @return the unicode symbol
+     * @return the result of the operation
      */
     private String getUnicodeSymbol(PieceType pieceType, Color color) {
         if (pieceType == null || color == null) {
