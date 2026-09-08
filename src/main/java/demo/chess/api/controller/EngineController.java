@@ -51,30 +51,14 @@ public class EngineController {
     }
 
     /**
-     * Opens the server-sent-event stream and starts evaluation for the current
-     * position immediately.
+     * Opens the server-sent-event stream for live-evaluation bar updates.
+     * Evaluation itself continues to be started and synchronized by the normal
+     * GET /api/eval lifecycle used for the engine-lines display.
      * @return SSE emitter
      */
     @GetMapping(path = "/eval/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamEvaluation() {
-        SseEmitter emitter = liveEvaluationStreamService.subscribe();
-        try {
-            evaluationService.startLiveEvaluation();
-        } catch (RuntimeException e) {
-            emitter.completeWithError(e);
-        }
-        return emitter;
-    }
-
-    /**
-     * Ensures evaluation is running for the latest game position. This endpoint
-     * carries no evaluation data; results arrive through the SSE stream.
-     * @return empty success response
-     */
-    @PostMapping("/eval/start")
-    public ResponseEntity<?> startEvaluation() {
-        evaluationService.startLiveEvaluation();
-        return ResponseEntity.ok().build();
+        return liveEvaluationStreamService.subscribe();
     }
 
     /**
