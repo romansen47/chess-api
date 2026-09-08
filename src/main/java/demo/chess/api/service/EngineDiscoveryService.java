@@ -20,10 +20,10 @@ import demo.chess.definitions.engines.UciEngineInspector;
 /**
  * Discovers executable UCI engines from a system directory.
  *
- * For safety, automatic discovery only considers executables whose file name
- * contains "stockfish" or "lc0" (case-insensitive). This name filter is
- * applied before any candidate process is started. Matching candidates still
- * have to complete the UCI handshake via {@link UciEngineInspector}.
+ * For safety, automatic discovery only considers known engine executable names:
+ * Stockfish variants, lc0, Fruit and Toga variants. This name filter is applied
+ * before any candidate process is started. Matching candidates still have to
+ * complete the UCI handshake via {@link UciEngineInspector}.
  * Symlinks that resolve to the same executable are de-duplicated by real path.
  */
 @Service
@@ -128,12 +128,15 @@ public class EngineDiscoveryService {
             return false;
         }
         String normalizedName = fileName.toString().toLowerCase(Locale.ROOT);
-        return normalizedName.contains("stockfish") || normalizedName.contains("lc0");
+        return normalizedName.contains("stockfish")
+                || normalizedName.contains("lc0")
+                || normalizedName.contains("fruit")
+                || normalizedName.contains("toga");
     }
 
     /**
-     * Returns whether this object can didate comparator.
-     * @return true when the condition is satisfied; otherwise false
+     * Returns the candidate comparator.
+     * @return the result of the operation
      */
     private Comparator<Path> candidateComparator() {
         return Comparator
