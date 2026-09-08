@@ -26,7 +26,7 @@ public class ComputerMoveService {
     private static final Log logger = LogFactory.getLog(ComputerMoveService.class);
 
     private final GameService gameService;
-    private final EngineSettingsService engineSettingsService;
+    private final EngineRuntimeSelectionService engineRuntimeSelectionService;
 
     private PlayerEngine whitePlayerEngine;
     private PlayerEngine blackPlayerEngine;
@@ -38,14 +38,16 @@ public class ComputerMoveService {
     /**
      * Creates a new ComputerMoveService instance.
      * @param gameService the game service
-     * @param engineSettingsService the engine settings service
+     * @param engineRuntimeSelectionService runtime engine profile selections
      */
-    public ComputerMoveService(GameService gameService, EngineSettingsService engineSettingsService) {
+    public ComputerMoveService(
+            GameService gameService,
+            EngineRuntimeSelectionService engineRuntimeSelectionService) {
         this.gameService = gameService;
-        this.engineSettingsService = engineSettingsService;
+        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
 
-        this.currentWhitePlayerEnginePath = engineSettingsService.getWhitePlayerEnginePath();
-        this.currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
+        this.currentWhitePlayerEnginePath = engineRuntimeSelectionService.getWhitePlayerEnginePath();
+        this.currentBlackPlayerEnginePath = engineRuntimeSelectionService.getBlackPlayerEnginePath();
         this.whitePlayerEngine = null;
         this.blackPlayerEngine = null;
     }
@@ -115,8 +117,8 @@ public class ComputerMoveService {
         PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
         PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
 
-        currentWhitePlayerEnginePath = engineSettingsService.getWhitePlayerEnginePath();
-        currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
+        currentWhitePlayerEnginePath = engineRuntimeSelectionService.getWhitePlayerEnginePath();
+        currentBlackPlayerEnginePath = engineRuntimeSelectionService.getBlackPlayerEnginePath();
         whitePlayerEngine = null;
         blackPlayerEngine = null;
         whitePlayerEngineGeneration++;
@@ -134,7 +136,7 @@ public class ComputerMoveService {
         if (color == Color.WHITE) {
             logger.info("Cancelling white player engine");
             PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
-            currentWhitePlayerEnginePath = engineSettingsService.getWhitePlayerEnginePath();
+            currentWhitePlayerEnginePath = engineRuntimeSelectionService.getWhitePlayerEnginePath();
             whitePlayerEngine = null;
             whitePlayerEngineGeneration++;
             closePlayerEngine(oldWhitePlayerEngine, "cancelled white player");
@@ -143,7 +145,7 @@ public class ComputerMoveService {
 
         logger.info("Cancelling black player engine");
         PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
-        currentBlackPlayerEnginePath = engineSettingsService.getBlackPlayerEnginePath();
+        currentBlackPlayerEnginePath = engineRuntimeSelectionService.getBlackPlayerEnginePath();
         blackPlayerEngine = null;
         blackPlayerEngineGeneration++;
         closePlayerEngine(oldBlackPlayerEngine, "cancelled black player");
@@ -160,11 +162,11 @@ public class ComputerMoveService {
     /**
      * Returns the player engine snapshot.
      * @param color the color
-     * @return the player engine snapshot
+     * @return the result of the operation
      */
     private synchronized PlayerEngineSnapshot getPlayerEngineSnapshot(Color color) {
         if (color == Color.WHITE) {
-            EngineConfig config = engineSettingsService.getWhitePlayerConfig();
+            EngineConfig config = engineRuntimeSelectionService.getWhitePlayerConfig();
             String configuredPath = config.getEngine();
             if (whitePlayerEngine == null || !configuredPath.equals(currentWhitePlayerEnginePath)) {
                 PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
@@ -179,7 +181,7 @@ public class ComputerMoveService {
                     whitePlayerEngineGeneration);
         }
 
-        EngineConfig config = engineSettingsService.getBlackPlayerConfig();
+        EngineConfig config = engineRuntimeSelectionService.getBlackPlayerConfig();
         String configuredPath = config.getEngine();
         if (blackPlayerEngine == null || !configuredPath.equals(currentBlackPlayerEnginePath)) {
             PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;

@@ -12,16 +12,18 @@ import demo.chess.game.Game;
 public class ClockService {
 
     private final GameService gameService;
-    private final EngineSettingsService engineSettingsService;
+    private final EngineRuntimeSelectionService engineRuntimeSelectionService;
 
     /**
      * Creates a new ClockService instance.
      * @param gameService the game service
-     * @param engineSettingsService the engine settings service
+     * @param engineRuntimeSelectionService runtime engine profile selections
      */
-    public ClockService(GameService gameService, EngineSettingsService engineSettingsService) {
+    public ClockService(
+            GameService gameService,
+            EngineRuntimeSelectionService engineRuntimeSelectionService) {
         this.gameService = gameService;
-        this.engineSettingsService = engineSettingsService;
+        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
     }
 
     /**
@@ -64,8 +66,8 @@ public class ClockService {
         String timeControl = formatTimeControl(game.getTimeForEachPlayer(), game.getIncrementForWhite(), game.getIncrementForBlack());
         String whitePlayerName = game.getWhitePlayer() != null ? game.getWhitePlayer().getName() : null;
         String blackPlayerName = game.getBlackPlayer() != null ? game.getBlackPlayer().getName() : null;
-        String whitePlayerEngineName = engineSettingsService.getWhitePlayerEngineName();
-        String blackPlayerEngineName = engineSettingsService.getBlackPlayerEngineName();
+        String whitePlayerEngineName = engineRuntimeSelectionService.getWhitePlayerEngineName();
+        String blackPlayerEngineName = engineRuntimeSelectionService.getBlackPlayerEngineName();
 
         return new ClockDto(
                 Math.max(0, whiteTime),

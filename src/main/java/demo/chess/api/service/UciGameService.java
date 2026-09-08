@@ -33,7 +33,7 @@ public class UciGameService {
     private static final DateTimeFormatter PGN_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy.MM.dd");
 
     private final GameService gameService;
-    private final EngineSettingsService engineSettingsService;
+    private final EngineRuntimeSelectionService engineRuntimeSelectionService;
     private final GameLoader gameLoader = new GameLoader();
     private final GameSaver gameSaver = new GameSaver();
 
@@ -47,11 +47,13 @@ public class UciGameService {
     /**
      * Creates a new UciGameService instance.
      * @param gameService the game service
-     * @param engineSettingsService the engine settings service
+     * @param engineRuntimeSelectionService runtime engine profile selections
      */
-    public UciGameService(GameService gameService, EngineSettingsService engineSettingsService) {
+    public UciGameService(
+            GameService gameService,
+            EngineRuntimeSelectionService engineRuntimeSelectionService) {
         this.gameService = gameService;
-        this.engineSettingsService = engineSettingsService;
+        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
     }
 
     /**
@@ -196,8 +198,8 @@ public class UciGameService {
 
         if (computerControlled) {
             String engineName = color == Color.WHITE
-                    ? engineSettingsService.getWhitePlayerEngineName()
-                    : engineSettingsService.getBlackPlayerEngineName();
+                    ? engineRuntimeSelectionService.getWhitePlayerEngineName()
+                    : engineRuntimeSelectionService.getBlackPlayerEngineName();
             return playerName(engineName, fallback + " Engine");
         }
 

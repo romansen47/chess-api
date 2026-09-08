@@ -26,26 +26,28 @@ import demo.chess.game.impl.Simulation;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-@Service 
+@Service
 public class EvaluationService {
 
     private static final Log logger = LogFactory.getLog(EvaluationService.class);
 
     private final GameService gameService;
     private EvaluationEngine evaluationEngine;
-    private final EngineSettingsService engineSettingsService;
+    private final EngineRuntimeSelectionService engineRuntimeSelectionService;
     private String currentEvaluationEnginePath;
     private long lastSeenSettingsVersion = -1L;
 
     /**
      * Creates a new EvaluationService instance.
      * @param gameService the game service
-     * @param engineSettingsService the engine settings service
+     * @param engineRuntimeSelectionService runtime engine profile selections
      */
-    public EvaluationService(GameService gameService, EngineSettingsService engineSettingsService) {
+    public EvaluationService(
+            GameService gameService,
+            EngineRuntimeSelectionService engineRuntimeSelectionService) {
         this.gameService = gameService;
-        this.engineSettingsService = engineSettingsService;
-        this.currentEvaluationEnginePath = engineSettingsService.getEvaluationEnginePath();
+        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
+        this.currentEvaluationEnginePath = engineRuntimeSelectionService.getEvaluationEnginePath();
         this.evaluationEngine = null;
     }
 
@@ -55,9 +57,9 @@ public class EvaluationService {
      */
     public synchronized EngineEvaluationDto getEvaluation() {
         Game game = gameService.getCurrentGame();
-        EngineConfig engineConfig = engineSettingsService.toEvaluationEngineConfig();
+        EngineConfig engineConfig = engineRuntimeSelectionService.getEvaluationConfig();
         EvaluationEngine engine = getEvaluationEngine();
-        long settingsVersion = engineSettingsService.getEvaluationVersion();
+        long settingsVersion = engineRuntimeSelectionService.getEvaluationVersion();
 
         logger.debug("Requesting best lines from engine (single snapshot)...");
 
@@ -113,11 +115,9 @@ public class EvaluationService {
         }
 
         EngineEvaluationDto result = new EngineEvaluationDto(eval, bar, lines);
-        result.setEngineName(engineSettingsService.getEvaluationEngineName());
+        result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
         return result;
     }
-
-
 
     /**
      * Evaluates the game for analysis.
@@ -183,7 +183,7 @@ public class EvaluationService {
 
         closeEvaluationEngine(evaluationEngine);
         evaluationEngine = null;
-        currentEvaluationEnginePath = engineSettingsService.getEvaluationEnginePath();
+        currentEvaluationEnginePath = engineRuntimeSelectionService.getEvaluationEnginePath();
         lastSeenSettingsVersion = -1L;
     }
 
@@ -202,7 +202,7 @@ public class EvaluationService {
      * @return the evaluation engine
      */
     private synchronized EvaluationEngine getEvaluationEngine() {
-        String configuredPath = engineSettingsService.getEvaluationEnginePath();
+        String configuredPath = engineRuntimeSelectionService.getEvaluationEnginePath();
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
             closeEvaluationEngine(evaluationEngine);
             currentEvaluationEnginePath = configuredPath;
@@ -304,7 +304,6 @@ public class EvaluationService {
             return uciMoves;
         }
     }
-
 
     /**
      * Performs the to display san operation.
