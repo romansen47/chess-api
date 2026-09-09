@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.GameSettingsDto;
+import demo.chess.api.dto.GameSnapshotDto;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.api.service.AnalysisReplayService;
 import demo.chess.api.service.ChessDatabaseService;
@@ -69,6 +70,21 @@ public class GameController {
     @GetMapping("/game-settings")
     public ResponseEntity<GameSettingsDto> getGameSettings() {
         return ResponseEntity.ok(gameService.getGameSettings());
+    }
+
+    /**
+     * Returns the current game snapshot used to rehydrate the frontend after a reload.
+     *
+     * @return current frontend game snapshot
+     */
+    @GetMapping(value = "/game/state", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> getCurrentGameState() {
+        try {
+            GameSnapshotDto snapshot = uciGameService.getCurrentGameSnapshot();
+            return ResponseEntity.ok(snapshot);
+        } catch (NoMoveFoundException | IOException e) {
+            return ResponseEntity.internalServerError().body("Could not reconstruct current game state");
+        }
     }
 
     /**

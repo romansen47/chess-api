@@ -11,6 +11,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import demo.chess.api.dto.GameSnapshotDto;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.api.dto.UciGameMoveDto;
 import demo.chess.definitions.Color;
@@ -123,6 +124,50 @@ public class UciGameService {
     public synchronized void clearImportedGame() {
         importedAnalysisGame = null;
         importedPgnTags = new LinkedHashMap<>();
+    }
+
+    /**
+     * Returns a snapshot of the game currently represented by the frontend.
+     * For an imported PGN this is the analysis-only game; otherwise it is the live game.
+     *
+     * @return current frontend game snapshot
+     * @throws NoMoveFoundException if move replay fails
+     * @throws IOException if move notation cannot be reconstructed
+     */
+    public synchronized GameSnapshotDto getCurrentGameSnapshot() throws NoMoveFoundException, IOException {
+        boolean imported = importedAnalysisGame != null;
+        Game sourceGame = imported ? importedAnalysisGame : gameService.getCurrentGame();
+
+        if (sourceGame == null) {
+            return new GameSnapshotDto(
+                    imported,
+                    new UciGameDto(0, null, "", List.of(), "White", "Black"));
+        }
+
+        List<Move> originalMoves = imported
+                ? new ArrayList<>(importedAnalysisGame.getMoveList())
+                : gameService.getMoveListSnapshot();
+        List<UciGameMoveDto> moveDtos = createMoveDtos(originalMoves);
+        String sideToMove = sourceGame.getPlayer() != null && sourceGame.getPlayer().getColor() != null
+                ? sourceGame.getPlayer().getColor().name().toLowerCase(Locale.ROOT)
+                : null;
+
+        String whitePlayerName = imported
+                ? playerName(importedPgnTags.get("White"), "White")
+                : playerName(sourceGame.getWhitePlayer() != null ? sourceGame.getWhitePlayer().getName() : null, "White");
+        String blackPlayerName = imported
+                ? playerName(importedPgnTags.get("Black"), "Black")
+                : playerName(sourceGame.getBlackPlayer() != null ? sourceGame.getBlackPlayer().getName() : null, "Black");
+
+        return new GameSnapshotDto(
+                imported,
+                new UciGameDto(
+                        originalMoves.size(),
+                        sideToMove,
+                        toPositionString(sourceGame),
+                        moveDtos,
+                        whitePlayerName,
+                        blackPlayerName));
     }
 
     /**
