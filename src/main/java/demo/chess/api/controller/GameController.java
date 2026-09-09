@@ -14,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -76,7 +77,7 @@ public class GameController {
      * @return the result of the operation
      */
     @PostMapping("/new-game")
-    public ResponseEntity<GameSettingsDto> startNewGame(org.springframework.web.bind.annotation.RequestBody(required = false) GameSettingsDto settings) {
+    public ResponseEntity<GameSettingsDto> startNewGame(@RequestBody(required = false) GameSettingsDto settings) {
         GameSettingsDto appliedSettings = gameLifecycleService.startNewGame(settings);
         uciGameService.clearImportedGame();
         return ResponseEntity.ok(appliedSettings);
