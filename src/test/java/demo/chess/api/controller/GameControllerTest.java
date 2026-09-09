@@ -67,7 +67,8 @@ class GameControllerTest {
 
     /**
      * Verifies that a multi-game PGN is rejected before any analysis state or
-     * database content is changed.
+     * database content is changed. The response marks the count as an early-abort
+     * minimum: reading stops as soon as game number two begins.
      */
     @Test
     void multiplePgnGamesAreRejectedWithoutSideEffects() throws Exception {
@@ -98,7 +99,10 @@ class GameControllerTest {
         ResponseEntity<?> response = controller.importPgnGame(pgn);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals(Map.of("code", "PGN_MULTIPLE_GAMES", "gameCount", 2), response.getBody());
+        assertEquals(Map.of(
+                "code", "PGN_MULTIPLE_GAMES",
+                "gameCount", 2,
+                "earlyAbort", true), response.getBody());
         verify(analysisReplayService, never()).cancel();
         verifyNoInteractions(chessDatabaseService, uciGameService);
     }
