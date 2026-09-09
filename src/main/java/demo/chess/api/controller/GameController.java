@@ -1,8 +1,11 @@
 package demo.chess.api.controller;
 
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
-import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.HttpHeaders;
@@ -11,7 +14,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -24,7 +26,8 @@ import demo.chess.api.service.GameLifecycleService;
 import demo.chess.api.service.GameService;
 import demo.chess.api.service.UciGameService;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
-import demo.chess.load.GameLoader;
+import demo.chess.load.SinglePgnGameReader;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api")
@@ -35,7 +38,7 @@ public class GameController {
     private final UciGameService uciGameService;
     private final AnalysisReplayService analysisReplayService;
     private final ChessDatabaseService chessDatabaseService;
-    private final GameLoader gameLoader = new GameLoader();
+    private final SinglePgnGameReader singlePgnGameReader = new SinglePgnGameReader();
 
     /**
      * Creates a new GameController instance.
@@ -73,7 +76,7 @@ public class GameController {
      * @return the result of the operation
      */
     @PostMapping("/new-game")
-    public ResponseEntity<GameSettingsDto> startNewGame(@RequestBody(required = false) GameSettingsDto settings) {
+    public ResponseEntity<GameSettingsDto> startNewGame(org.springframework.web.bind.annotation.RequestBody(required = false) GameSettingsDto settings) {
         GameSettingsDto appliedSettings = gameLifecycleService.startNewGame(settings);
         uciGameService.clearImportedGame();
         return ResponseEntity.ok(appliedSettings);
@@ -104,30 +107,60 @@ public class GameController {
     /**
      * Imports exactly one PGN game for analysis and stores it in the local database.
      *
-     * <p>The PGN splitter is used only to validate the number of games. Once the
-     * payload has been accepted as a single game, the original request content is
+     * <p>The request body is consumed as a stream. Reading stops immediately when
+     * the beginning of a second game is detected, so a large database PGN is not
+     * materialized in the JVM heap before it can be rejected.</p>
+     *
+     * <p>When exactly one game is present, its original character content is
      * forwarded unchanged to the database and analysis import paths.</p>
      *
-     * @param content complete PGN content
-     * @return imported analysis game
+     * @param request HTTP request whose body contains the PGN source
+     * @return imported analysis game or a structured validation error
      */
     @PostMapping(
             value = "/game/pgn",
             consumes = MediaType.TEXT_PLAIN_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> importPgnGame(@RequestBody(required = false) String content) {
-        List<String> games = gameLoader.splitPgnGames(content);
-        if (games.isEmpty()) {
+    public ResponseEntity<?> importPgnGame(HttpServletRequest request) {
+        try {
+            return importPgnGame(new InputStreamReader(request.getInputStream(), StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().body("I/O error while reading PGN game");
+        }
+    }
+
+    /**
+     * String-based entry point retained for direct service/controller tests.
+     * Production HTTP imports use the streaming servlet request method above.
+     *
+     * @param content complete PGN content
+     * @return imported analysis game or a structured validation error
+     */
+    public ResponseEntity<?> importPgnGame(String content) {
+        return importPgnGame(new StringReader(content == null ? "" : content));
+    }
+
+    private ResponseEntity<?> importPgnGame(Reader reader) {
+        SinglePgnGameReader.Result probe;
+        try {
+            probe = singlePgnGameReader.read(reader);
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError().body("I/O error while reading PGN game");
+        }
+
+        if (probe.gameCount() == 0) {
             return ResponseEntity.badRequest().body(Map.of(
                     "code", "PGN_NO_GAME",
                     "gameCount", 0));
         }
-        if (games.size() > 1) {
+        if (probe.gameCount() > 1) {
             return ResponseEntity.badRequest().body(Map.of(
                     "code", "PGN_MULTIPLE_GAMES",
-                    "gameCount", games.size()));
+                    "gameCount", probe.gameCount(),
+                    "earlyAbort", probe.earlyAbort()));
         }
 
+        String content = probe.content();
         analysisReplayService.cancel();
 
         try {
