@@ -150,7 +150,7 @@ public class AnalysisEvaluationService {
         }
 
         double evaluation = bestLines.get(0).getEvaluation();
-        double bar = mapEvalToBar(evaluation);
+        double bar = EvaluationBarMapper.toBar(evaluation);
         List<EngineLineDto> lines = new ArrayList<>();
 
         for (EngineLine line : bestLines) {
@@ -353,20 +353,4 @@ public class AnalysisEvaluationService {
         }
     }
 
-    /**
-     * Maps the eval to bar.
-     * @param evaluation the evaluation
-     * @return the result of the operation
-     */
-    private double mapEvalToBar(double evaluation) {
-        if (evaluation >= 99d) {
-            return 1.0;
-        }
-        if (evaluation <= -99d) {
-            return 0.0;
-        }
-
-        double result = 0.5 + Math.atan(Math.tan(Math.PI / 10d) * evaluation) / Math.PI;
-        return Math.max(0.0, Math.min(1.0, result));
-    }
 }

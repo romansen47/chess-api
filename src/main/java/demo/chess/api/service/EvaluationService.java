@@ -124,7 +124,7 @@ public class EvaluationService {
             }
 
             double eval = bestLines.get(0).getEvaluation();
-            double bar = mapEvalToBar(eval);
+            double bar = EvaluationBarMapper.toBar(eval);
             List<EngineLineDto> lines = new ArrayList<>();
 
             for (EngineLine line : bestLines) {
@@ -200,7 +200,7 @@ public class EvaluationService {
 
             liveEvaluationStreamService.publish(
                     evaluation,
-                    mapEvalToBar(evaluation),
+                    EvaluationBarMapper.toBar(evaluation),
                     depth);
         } catch (Exception e) {
             logger.debug("Could not publish live evaluation bar SSE snapshot: " + e.getMessage());
@@ -216,7 +216,7 @@ public class EvaluationService {
             List<EngineLine> bestLines,
             String engineName) {
         double eval = bestLines.get(0).getEvaluation();
-        double bar = mapEvalToBar(eval);
+        double bar = EvaluationBarMapper.toBar(eval);
 
         List<EngineLineDto> lines = new ArrayList<>();
         for (EngineLine line : bestLines) {
@@ -280,13 +280,4 @@ public class EvaluationService {
         }
     }
 
-    private double mapEvalToBar(double eval) {
-        double ans = 0.5 + Math.atan(Math.tan(Math.PI / 10d) * eval) / Math.PI;
-        if (ans < 0.0) {
-            ans = 0.0;
-        } else if (ans > 1.0) {
-            ans = 1.0;
-        }
-        return ans;
-    }
 }

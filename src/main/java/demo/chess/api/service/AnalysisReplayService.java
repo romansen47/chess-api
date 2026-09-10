@@ -237,7 +237,7 @@ public class AnalysisReplayService {
             }
 
             double eval = bestLines.get(0).getEvaluation();
-            double bar = mapEvalToBar(eval);
+            double bar = EvaluationBarMapper.toBar(eval);
             int depth = bestLines.get(0).getDepth();
 
             List<EngineLineDto> lines = new ArrayList<>();
@@ -326,15 +326,7 @@ public class AnalysisReplayService {
         return new AnalysisEvaluation(100.0, 1.0, latestDepth(source), List.of());
     }
 
-    private double mapEvalToBar(double eval) {
-        if (eval >= 99d) {
-            return 1.0;
-        }
-        if (eval <= -99d) {
-            return 0.0;
-        }
-        return 0.5 + Math.atan(Math.tan(Math.PI / 10.0) * eval) / Math.PI;
-    }
+    
 
     private double latestEvaluation(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
