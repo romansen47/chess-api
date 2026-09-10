@@ -9,6 +9,7 @@ import demo.chess.api.dto.EngineLineDto;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
+import demo.chess.game.LegalMoveResolver;
 import demo.chess.notation.PgnNotation;
 
 /**
@@ -94,19 +95,12 @@ public class EngineLineDisplayService {
         }
 
         try {
-            for (Move candidate : game.getPlayer().getValidMoves(game)) {
-                if (uci.equalsIgnoreCase(candidate.toString())) {
-                    return candidate;
-                }
-            }
+            return LegalMoveResolver.resolveUci(game, uci);
         } catch (Exception ignored) {
+            return null;
         }
-        return null;
     }
 
-    
-
-    
 
     private static final class EngineLineDisplayData {
         private final String moves;

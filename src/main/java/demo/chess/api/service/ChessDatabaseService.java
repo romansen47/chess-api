@@ -33,6 +33,7 @@ import demo.chess.database.SqliteChessDatabase;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.DummyGame;
+import demo.chess.game.LegalMoveResolver;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
 import demo.chess.notation.PgnNotation;
@@ -340,13 +341,13 @@ public class ChessDatabaseService {
      * @param uciMove UCI continuation
      * @return SAN notation or the original UCI move when no legal match is found
      */
-    private String toSan(DummyGame game, String uciMove) throws NoMoveFoundException, IOException {
-        for (Move move : game.getPlayer().getValidMoves(game)) {
-            if (move.toString().equalsIgnoreCase(uciMove)) {
-                return PgnNotation.toDisplayNotation(game, move);
-            }
+    private String toSan(DummyGame game, String uciMove) throws IOException {
+        try {
+            Move move = LegalMoveResolver.resolveUci(game, uciMove);
+            return PgnNotation.toDisplayNotation(game, move);
+        } catch (NoMoveFoundException e) {
+            return uciMove;
         }
-        return uciMove;
     }
 
     /**

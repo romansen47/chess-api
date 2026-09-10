@@ -17,9 +17,8 @@ import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
-import demo.chess.definitions.players.Player;
-import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
+import demo.chess.game.TerminalPositionEvaluator;
 import demo.chess.game.impl.Simulation;
 
 /**
@@ -212,90 +211,25 @@ public class AnalysisEvaluationService {
      * @return the result of the operation
      */
     private EngineEvaluationDto evaluateTerminalPosition(Game game) {
-        if (game == null) {
+        Double evaluation = TerminalEvaluationMapper.toEvaluation(
+                TerminalPositionEvaluator.determineState(game));
+        if (evaluation == null) {
             return null;
         }
-
-        EngineEvaluationDto explicitStateEvaluation = evaluateExplicitTerminalState(game);
-        if (explicitStateEvaluation != null) {
-            return explicitStateEvaluation;
-        }
-
-        return evaluateTerminalSimulationPosition(game);
+        return terminalEvaluation(evaluation);
     }
 
-    /**
-     * Evaluates the explicit terminal state.
-     * @param game the game
-     * @return the result of the operation
-     */
-    private EngineEvaluationDto evaluateExplicitTerminalState(Game game) {
-        State state = game.getState();
-        if (state == null) {
-            return null;
-        }
-
-        if (state == State.BLACK_MATED || state == State.BLACK_RESIGNED) {
-            return terminalEvaluation(100.0, 1.0);
-        }
-
-        if (state == State.WHITE_MATED || state == State.WHITE_RESIGNED) {
-            return terminalEvaluation(-100.0, 0.0);
-        }
-
-        if (state == State.STALEMATE
-                || state == State.DRAW_BY_50_MOVES_RULE
-                || state == State.DRAW_BY_THREEFOLD_REPETITION) {
-            return terminalEvaluation(0.0, 0.5);
-        }
-
-        return null;
-    }
-
-    /**
-     * Evaluates the terminal simulation position.
-     * @param game the game
-     * @return the result of the operation
-     */
-    private EngineEvaluationDto evaluateTerminalSimulationPosition(Game game) {
-        Player playerToMove = game.getPlayer();
-        if (playerToMove == null || playerToMove.getKing() == null || playerToMove.getKing().getField() == null) {
-            return null;
-        }
-
-        try {
-            if (!playerToMove.getValidMoves(game).isEmpty()) {
-                return null;
-            }
-        } catch (NoMoveFoundException | IOException e) {
-            return null;
-        }
-
-        Player opponent = playerToMove == game.getWhitePlayer()
-                ? game.getBlackPlayer()
-                : game.getWhitePlayer();
-
-        boolean kingIsAttacked = opponent.getSimpleMoves().stream()
-                .map(Move::getTarget)
-                .anyMatch(playerToMove.getKing().getField()::equals);
-
-        if (!kingIsAttacked) {
-            return terminalEvaluation(0.0, 0.5);
-        }
-
-        return playerToMove == game.getWhitePlayer()
-                ? terminalEvaluation(-100.0, 0.0)
-                : terminalEvaluation(100.0, 1.0);
-    }
 
     /**
      * Performs the terminal evaluation operation.
      * @param evaluation the evaluation
-     * @param bar the bar
      * @return the result of the operation
      */
-    private EngineEvaluationDto terminalEvaluation(double evaluation, double bar) {
-        EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, List.of());
+    private EngineEvaluationDto terminalEvaluation(double evaluation) {
+        EngineEvaluationDto result = new EngineEvaluationDto(
+                evaluation,
+                EvaluationBarMapper.toBar(evaluation),
+                List.of());
         result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
         return result;
     }

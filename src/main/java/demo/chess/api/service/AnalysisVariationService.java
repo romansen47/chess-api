@@ -11,7 +11,9 @@ import demo.chess.api.dto.AnalysisVariationMoveResultDto;
 import demo.chess.api.dto.AnalysisVariationRequestDto;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
-import demo.chess.definitions.moves.Promotion;
+import demo.chess.definitions.states.State;
+import demo.chess.game.LegalMoveResolver;
+import demo.chess.game.TerminalPositionEvaluator;
 import demo.chess.game.impl.Simulation;
 
 /**
@@ -54,7 +56,7 @@ public class AnalysisVariationService {
         }
 
         for (String uci : safeMoves(variationMoves)) {
-            Move variationMove = findLegalMoveByUci(simulation, uci);
+            Move variationMove = LegalMoveResolver.resolveUci(simulation, uci);
             simulation.apply(variationMove);
         }
 
@@ -100,7 +102,7 @@ public class AnalysisVariationService {
         }
 
         Simulation simulation = createVariationGame(request.getAnchorPly(), request.getMoves());
-        Move selected = findLegalMove(
+        Move selected = LegalMoveResolver.resolveCoordinates(
                 simulation,
                 request.getFrom(),
                 request.getTo(),
@@ -111,7 +113,8 @@ public class AnalysisVariationService {
         String sideToMove = simulation.getPlayer() != null && simulation.getPlayer().getColor() != null
                 ? simulation.getPlayer().getColor().name().toLowerCase(Locale.ROOT)
                 : null;
-        String gameState = simulation.getState() != null ? simulation.getState().name() : null;
+        State terminalState = TerminalPositionEvaluator.determineState(simulation);
+        String gameState = terminalState != null ? terminalState.name() : null;
 
         return new AnalysisVariationMoveResultDto(
                 true,
@@ -124,72 +127,6 @@ public class AnalysisVariationService {
                 gameState);
     }
 
-    private Move findLegalMoveByUci(Simulation simulation, String rawUci)
-            throws NoMoveFoundException, IOException {
-        String wanted = rawUci != null ? rawUci.trim().toLowerCase(Locale.ROOT) : "";
-        if (wanted.length() < 4) {
-            throw new NoMoveFoundException("Invalid variation UCI move: " + rawUci);
-        }
-
-        for (Move candidate : simulation.getPlayer().getValidMoves(simulation)) {
-            if (candidate != null && wanted.equals(candidate.toString().toLowerCase(Locale.ROOT))) {
-                return candidate;
-            }
-        }
-
-        throw new NoMoveFoundException("No legal variation move for UCI " + rawUci);
-    }
-
-    private Move findLegalMove(Simulation simulation, String from, String to, String promotion)
-            throws NoMoveFoundException, IOException {
-        String fromNorm = from.trim().toLowerCase(Locale.ROOT);
-        String toNorm = to.trim().toLowerCase(Locale.ROOT);
-        String promotionLabel = normalizePromotion(promotion);
-        List<Move> matches = new ArrayList<>();
-
-        for (Move candidate : simulation.getPlayer().getValidMoves(simulation)) {
-            if (candidate == null || candidate.getSource() == null || candidate.getTarget() == null) {
-                continue;
-            }
-            if (!fromNorm.equalsIgnoreCase(candidate.getSource().getName())
-                    || !toNorm.equalsIgnoreCase(candidate.getTarget().getName())) {
-                continue;
-            }
-            if (promotionLabel != null) {
-                if (!(candidate instanceof Promotion)) {
-                    continue;
-                }
-                Promotion promotionMove = (Promotion) candidate;
-                if (promotionMove.getPromotedPiece() == null
-                        || promotionMove.getPromotedPiece().getType() == null
-                        || !promotionLabel.equals(promotionMove.getPromotedPiece().getType().label)) {
-                    continue;
-                }
-            }
-            matches.add(candidate);
-        }
-
-        if (matches.isEmpty()) {
-            throw new NoMoveFoundException("No legal variation move for " + from + " -> " + to);
-        }
-
-        return matches.get(0);
-    }
-
-    private String normalizePromotion(String promotion) {
-        if (promotion == null || promotion.isBlank()) {
-            return null;
-        }
-
-        String normalized = promotion.trim().toLowerCase(Locale.ROOT);
-        return switch (normalized) {
-            case "q", "queen" -> "q";
-            case "r", "rook" -> "r";
-            case "b", "bishop" -> "b";
-            case "n", "knight" -> "n";
-            default -> normalized;
-        };
-    }
 
     private List<String> safeMoves(List<String> moves) {
         return moves != null ? moves : List.of();

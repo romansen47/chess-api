@@ -18,9 +18,8 @@ import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
-import demo.chess.definitions.players.Player;
-import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
+import demo.chess.game.TerminalPositionEvaluator;
 import demo.chess.game.impl.Simulation;
 import demo.chess.notation.PgnNotation;
 
@@ -242,68 +241,17 @@ public class AnalysisReplayService {
             return null;
         }
 
-        AnalysisEvaluation explicitStateEvaluation = evaluateExplicitTerminalState(source);
-        if (explicitStateEvaluation != null) {
-            return explicitStateEvaluation;
-        }
-
-        return evaluateTerminalSimulationPosition(source);
-    }
-
-    private AnalysisEvaluation evaluateExplicitTerminalState(AnalysisReplaySession source) {
-        State state = source.replayGame.getState();
-        if (state == null) {
+        Double evaluation = TerminalEvaluationMapper.toEvaluation(
+                TerminalPositionEvaluator.determineState(source.replayGame));
+        if (evaluation == null) {
             return null;
         }
 
-        if (state == State.BLACK_MATED || state == State.BLACK_RESIGNED) {
-            return new AnalysisEvaluation(100.0, 1.0, latestDepth(source), List.of());
-        }
-
-        if (state == State.WHITE_MATED || state == State.WHITE_RESIGNED) {
-            return new AnalysisEvaluation(-100.0, 0.0, latestDepth(source), List.of());
-        }
-
-        if (state == State.STALEMATE
-                || state == State.DRAW_BY_50_MOVES_RULE
-                || state == State.DRAW_BY_THREEFOLD_REPETITION) {
-            return new AnalysisEvaluation(0.0, 0.5, latestDepth(source), List.of());
-        }
-
-        return null;
-    }
-
-    private AnalysisEvaluation evaluateTerminalSimulationPosition(AnalysisReplaySession source) {
-        Player playerToMove = source.replayGame.getPlayer();
-        if (playerToMove == null || playerToMove.getKing() == null || playerToMove.getKing().getField() == null) {
-            return null;
-        }
-
-        try {
-            if (!playerToMove.getValidMoves(source.replayGame).isEmpty()) {
-                return null;
-            }
-        } catch (NoMoveFoundException | IOException e) {
-            return null;
-        }
-
-        Player opponent = playerToMove == source.replayGame.getWhitePlayer()
-                ? source.replayGame.getBlackPlayer()
-                : source.replayGame.getWhitePlayer();
-
-        boolean kingIsAttacked = opponent.getSimpleMoves().stream()
-                .map(Move::getTarget)
-                .anyMatch(playerToMove.getKing().getField()::equals);
-
-        if (!kingIsAttacked) {
-            return new AnalysisEvaluation(0.0, 0.5, latestDepth(source), List.of());
-        }
-
-        if (playerToMove == source.replayGame.getWhitePlayer()) {
-            return new AnalysisEvaluation(-100.0, 0.0, latestDepth(source), List.of());
-        }
-
-        return new AnalysisEvaluation(100.0, 1.0, latestDepth(source), List.of());
+        return new AnalysisEvaluation(
+                evaluation,
+                EvaluationBarMapper.toBar(evaluation),
+                latestDepth(source),
+                List.of());
     }
 
 

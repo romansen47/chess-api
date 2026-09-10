@@ -17,10 +17,10 @@ import demo.chess.definitions.board.Board;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Move;
-import demo.chess.definitions.moves.Promotion;
 import demo.chess.definitions.pieces.Piece;
 import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
+import demo.chess.game.LegalMoveResolver;
 
 @Service
 public class GameService {
@@ -260,107 +260,10 @@ public class GameService {
      */
     public synchronized Move applyMove(String from, String to, String promotion)
             throws NoMoveFoundException, IOException {
-
-        if (from == null || to == null) {
-            throw new NoMoveFoundException("from/to must not be null");
-        }
-
-        String fromNorm = from.toLowerCase(Locale.ROOT);
-        String toNorm = to.toLowerCase(Locale.ROOT);
-
-        List<Move> legalMoves = game.getPlayer().getValidMoves(game);
-        List<Move> matchingMoves = new ArrayList<>();
-
-        for (Move m : legalMoves) {
-            if (m.getSource() == null || m.getTarget() == null) {
-                continue;
-            }
-
-            String srcName = m.getSource().getName();
-            String tgtName = m.getTarget().getName();
-            if (srcName == null || tgtName == null) {
-                continue;
-            }
-
-            if (srcName.equalsIgnoreCase(fromNorm) && tgtName.equalsIgnoreCase(toNorm)) {
-                matchingMoves.add(m);
-            }
-        }
-
-        if (matchingMoves.isEmpty()) {
-            throw new NoMoveFoundException("No legal move for " + from + " -> " + to);
-        }
-
-        Move selected = selectMoveForPromotion(matchingMoves, promotion, from, to);
+        Move selected = LegalMoveResolver.resolveCoordinates(game, from, to, promotion);
         return applyMove(selected);
     }
 
-    /**
-     * Performs the select move for promotion operation.
-     * @param matchingMoves the matching moves
-     * @param promotion the promotion
-     * @param from the from
-     * @param to the to
-     * @return the result of the operation
-     */
-    private Move selectMoveForPromotion(List<Move> matchingMoves, String promotion, String from, String to)
-            throws NoMoveFoundException {
-
-        String promotionLabel = normalizePromotion(promotion);
-
-        if (promotionLabel == null) {
-            return matchingMoves.get(0);
-        }
-
-        for (Move move : matchingMoves) {
-            if (!(move instanceof Promotion)) {
-                continue;
-            }
-
-            Promotion promotionMove = (Promotion) move;
-            if (promotionMove.getPromotedPiece() == null
-                    || promotionMove.getPromotedPiece().getType() == null) {
-                continue;
-            }
-
-            if (promotionLabel.equals(promotionMove.getPromotedPiece().getType().label)) {
-                return move;
-            }
-        }
-
-        throw new NoMoveFoundException(
-                "No legal promotion move for " + from + " -> " + to + " with promotion " + promotion);
-    }
-
-    /**
-     * Performs the normalize promotion operation.
-     * @param promotion the promotion
-     * @return the result of the operation
-     */
-    private String normalizePromotion(String promotion) {
-        if (promotion == null || promotion.isBlank()) {
-            return null;
-        }
-
-        String normalized = promotion.trim().toLowerCase(Locale.ROOT);
-
-        switch (normalized) {
-            case "q":
-            case "queen":
-                return "q";
-            case "r":
-            case "rook":
-                return "r";
-            case "b":
-            case "bishop":
-                return "b";
-            case "n":
-            case "knight":
-                return "n";
-            default:
-                return normalized;
-        }
-    }
 
     /**
      * Returns the current position string.
