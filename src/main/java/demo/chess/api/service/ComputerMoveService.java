@@ -152,14 +152,6 @@ public class ComputerMoveService {
     }
 
     /**
-     * Performs the make black computer move operation.
-     * @return the result of the operation
-     */
-    public MoveResultDto makeBlackComputerMove() throws NoMoveFoundException, IOException, InterruptedException, ExecutionException {
-        return makeComputerMove();
-    }
-
-    /**
      * Returns the player engine snapshot.
      * @param color the color
      * @return the result of the operation

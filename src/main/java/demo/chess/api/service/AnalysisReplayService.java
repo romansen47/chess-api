@@ -213,7 +213,7 @@ public class AnalysisReplayService {
         try {
             DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(effectivePath);
             engine.setManagementLabel("deep analysis");
-            return new DeepAnalysisEngineSelection(engine, effectivePath);
+            return new DeepAnalysisEngineSelection(engine);
         } catch (Exception ex) {
             throw new IllegalStateException("Could not start deep analysis engine at " + effectivePath, ex);
         }
@@ -422,12 +422,9 @@ public class AnalysisReplayService {
 
     private static class DeepAnalysisEngineSelection {
         private final DeepAnalysisEngine engine;
-        @SuppressWarnings("unused")
-        private final String enginePath;
 
-        private DeepAnalysisEngineSelection(DeepAnalysisEngine engine, String enginePath) {
+        private DeepAnalysisEngineSelection(DeepAnalysisEngine engine) {
             this.engine = engine;
-            this.enginePath = enginePath;
         }
     }
 
