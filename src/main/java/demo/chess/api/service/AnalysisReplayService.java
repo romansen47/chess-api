@@ -74,13 +74,13 @@ public class AnalysisReplayService {
                 engineProfileId,
                 depth,
                 moveTimeSeconds);
-        DeepAnalysisEngineSelection engineSelection = createDeepAnalysisEngine(engineConfig.getEngine());
+        DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine(engineConfig.getEngine());
         String engineName = engineConfig.getEngineName();
 
         AnalysisReplaySession newSession = new AnalysisReplaySession(
                 moveListSnapshot,
                 Simulation.createSimulation(),
-                engineSelection.engine,
+                deepAnalysisEngine,
                 engineConfig,
                 engineName);
 
@@ -162,26 +162,6 @@ public class AnalysisReplayService {
                 done ? "Analysis replay finished." : null);
     }
 
-    /**
-     * Performs the state operation.
-     * @return the result of the operation
-     */
-    public synchronized AnalysisReplayStepDto state() {
-        if (session == null) {
-            return inactiveStep("No active analysis replay.");
-        }
-
-        return toStepDto(
-                session,
-                !session.active,
-                null,
-                null,
-                null,
-                latestEvaluation(session),
-                latestBar(session),
-                latestDepth(session),
-                null);
-    }
 
     /**
      * Cancels the current analysis replay.
@@ -206,14 +186,14 @@ public class AnalysisReplayService {
                 "Analysis replay cancelled.");
     }
 
-    private DeepAnalysisEngineSelection createDeepAnalysisEngine(String enginePath) {
+    private DeepAnalysisEngine createDeepAnalysisEngine(String enginePath) {
         String effectivePath = enginePath == null || enginePath.isBlank()
                 ? engineSettingsService.getDefaultEnginePath()
                 : enginePath.trim();
         try {
             DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(effectivePath);
             engine.setManagementLabel("deep analysis");
-            return new DeepAnalysisEngineSelection(engine);
+            return engine;
         } catch (Exception ex) {
             throw new IllegalStateException("Could not start deep analysis engine at " + effectivePath, ex);
         }
@@ -326,7 +306,6 @@ public class AnalysisReplayService {
         return new AnalysisEvaluation(100.0, 1.0, latestDepth(source), List.of());
     }
 
-    
 
     private double latestEvaluation(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
@@ -412,13 +391,6 @@ public class AnalysisReplayService {
         }
     }
 
-    private static class DeepAnalysisEngineSelection {
-        private final DeepAnalysisEngine engine;
-
-        private DeepAnalysisEngineSelection(DeepAnalysisEngine engine) {
-            this.engine = engine;
-        }
-    }
 
     private static class AnalysisEvaluation {
         private final double evaluation;

@@ -14,7 +14,6 @@ import demo.chess.api.dto.EngineLineDto;
 import demo.chess.definitions.engines.EngineConfig;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.EvaluationEngine;
-import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
@@ -98,57 +97,6 @@ public class EvaluationService {
                 engineRuntimeSelectionService.getEvaluationEngineName());
     }
 
-    /**
-     * Evaluates the game for analysis.
-     * @param game the game
-     * @param engineConfig the engine config
-     * @param moveTimeMillis the move time millis
-     * @return the result of the operation
-     */
-    public synchronized EngineEvaluationDto evaluateGameForAnalysis(
-            Game game,
-            UciEngineConfig engineConfig,
-            int moveTimeMillis) {
-        EvaluationEngine engine = getEvaluationEngine();
-        int safeMoveTimeMillis = Math.max(100, moveTimeMillis);
-
-        try {
-            engine.clearChachedLines();
-            engine.getBestLines(game, engineConfig);
-            Thread.sleep(safeMoveTimeMillis);
-            List<EngineLine> bestLines = engine.getBestLines(game, engineConfig);
-            engine.stopEvaluation();
-
-            if (bestLines == null || bestLines.isEmpty()) {
-                return new EngineEvaluationDto(0.0, 0.5, List.of());
-            }
-
-            double eval = bestLines.get(0).getEvaluation();
-            double bar = EvaluationBarMapper.toBar(eval);
-            List<EngineLineDto> lines = new ArrayList<>();
-
-            for (EngineLine line : bestLines) {
-                Game displayGame = Simulation.forkDummyFrom(game.getMoveList());
-                lines.add(engineLineDisplayService.toDto(displayGame, line));
-            }
-
-            return new EngineEvaluationDto(eval, bar, lines);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            try {
-                engine.stopEvaluation();
-            } catch (Exception ignored) {
-            }
-            return new EngineEvaluationDto(0.0, 0.5, List.of());
-        } catch (Exception e) {
-            logger.error("Engine error while replay-analyzing position: " + e.getMessage());
-            try {
-                engine.stopEvaluation();
-            } catch (Exception ignored) {
-            }
-            return new EngineEvaluationDto(0.0, 0.5, List.of());
-        }
-    }
 
     /**
      * Resets the for new game.
