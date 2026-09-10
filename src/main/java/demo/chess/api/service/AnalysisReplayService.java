@@ -12,24 +12,17 @@ import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.dto.BoardDto;
 import demo.chess.api.dto.EngineLineDto;
-import demo.chess.definitions.board.Board;
-import demo.chess.definitions.Color;
-import demo.chess.definitions.PieceType;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
-import demo.chess.definitions.fields.Field;
-import demo.chess.definitions.moves.Castling;
-import demo.chess.definitions.moves.EnPassant;
 import demo.chess.definitions.moves.Move;
-import demo.chess.definitions.moves.Promotion;
-import demo.chess.definitions.pieces.Piece;
 import demo.chess.definitions.players.Player;
 import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
+import demo.chess.notation.PgnNotation;
 
 @Service
 public class AnalysisReplayService {
@@ -38,6 +31,7 @@ public class AnalysisReplayService {
     private final EngineSettingsService engineSettingsService;
     private final EvaluationService evaluationService;
     private final UciGameService uciGameService;
+    private final EngineLineDisplayService engineLineDisplayService;
     private AnalysisReplaySession session;
 
     /**
@@ -46,16 +40,19 @@ public class AnalysisReplayService {
      * @param engineSettingsService the engine settings service
      * @param evaluationService the evaluation service
      * @param uciGameService the uci game service
+     * @param engineLineDisplayService canonical engine-line display converter
      */
     public AnalysisReplayService(
             GameService gameService,
             EngineSettingsService engineSettingsService,
             EvaluationService evaluationService,
-            UciGameService uciGameService) {
+            UciGameService uciGameService,
+            EngineLineDisplayService engineLineDisplayService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
         this.evaluationService = evaluationService;
         this.uciGameService = uciGameService;
+        this.engineLineDisplayService = engineLineDisplayService;
     }
 
     /**
@@ -112,18 +109,27 @@ public class AnalysisReplayService {
         if (session.currentPly >= session.originalMoves.size()) {
             session.active = false;
             closeSessionEngine();
-            return toStepDto(session, true, null, null, null, latestEvaluation(session), latestBar(session), latestDepth(session),
+            return toStepDto(
+                    session,
+                    true,
+                    null,
+                    null,
+                    null,
+                    latestEvaluation(session),
+                    latestBar(session),
+                    latestDepth(session),
                     "Analysis replay finished.");
         }
 
         Move originalMove = session.originalMoves.get(session.currentPly);
         Move replayMove = session.replayGame.getPlayer().getMoveInSimulation(session.replayGame, originalMove);
+        if (replayMove == null) {
+            throw new NoMoveFoundException("Could not map analysis replay move: " + originalMove);
+        }
 
         String from = replayMove.getSource() != null ? replayMove.getSource().getName() : null;
         String to = replayMove.getTarget() != null ? replayMove.getTarget().getName() : null;
-        String san = originalMove.toString();
-
-        session.replayGame.apply(replayMove);
+        String san = PgnNotation.toDisplayNotationAndApply(session.replayGame, replayMove);
         session.currentPly++;
 
         AnalysisEvaluation evaluation = analyzeCurrentReplayPosition(session);
@@ -178,8 +184,8 @@ public class AnalysisReplayService {
     }
 
     /**
-     * Returns whether this object can cel.
-     * @return true when the condition is satisfied; otherwise false
+     * Cancels the current analysis replay.
+     * @return current replay state
      */
     public synchronized AnalysisReplayStepDto cancel() {
         if (session == null) {
@@ -200,11 +206,6 @@ public class AnalysisReplayService {
                 "Analysis replay cancelled.");
     }
 
-    /**
-     * Creates the deep analysis engine.
-     * @param enginePath the engine path
-     * @return the result of the operation
-     */
     private DeepAnalysisEngineSelection createDeepAnalysisEngine(String enginePath) {
         String effectivePath = enginePath == null || enginePath.isBlank()
                 ? engineSettingsService.getDefaultEnginePath()
@@ -218,12 +219,8 @@ public class AnalysisReplayService {
         }
     }
 
-    /**
-     * Performs the analyze current replay position operation.
-     * @param source the source
-     * @return the result of the operation
-     */
-    private AnalysisEvaluation analyzeCurrentReplayPosition(AnalysisReplaySession source)  throws NoMoveFoundException{
+    private AnalysisEvaluation analyzeCurrentReplayPosition(AnalysisReplaySession source)
+            throws NoMoveFoundException {
         AnalysisEvaluation terminalEvaluation = evaluateTerminalPosition(source);
         if (terminalEvaluation != null) {
             return terminalEvaluation;
@@ -245,20 +242,8 @@ public class AnalysisReplayService {
 
             List<EngineLineDto> lines = new ArrayList<>();
             for (EngineLine line : bestLines) {
-                double lineEval = line.getEvaluation();
-                int lineDepth = line.getDepth();
-                Integer mateDistance = line.getMateDistance();
-                String movesUci = line.getMoves();
-                EngineLineDisplayData displayData = convertEngineLine(
-                        Simulation.forkDummyFrom(source.replayGame.getMoveList()),
-                        movesUci);
-                double roundedEval = Math.round(lineEval * 100.0) / 100.0;
-                lines.add(new EngineLineDto(
-                        roundedEval,
-                        lineDepth,
-                        mateDistance,
-                        displayData.moves,
-                        displayData.positions));
+                Game displayGame = Simulation.forkDummyFrom(source.replayGame.getMoveList());
+                lines.add(engineLineDisplayService.toDto(displayGame, line));
             }
 
             return new AnalysisEvaluation(eval, bar, depth, lines);
@@ -272,11 +257,6 @@ public class AnalysisReplayService {
         }
     }
 
-    /**
-     * Evaluates the terminal position.
-     * @param source the source
-     * @return the result of the operation
-     */
     private AnalysisEvaluation evaluateTerminalPosition(AnalysisReplaySession source) {
         if (source == null || source.replayGame == null) {
             return null;
@@ -290,11 +270,6 @@ public class AnalysisReplayService {
         return evaluateTerminalSimulationPosition(source);
     }
 
-    /**
-     * Evaluates the explicit terminal state.
-     * @param source the source
-     * @return the result of the operation
-     */
     private AnalysisEvaluation evaluateExplicitTerminalState(AnalysisReplaySession source) {
         State state = source.replayGame.getState();
         if (state == null) {
@@ -318,11 +293,6 @@ public class AnalysisReplayService {
         return null;
     }
 
-    /**
-     * Evaluates the terminal simulation position.
-     * @param source the source
-     * @return the result of the operation
-     */
     private AnalysisEvaluation evaluateTerminalSimulationPosition(AnalysisReplaySession source) {
         Player playerToMove = source.replayGame.getPlayer();
         if (playerToMove == null || playerToMove.getKing() == null || playerToMove.getKing().getField() == null) {
@@ -356,303 +326,6 @@ public class AnalysisReplayService {
         return new AnalysisEvaluation(100.0, 1.0, latestDepth(source), List.of());
     }
 
-    /**
-     * Converts the engine line.
-     * @param currentGame the current game
-     * @param uciMoves the uci moves
-     * @return the result of the operation
-     */
-    private EngineLineDisplayData convertEngineLine(Game currentGame, String uciMoves) {
-        if (uciMoves == null || uciMoves.isBlank()) {
-            return new EngineLineDisplayData("", currentGame != null ? List.of(toPositionString(currentGame)) : List.of());
-        }
-
-        if (currentGame == null) {
-            return new EngineLineDisplayData(uciMoves, List.of());
-        }
-
-        try {
-            StringBuilder result = new StringBuilder();
-            List<String> positions = new ArrayList<>();
-            positions.add(toPositionString(currentGame));
-
-            String[] tokens = uciMoves.split("\\s+");
-            for (String token : tokens) {
-                if (token == null || token.isBlank()) {
-                    continue;
-                }
-
-                Move move = findMoveByUci(currentGame, token);
-                if (move == null) {
-                    break;
-                }
-
-                String displayMove = toDisplaySan(currentGame, move);
-                if (!displayMove.isBlank()) {
-                    if (result.length() > 0) {
-                        result.append(' ');
-                    }
-                    result.append(displayMove);
-                }
-
-                currentGame.apply(move);
-                positions.add(toPositionString(currentGame));
-            }
-
-            return new EngineLineDisplayData(result.length() > 0 ? result.toString() : uciMoves, positions);
-        } catch (Exception ignored) {
-            return new EngineLineDisplayData(uciMoves, List.of(toPositionString(currentGame)));
-        }
-    }
-
-    /**
-     * Performs the to position string operation.
-     * @param game the game
-     * @return the result of the operation
-     */
-    private String toPositionString(Game game) {
-        if (game == null || game.getChessBoard() == null) {
-            return "";
-        }
-
-        Board board = game.getChessBoard();
-        StringBuilder position = new StringBuilder(64);
-
-        for (int rank = 8; rank >= 1; rank--) {
-            for (int file = 1; file <= 8; file++) {
-                Field field = board.getField(file, rank);
-                Piece piece = field != null ? field.getPiece() : null;
-                position.append(toPositionChar(piece));
-            }
-        }
-
-        return position.toString();
-    }
-
-    /**
-     * Performs the to position char operation.
-     * @param piece the piece
-     * @return the result of the operation
-     */
-    private char toPositionChar(Piece piece) {
-        if (piece == null || piece.getType() == null) {
-            return '.';
-        }
-
-        char pieceChar;
-        switch (piece.getType()) {
-            case PAWN:
-                pieceChar = 'p';
-                break;
-            case KNIGHT:
-                pieceChar = 'n';
-                break;
-            case BISHOP:
-                pieceChar = 'b';
-                break;
-            case ROOK:
-                pieceChar = 'r';
-                break;
-            case QUEEN:
-                pieceChar = 'q';
-                break;
-            case KING:
-                pieceChar = 'k';
-                break;
-            default:
-                pieceChar = '.';
-        }
-
-        return piece.getColor() == Color.WHITE ? Character.toUpperCase(pieceChar) : pieceChar;
-    }
-
-    /**
-     * Finds the move by uci.
-     * @param game the game
-     * @param uci the uci
-     * @return the result of the operation
-     */
-    private Move findMoveByUci(Game game, String uci) {
-        if (game == null || uci == null || uci.isBlank()) {
-            return null;
-        }
-
-        try {
-            for (Move candidate : game.getPlayer().getValidMoves(game)) {
-                if (uci.equals(candidate.toString())) {
-                    return candidate;
-                }
-            }
-        } catch (Exception ignored) {
-        }
-
-        return null;
-    }
-
-    /**
-     * Performs the to display san operation.
-     * @param game the game
-     * @param move the move
-     * @return the result of the operation
-     */
-    private String toDisplaySan(Game game, Move move) {
-        if (move == null || move.getSource() == null || move.getTarget() == null || move.getPiece() == null) {
-            return "";
-        }
-
-        Field source = move.getSource();
-        Field target = move.getTarget();
-        Piece piece = move.getPiece();
-
-        if (move instanceof Castling) {
-            return target.getFile() > source.getFile() ? "0-0" : "0-0-0";
-        }
-
-        String piecePrefix = getPiecePrefix(piece);
-        String sourceDisambiguation = getSourceDisambiguation(game, move);
-        boolean capture = target.getPiece() != null || move instanceof EnPassant;
-        String captureMarker = capture ? "x" : "";
-        String targetName = target.toString();
-        String postFix = "";
-
-        if (piece.getType() == PieceType.PAWN && capture) {
-            sourceDisambiguation = source.toString().substring(0, 1);
-        }
-
-        if (move instanceof EnPassant) {
-            postFix = " e.p.";
-        }
-
-        if (move instanceof Promotion) {
-            Promotion promotion = (Promotion) move;
-            if (promotion.getPromotedPiece() != null) {
-                postFix = "=" + getPiecePrefix(promotion.getPromotedPiece());
-            }
-        }
-
-        return piecePrefix + sourceDisambiguation + captureMarker + targetName + postFix;
-    }
-
-    /**
-     * Returns the source disambiguation.
-     * @param game the game
-     * @param move the move
-     * @return the source disambiguation
-     */
-    private String getSourceDisambiguation(Game game, Move move) {
-        Piece piece = move.getPiece();
-        if (piece == null || piece.getType() == PieceType.PAWN || move.getTarget() == null) {
-            return "";
-        }
-
-        List<Move> competingMoves = new ArrayList<>();
-        try {
-            for (Move candidate : game.getPlayer().getValidMoves(game)) {
-                if (candidate.getPiece() == null
-                        || candidate.getSource() == null
-                        || candidate.getTarget() == null) {
-                    continue;
-                }
-
-                if (candidate.getSource().equals(move.getSource())
-                        && candidate.getTarget().equals(move.getTarget())) {
-                    continue;
-                }
-
-                if (candidate.getTarget().equals(move.getTarget())
-                        && candidate.getPiece().getType() == piece.getType()) {
-                    competingMoves.add(candidate);
-                }
-            }
-        } catch (Exception ignored) {
-            return "";
-        }
-
-        if (competingMoves.isEmpty()) {
-            return "";
-        }
-
-        boolean sameFileExists = competingMoves.stream()
-                .anyMatch(candidate -> candidate.getSource().getFile() == move.getSource().getFile());
-        boolean sameRankExists = competingMoves.stream()
-                .anyMatch(candidate -> candidate.getSource().getRank() == move.getSource().getRank());
-
-        if (sameFileExists && sameRankExists) {
-            return move.getSource().toString();
-        }
-
-        if (sameFileExists) {
-            return move.getSource().toString().substring(1, 2);
-        }
-
-        return move.getSource().toString().substring(0, 1);
-    }
-
-    /**
-     * Returns the piece prefix.
-     * @param piece the piece
-     * @return the piece prefix
-     */
-    private String getPiecePrefix(Piece piece) {
-        if (piece == null || piece.getType() == null || piece.getType() == PieceType.PAWN) {
-            return "";
-        }
-
-        return getUnicodeSymbol(piece.getType(), piece.getColor());
-    }
-
-    /**
-     * Returns the unicode symbol.
-     * @param pieceType the piece type
-     * @param color the color
-     * @return the unicode symbol
-     */
-    private String getUnicodeSymbol(PieceType pieceType, Color color) {
-        if (pieceType == null || color == null) {
-            return "";
-        }
-
-        switch (color) {
-            case WHITE:
-                switch (pieceType) {
-                    case KING:
-                        return "♔";
-                    case QUEEN:
-                        return "♕";
-                    case ROOK:
-                        return "♖";
-                    case BISHOP:
-                        return "♗";
-                    case KNIGHT:
-                        return "♘";
-                    default:
-                        return "";
-                }
-            case BLACK:
-                switch (pieceType) {
-                    case KING:
-                        return "♚";
-                    case QUEEN:
-                        return "♛";
-                    case ROOK:
-                        return "♜";
-                    case BISHOP:
-                        return "♝";
-                    case KNIGHT:
-                        return "♞";
-                    default:
-                        return "";
-                }
-            default:
-                return "";
-        }
-    }
-
-    /**
-     * Maps the eval to bar.
-     * @param eval the eval
-     * @return the result of the operation
-     */
     private double mapEvalToBar(double eval) {
         if (eval >= 99d) {
             return 1.0;
@@ -663,11 +336,6 @@ public class AnalysisReplayService {
         return 0.5 + Math.atan(Math.tan(Math.PI / 10.0) * eval) / Math.PI;
     }
 
-    /**
-     * Performs the latest evaluation operation.
-     * @param source the source
-     * @return the result of the operation
-     */
     private double latestEvaluation(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
             return 0.0;
@@ -675,11 +343,6 @@ public class AnalysisReplayService {
         return source.profile.get(source.profile.size() - 1).getEvaluation();
     }
 
-    /**
-     * Performs the latest bar operation.
-     * @param source the source
-     * @return the result of the operation
-     */
     private double latestBar(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
             return 0.5;
@@ -687,11 +350,6 @@ public class AnalysisReplayService {
         return source.profile.get(source.profile.size() - 1).getBar();
     }
 
-    /**
-     * Performs the latest depth operation.
-     * @param source the source
-     * @return the result of the operation
-     */
     private int latestDepth(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
             return 0;
@@ -699,11 +357,6 @@ public class AnalysisReplayService {
         return source.profile.get(source.profile.size() - 1).getDepth();
     }
 
-    /**
-     * Performs the inactive step operation.
-     * @param message the message
-     * @return the result of the operation
-     */
     private AnalysisReplayStepDto inactiveStep(String message) {
         return new AnalysisReplayStepDto(
                 false,
@@ -722,19 +375,6 @@ public class AnalysisReplayService {
                 message);
     }
 
-    /**
-     * Performs the to step dto operation.
-     * @param source the source
-     * @param done the done
-     * @param from the from
-     * @param to the to
-     * @param san the san
-     * @param evaluation the evaluation
-     * @param bar the bar
-     * @param depth the depth
-     * @param message the message
-     * @return the result of the operation
-     */
     private AnalysisReplayStepDto toStepDto(
             AnalysisReplaySession source,
             boolean done,
@@ -763,22 +403,13 @@ public class AnalysisReplayService {
                 message);
     }
 
-    /**
-     * Closes the session engine.
-     */
     private void closeSessionEngine() {
         if (session == null || session.engine == null) {
             return;
         }
-        // DeepAnalysisUciEngine.stopEvaluation() is terminal and closes the
-        // underlying UCI process. Avoid a second close/quit here.
         safeStop(session.engine);
     }
 
-    /**
-     * Performs the safe stop operation.
-     * @param engine the engine
-     */
     private void safeStop(DeepAnalysisEngine engine) {
         if (engine == null) {
             return;
@@ -791,31 +422,12 @@ public class AnalysisReplayService {
 
     private static class DeepAnalysisEngineSelection {
         private final DeepAnalysisEngine engine;
+        @SuppressWarnings("unused")
         private final String enginePath;
 
-        /**
-         * Creates a new DeepAnalysisEngineSelection instance.
-         * @param engine the engine
-         * @param enginePath the engine path
-         */
         private DeepAnalysisEngineSelection(DeepAnalysisEngine engine, String enginePath) {
             this.engine = engine;
             this.enginePath = enginePath;
-        }
-    }
-
-    private static class EngineLineDisplayData {
-        private final String moves;
-        private final List<String> positions;
-
-        /**
-         * Creates a new EngineLineDisplayData instance.
-         * @param moves the moves
-         * @param positions the positions
-         */
-        private EngineLineDisplayData(String moves, List<String> positions) {
-            this.moves = moves;
-            this.positions = positions != null ? positions : List.of();
         }
     }
 
@@ -825,13 +437,6 @@ public class AnalysisReplayService {
         private final int depth;
         private final List<EngineLineDto> lines;
 
-        /**
-         * Creates a new AnalysisEvaluation instance.
-         * @param evaluation the evaluation
-         * @param bar the bar
-         * @param depth the depth
-         * @param lines the lines
-         */
         private AnalysisEvaluation(double evaluation, double bar, int depth, List<EngineLineDto> lines) {
             this.evaluation = evaluation;
             this.bar = bar;
@@ -850,14 +455,6 @@ public class AnalysisReplayService {
         private int currentPly = 0;
         private boolean active = true;
 
-        /**
-         * Creates a new AnalysisReplaySession instance.
-         * @param originalMoves the original moves
-         * @param replayGame the replay game
-         * @param engine the engine
-         * @param engineConfig the engine config
-         * @param engineName the engine name
-         */
         private AnalysisReplaySession(
                 List<Move> originalMoves,
                 Game replayGame,
