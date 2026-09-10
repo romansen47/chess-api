@@ -15,11 +15,8 @@ import demo.chess.api.dto.GameSnapshotDto;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.api.dto.UciGameMoveDto;
 import demo.chess.definitions.Color;
-import demo.chess.definitions.board.Board;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
-import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Move;
-import demo.chess.definitions.pieces.Piece;
 import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
@@ -69,7 +66,7 @@ public class UciGameService {
         return new UciGameDto(
                 importedGame.getMoveList().size(),
                 sideToMove,
-                toPositionString(importedGame),
+                BoardPositionSerializer.toPositionString(importedGame),
                 moveDtos,
                 playerName(pgnTags.get("White"), "White"),
                 playerName(pgnTags.get("Black"), "Black"));
@@ -128,7 +125,7 @@ public class UciGameService {
                 new UciGameDto(
                         originalMoves.size(),
                         sideToMove,
-                        toPositionString(sourceGame),
+                        BoardPositionSerializer.toPositionString(sourceGame),
                         moveDtos,
                         whitePlayerName,
                         blackPlayerName));
@@ -158,7 +155,7 @@ public class UciGameService {
                     ply,
                     originalMove.toString(),
                     san,
-                    toPositionString(replayGame)));
+                    BoardPositionSerializer.toPositionString(replayGame)));
         }
 
         return result;
@@ -238,51 +235,7 @@ public class UciGameService {
         return "*";
     }
 
-    private String toPositionString(Game game) {
-        Board board = game.getChessBoard();
-        StringBuilder position = new StringBuilder(64);
+    
 
-        for (int rank = 8; rank >= 1; rank--) {
-            for (int file = 1; file <= 8; file++) {
-                Field field = board.getField(file, rank);
-                Piece piece = field != null ? field.getPiece() : null;
-                position.append(toPositionChar(piece));
-            }
-        }
-
-        return position.toString();
-    }
-
-    private char toPositionChar(Piece piece) {
-        if (piece == null || piece.getType() == null) {
-            return '.';
-        }
-
-        char pieceChar;
-        switch (piece.getType()) {
-            case PAWN:
-                pieceChar = 'p';
-                break;
-            case KNIGHT:
-                pieceChar = 'n';
-                break;
-            case BISHOP:
-                pieceChar = 'b';
-                break;
-            case ROOK:
-                pieceChar = 'r';
-                break;
-            case QUEEN:
-                pieceChar = 'q';
-                break;
-            case KING:
-                pieceChar = 'k';
-                break;
-            default:
-                pieceChar = '.';
-                break;
-        }
-
-        return piece.getColor() == Color.WHITE ? Character.toUpperCase(pieceChar) : pieceChar;
-    }
+    
 }

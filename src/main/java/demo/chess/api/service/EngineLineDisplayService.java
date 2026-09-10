@@ -6,12 +6,8 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineLineDto;
-import demo.chess.definitions.Color;
-import demo.chess.definitions.board.Board;
 import demo.chess.definitions.engines.EngineLine;
-import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Move;
-import demo.chess.definitions.pieces.Piece;
 import demo.chess.game.Game;
 import demo.chess.notation.PgnNotation;
 
@@ -50,7 +46,7 @@ public class EngineLineDisplayService {
         if (uciMoves == null || uciMoves.isBlank()) {
             return new EngineLineDisplayData(
                     "",
-                    currentGame != null ? List.of(toPositionString(currentGame)) : List.of());
+                    currentGame != null ? List.of(BoardPositionSerializer.toPositionString(currentGame)) : List.of());
         }
 
         if (currentGame == null) {
@@ -60,7 +56,7 @@ public class EngineLineDisplayService {
         try {
             StringBuilder result = new StringBuilder();
             List<String> positions = new ArrayList<>();
-            positions.add(toPositionString(currentGame));
+            positions.add(BoardPositionSerializer.toPositionString(currentGame));
 
             for (String token : uciMoves.split("\\s+")) {
                 if (token == null || token.isBlank()) {
@@ -79,7 +75,7 @@ public class EngineLineDisplayService {
                     }
                     result.append(displayMove);
                 }
-                positions.add(toPositionString(currentGame));
+                positions.add(BoardPositionSerializer.toPositionString(currentGame));
             }
 
             return new EngineLineDisplayData(
@@ -88,7 +84,7 @@ public class EngineLineDisplayService {
         } catch (Exception ignored) {
             return new EngineLineDisplayData(
                     uciMoves,
-                    List.of(toPositionString(currentGame)));
+                    List.of(BoardPositionSerializer.toPositionString(currentGame)));
         }
     }
 
@@ -108,56 +104,9 @@ public class EngineLineDisplayService {
         return null;
     }
 
-    private String toPositionString(Game game) {
-        if (game == null || game.getChessBoard() == null) {
-            return "";
-        }
+    
 
-        Board board = game.getChessBoard();
-        StringBuilder position = new StringBuilder(64);
-        for (int rank = 8; rank >= 1; rank--) {
-            for (int file = 1; file <= 8; file++) {
-                Field field = board.getField(file, rank);
-                Piece piece = field != null ? field.getPiece() : null;
-                position.append(toPositionChar(piece));
-            }
-        }
-        return position.toString();
-    }
-
-    private char toPositionChar(Piece piece) {
-        if (piece == null || piece.getType() == null) {
-            return '.';
-        }
-
-        char pieceChar;
-        switch (piece.getType()) {
-            case PAWN:
-                pieceChar = 'p';
-                break;
-            case KNIGHT:
-                pieceChar = 'n';
-                break;
-            case BISHOP:
-                pieceChar = 'b';
-                break;
-            case ROOK:
-                pieceChar = 'r';
-                break;
-            case QUEEN:
-                pieceChar = 'q';
-                break;
-            case KING:
-                pieceChar = 'k';
-                break;
-            default:
-                pieceChar = '.';
-        }
-
-        return piece.getColor() == Color.WHITE
-                ? Character.toUpperCase(pieceChar)
-                : pieceChar;
-    }
+    
 
     private static final class EngineLineDisplayData {
         private final String moves;

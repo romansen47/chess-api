@@ -367,58 +367,7 @@ public class GameService {
      * @return the current position string
      */
     public synchronized String getCurrentPositionString() {
-        Board board = game.getChessBoard();
-        StringBuilder position = new StringBuilder(64);
-
-        for (int rank = 8; rank >= 1; rank--) {
-            for (int file = 1; file <= 8; file++) {
-                Field field = board.getField(file, rank);
-                Piece piece = field != null ? field.getPiece() : null;
-                position.append(toPositionChar(piece));
-            }
-        }
-
-        return position.toString();
-    }
-
-    /**
-     * Performs the to position char operation.
-     * @param piece the piece
-     * @return the result of the operation
-     */
-    private char toPositionChar(Piece piece) {
-        if (piece == null || piece.getType() == null) {
-            return '.';
-        }
-
-        char pieceChar;
-        switch (piece.getType()) {
-            case PAWN:
-                pieceChar = 'p';
-                break;
-            case KNIGHT:
-                pieceChar = 'n';
-                break;
-            case BISHOP:
-                pieceChar = 'b';
-                break;
-            case ROOK:
-                pieceChar = 'r';
-                break;
-            case QUEEN:
-                pieceChar = 'q';
-                break;
-            case KING:
-                pieceChar = 'k';
-                break;
-            default:
-                pieceChar = '?';
-                break;
-        }
-
-        return piece.getColor() == Color.WHITE
-                ? Character.toUpperCase(pieceChar)
-                : pieceChar;
+        return BoardPositionSerializer.toPositionString(game);
     }
 
     /**
