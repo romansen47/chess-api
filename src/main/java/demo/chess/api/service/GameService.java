@@ -18,7 +18,6 @@ import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Move;
 import demo.chess.definitions.pieces.Piece;
-import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
 import demo.chess.game.LegalMoveResolver;
 
@@ -54,7 +53,8 @@ public class GameService {
         this.game = createGame(
                 this.gameSettings.getTimeForEachPlayerSeconds(),
                 this.gameSettings.getIncrementForWhiteSeconds(),
-                this.gameSettings.getIncrementForBlackSeconds());
+                this.gameSettings.getIncrementForBlackSeconds(),
+                this.gameSettings.getAdditionalTimeAfter40MovesSeconds());
     }
 
     /**
@@ -77,7 +77,8 @@ public class GameService {
         this.game = createGame(
                 normalizedSettings.getTimeForEachPlayerSeconds(),
                 normalizedSettings.getIncrementForWhiteSeconds(),
-                normalizedSettings.getIncrementForBlackSeconds());
+                normalizedSettings.getIncrementForBlackSeconds(),
+                normalizedSettings.getAdditionalTimeAfter40MovesSeconds());
 
         return copyGameSettings(this.gameSettings);
     }
@@ -170,58 +171,19 @@ public class GameService {
      * @param blackIncrementSeconds the black increment seconds
      * @return the result of the operation
      */
-    private Game createGame(int timeSeconds, int whiteIncrementSeconds, int blackIncrementSeconds) {
+    private Game createGame(
+            int timeSeconds,
+            int whiteIncrementSeconds,
+            int blackIncrementSeconds,
+            int additionalTimeAfter40MovesSeconds) {
         Game createdGame = new ChessAdmin().chessGame(timeSeconds);
-
-        createdGame.setIncrementForWhite(whiteIncrementSeconds);
-        createdGame.setIncrementForBlack(blackIncrementSeconds);
-
-        setupClocks(createdGame, whiteIncrementSeconds, blackIncrementSeconds);
-
+        createdGame.configureTimeControl(
+                whiteIncrementSeconds,
+                blackIncrementSeconds,
+                additionalTimeAfter40MovesSeconds);
         return createdGame;
     }
 
-    /**
-     * Sets the up clocks.
-     * @param chessGame the chess game
-     * @param whiteIncrementSeconds the white increment seconds
-     * @param blackIncrementSeconds the black increment seconds
-     */
-    private void setupClocks(Game chessGame, int whiteIncrementSeconds, int blackIncrementSeconds) {
-        chessGame.getWhitePlayer().setupClock(
-                chessGame.getTimeForEachPlayer(),
-                whiteIncrementSeconds,
-                () -> {
-                    chessGame.setState(State.LOST_ON_TIME);
-                    stopClocks(chessGame);
-                    System.out.println("[GameService] White lost on time.");
-                });
-
-        chessGame.getBlackPlayer().setupClock(
-                chessGame.getTimeForEachPlayer(),
-                blackIncrementSeconds,
-                () -> {
-                    chessGame.setState(State.LOST_ON_TIME);
-                    stopClocks(chessGame);
-                    System.out.println("[GameService] Black lost on time.");
-                });
-    }
-
-    /**
-     * Stops the clocks.
-     * @param chessGame the chess game
-     */
-    private void stopClocks(Game chessGame) {
-        if (chessGame.getWhitePlayer().getChessClock().isStarted()
-                && !chessGame.getWhitePlayer().getChessClock().isStopped()) {
-            chessGame.getWhitePlayer().getChessClock().stop();
-        }
-
-        if (chessGame.getBlackPlayer().getChessClock().isStarted()
-                && !chessGame.getBlackPlayer().getChessClock().isStopped()) {
-            chessGame.getBlackPlayer().getChessClock().stop();
-        }
-    }
 
     /**
      * Applies the move.

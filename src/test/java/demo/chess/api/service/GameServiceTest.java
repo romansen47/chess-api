@@ -83,6 +83,28 @@ class GameServiceTest {
     }
 
     /**
+     * Verifies that the complete configured time control is passed to the core game.
+     */
+    @Test
+    void completeTimeControlIsConfiguredInCoreGame() {
+        service = new GameService();
+
+        service.startNewGame(new GameSettingsDto(
+                120,
+                2,
+                3,
+                30,
+                "WHITE",
+                0L));
+
+        Game game = service.getCurrentGame();
+        assertEquals(2, game.getIncrementForWhite());
+        assertEquals(3, game.getIncrementForBlack());
+        assertEquals(30, game.getWhitePlayer().getAdditionalTime());
+        assertEquals(30, game.getBlackPlayer().getAdditionalTime());
+    }
+
+    /**
      * Verifies that callers cannot mutate the service state through the returned settings DTO.
      */
     @Test

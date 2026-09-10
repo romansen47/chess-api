@@ -229,13 +229,11 @@ public class UciGameService {
                 || state == State.DRAW_BY_THREEFOLD_REPETITION) {
             return "1/2-1/2";
         }
-        if (state == State.LOST_ON_TIME && game.getPlayer() != null) {
-            return game.getPlayer().getColor() == Color.WHITE ? "0-1" : "1-0";
+        if (state == State.LOST_ON_TIME && game.getTimedOutColor() != null) {
+            return game.getTimedOutColor() == Color.WHITE ? "0-1" : "1-0";
         }
         return "*";
     }
 
-    
 
-    
 }

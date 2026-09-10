@@ -1,11 +1,11 @@
 package demo.chess.api.service;
 
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.ClockDto;
+import demo.chess.definitions.clocks.impl.ChessClock;
 import demo.chess.game.Game;
 
 @Service
@@ -48,12 +48,8 @@ public class ClockService {
                     null);
         }
 
-        int timeForEachPlayer = game.getTimeForEachPlayer();
-
-        int whiteTime = timeForEachPlayer
-                - (int) game.getWhitePlayer().getChessClock().getTime(TimeUnit.SECONDS);
-        int blackTime = timeForEachPlayer
-                - (int) game.getBlackPlayer().getChessClock().getTime(TimeUnit.SECONDS);
+        int whiteTime = remainingSeconds(game.getWhitePlayer().getChessClock());
+        int blackTime = remainingSeconds(game.getBlackPlayer().getChessClock());
 
         String sideToMove = game.getPlayer() != null && game.getPlayer().getColor() != null
                 ? game.getPlayer().getColor().name().toLowerCase(Locale.ROOT)
@@ -81,6 +77,23 @@ public class ClockService {
                 blackPlayerName,
                 whitePlayerEngineName,
                 blackPlayerEngineName);
+    }
+
+    /**
+     * Converts the core clock's remaining milliseconds to the whole seconds shown
+     * by the frontend. Rounding up preserves the existing countdown display.
+     *
+     * @param clock core-owned chess clock
+     * @return remaining display seconds
+     */
+    private int remainingSeconds(ChessClock clock) {
+        if (clock == null) {
+            return 0;
+        }
+
+        long remainingMillis = clock.getRemainingTimeMillis();
+        long seconds = (remainingMillis + 999L) / 1_000L;
+        return (int) Math.min(Integer.MAX_VALUE, seconds);
     }
 
     /**
