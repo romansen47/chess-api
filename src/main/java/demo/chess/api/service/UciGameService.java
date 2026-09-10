@@ -21,7 +21,6 @@ import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Move;
 import demo.chess.definitions.pieces.Piece;
 import demo.chess.definitions.states.State;
-import demo.chess.game.DummyGame;
 import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
@@ -45,11 +44,6 @@ public class UciGameService {
     private Game importedAnalysisGame;
     private Map<String, String> importedPgnTags = new LinkedHashMap<>();
 
-    /**
-     * Creates a new UciGameService instance.
-     * @param gameService the game service
-     * @param engineRuntimeSelectionService runtime engine profile selections
-     */
     public UciGameService(
             GameService gameService,
             EngineRuntimeSelectionService engineRuntimeSelectionService) {
@@ -57,11 +51,6 @@ public class UciGameService {
         this.engineRuntimeSelectionService = engineRuntimeSelectionService;
     }
 
-    /**
-     * Performs the import game operation.
-     * @param content the content
-     * @return the result of the operation
-     */
     public synchronized UciGameDto importGame(String content) throws NoMoveFoundException, IOException {
         List<String> uciMoves = gameLoader.parsePgnMoveList(content);
 
@@ -86,12 +75,6 @@ public class UciGameService {
                 playerName(pgnTags.get("Black"), "Black"));
     }
 
-    /**
-     * Performs the export game operation.
-     * @param whiteComputerControlled the white computer controlled
-     * @param blackComputerControlled the black computer controlled
-     * @return the result of the operation
-     */
     public synchronized String exportGame(boolean whiteComputerControlled, boolean blackComputerControlled)
             throws NoMoveFoundException, IOException {
         return gameSaver.toPgn(
@@ -99,10 +82,6 @@ public class UciGameService {
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled));
     }
 
-    /**
-     * Returns the analysis move list snapshot.
-     * @return the analysis move list snapshot
-     */
     public synchronized List<Move> getAnalysisMoveListSnapshot() {
         if (importedAnalysisGame != null) {
             return new ArrayList<>(importedAnalysisGame.getMoveList());
@@ -110,30 +89,15 @@ public class UciGameService {
         return gameService.getMoveListSnapshot();
     }
 
-    /**
-     * Returns whether this object has the imported game.
-     * @return true when the condition is satisfied; otherwise false
-     */
     public synchronized boolean hasImportedGame() {
         return importedAnalysisGame != null;
     }
 
-    /**
-     * Clears the imported game.
-     */
     public synchronized void clearImportedGame() {
         importedAnalysisGame = null;
         importedPgnTags = new LinkedHashMap<>();
     }
 
-    /**
-     * Returns a snapshot of the game currently represented by the frontend.
-     * For an imported PGN this is the analysis-only game; otherwise it is the live game.
-     *
-     * @return current frontend game snapshot
-     * @throws NoMoveFoundException if move replay fails
-     * @throws IOException if move notation cannot be reconstructed
-     */
     public synchronized GameSnapshotDto getCurrentGameSnapshot() throws NoMoveFoundException, IOException {
         boolean imported = importedAnalysisGame != null;
         Game sourceGame = imported ? importedAnalysisGame : gameService.getCurrentGame();
@@ -171,26 +135,24 @@ public class UciGameService {
     }
 
     /**
-     * Creates the move dtos.
-     * @param originalMoves the original moves
-     * @return the result of the operation
+     * Replays the move list once. The same simulation now supplies both canonical
+     * display notation and the board snapshot after each move.
      */
     private List<UciGameMoveDto> createMoveDtos(List<Move> originalMoves)
             throws NoMoveFoundException, IOException {
         List<UciGameMoveDto> result = new ArrayList<>();
         Simulation replayGame = Simulation.createSimulation();
-        DummyGame notationGame = Simulation.createDummySimulation();
 
         int ply = 0;
         for (Move originalMove : originalMoves) {
             ply++;
 
             Move replayMove = replayGame.getPlayer().getMoveInSimulation(replayGame, originalMove);
-            Move notationMove = notationGame.getPlayer().getMoveInSimulation(notationGame, originalMove);
-            String san = PgnNotation.toDisplayNotation(notationGame, notationMove);
+            if (replayMove == null) {
+                throw new NoMoveFoundException("Could not map replay move: " + originalMove);
+            }
 
-            replayGame.apply(replayMove);
-            notationGame.apply(notationMove);
+            String san = PgnNotation.toDisplayNotationAndApply(replayGame, replayMove);
 
             result.add(new UciGameMoveDto(
                     ply,
@@ -202,12 +164,6 @@ public class UciGameService {
         return result;
     }
 
-    /**
-     * Returns the pgn tags for export.
-     * @param whiteComputerControlled the white computer controlled
-     * @param blackComputerControlled the black computer controlled
-     * @return the pgn tags for export
-     */
     private Map<String, String> getPgnTagsForExport(
             boolean whiteComputerControlled,
             boolean blackComputerControlled) {
@@ -231,13 +187,6 @@ public class UciGameService {
         return tags;
     }
 
-    /**
-     * Performs the player name for export operation.
-     * @param game the game
-     * @param color the color
-     * @param computerControlled the computer controlled
-     * @return the result of the operation
-     */
     private String playerNameForExport(Game game, Color color, boolean computerControlled) {
         String fallback = color == Color.WHITE ? "White" : "Black";
 
@@ -257,12 +206,6 @@ public class UciGameService {
         return playerName(gamePlayerName, fallback);
     }
 
-    /**
-     * Performs the player name operation.
-     * @param name the name
-     * @param fallback the fallback
-     * @return the result of the operation
-     */
     private String playerName(String name, String fallback) {
         if (name == null || name.isBlank()
                 || "ChessGame".equals(name)
@@ -272,11 +215,6 @@ public class UciGameService {
         return name;
     }
 
-    /**
-     * Performs the game result operation.
-     * @param game the game
-     * @return the result of the operation
-     */
     private String gameResult(Game game) {
         if (game == null || game.getState() == null) {
             return "*";
@@ -300,11 +238,6 @@ public class UciGameService {
         return "*";
     }
 
-    /**
-     * Performs the to position string operation.
-     * @param game the game
-     * @return the result of the operation
-     */
     private String toPositionString(Game game) {
         Board board = game.getChessBoard();
         StringBuilder position = new StringBuilder(64);
@@ -320,11 +253,6 @@ public class UciGameService {
         return position.toString();
     }
 
-    /**
-     * Performs the to position char operation.
-     * @param piece the piece
-     * @return the result of the operation
-     */
     private char toPositionChar(Piece piece) {
         if (piece == null || piece.getType() == null) {
             return '.';
