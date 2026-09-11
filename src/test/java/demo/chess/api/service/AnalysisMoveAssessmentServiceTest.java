@@ -50,6 +50,39 @@ class AnalysisMoveAssessmentServiceTest {
     }
 
     @Test
+    void classifiesTemporaryVariationMoveWithoutPersistedGameMove()
+            throws Exception {
+        TestContext context = contextWithSingleMove();
+
+        Simulation variationRoot = Simulation.createSimulation();
+        Move e4 = LegalMoveResolver.resolveUci(variationRoot, "e2e4");
+        variationRoot.apply(e4);
+        Move e5 = LegalMoveResolver.resolveUci(variationRoot, "e7e5");
+        variationRoot.apply(e5);
+
+        List<EngineLine> finalLines = List.of(
+                line(3.0, 20, "d2d4"),
+                line(0.0, 20, "c2c3"),
+                line(-3.0, 20, "g1f3"));
+        when(context.engine.getBestLines(any(Game.class), any()))
+                .thenReturn(finalLines);
+
+        AnalysisMoveAssessmentService.Result result =
+                context.service.assessPosition(
+                        variationRoot,
+                        "g1f3",
+                        "variation:2:g1f3",
+                        -3.0);
+
+        assertTrue(result.ready());
+        assertEquals(20, result.depth());
+        assertNotNull(result.annotation());
+        assertEquals(
+                MoveAnnotationKind.BLUNDER,
+                result.annotation().getKind());
+    }
+
+    @Test
     void accumulatesLiveDepthSnapshotsForCoreDeepDiscovery()
             throws Exception {
         TestContext context = contextWithSingleMove();
