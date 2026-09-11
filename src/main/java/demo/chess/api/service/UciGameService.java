@@ -226,7 +226,8 @@ public class UciGameService {
         }
         if (state == State.STALEMATE
                 || state == State.DRAW_BY_50_MOVES_RULE
-                || state == State.DRAW_BY_THREEFOLD_REPETITION) {
+                || state == State.DRAW_BY_THREEFOLD_REPETITION
+                || state == State.DRAW_BY_INSUFFICIENT_MATERIAL) {
             return "1/2-1/2";
         }
         if (state == State.LOST_ON_TIME && game.getTimedOutColor() != null) {

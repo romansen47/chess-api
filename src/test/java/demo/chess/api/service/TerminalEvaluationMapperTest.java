@@ -18,6 +18,7 @@ class TerminalEvaluationMapperTest {
         assertEquals(Double.valueOf(0.0), TerminalEvaluationMapper.toEvaluation(State.STALEMATE));
         assertEquals(Double.valueOf(0.0), TerminalEvaluationMapper.toEvaluation(State.DRAW_BY_50_MOVES_RULE));
         assertEquals(Double.valueOf(0.0), TerminalEvaluationMapper.toEvaluation(State.DRAW_BY_THREEFOLD_REPETITION));
+        assertEquals(Double.valueOf(0.0), TerminalEvaluationMapper.toEvaluation(State.DRAW_BY_INSUFFICIENT_MATERIAL));
     }
 
     @Test

@@ -25,7 +25,8 @@ final class TerminalEvaluationMapper {
         return switch (state) {
             case BLACK_MATED, BLACK_RESIGNED -> 100.0;
             case WHITE_MATED, WHITE_RESIGNED -> -100.0;
-            case STALEMATE, DRAW_BY_50_MOVES_RULE, DRAW_BY_THREEFOLD_REPETITION -> 0.0;
+            case STALEMATE, DRAW_BY_50_MOVES_RULE, DRAW_BY_THREEFOLD_REPETITION,
+                    DRAW_BY_INSUFFICIENT_MATERIAL -> 0.0;
             case LOST_ON_TIME -> null;
         };
     }
