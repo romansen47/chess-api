@@ -43,33 +43,6 @@ public class EngineLineDisplayService {
                 displayData.positions);
     }
 
-    /**
-     * Applies only the first move of an engine line and returns the resulting
-     * board position. This is used by finite DeepAnalysis depth history, where
-     * transmitting every full PV at every intermediate depth would be wasteful.
-     *
-     * @param currentGame disposable replay position at the start of the line
-     * @param line engine line
-     * @return board position after the first move, or null
-     */
-    public String toFirstMovePosition(Game currentGame, EngineLine line) {
-        if (currentGame == null || line == null || line.getMoves() == null || line.getMoves().isBlank()) {
-            return null;
-        }
-
-        try {
-            String firstUciMove = line.getMoves().trim().split("\\s+")[0];
-            Move move = findMoveByUci(currentGame, firstUciMove);
-            if (move == null) {
-                return null;
-            }
-            PgnNotation.toDisplayNotationAndApply(currentGame, move);
-            return BoardPositionSerializer.toPositionString(currentGame);
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
     private EngineLineDisplayData convertEngineLine(Game currentGame, String uciMoves) {
         if (uciMoves == null || uciMoves.isBlank()) {
             return new EngineLineDisplayData(
