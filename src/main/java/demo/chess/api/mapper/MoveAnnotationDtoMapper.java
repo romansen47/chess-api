@@ -21,7 +21,7 @@ public final class MoveAnnotationDtoMapper {
         MoveAnnotationDto dto = new MoveAnnotationDto();
         dto.setSymbol(symbol(annotation.getKind()));
         dto.setKind(kind(annotation.getKind()));
-        dto.setLoss(annotation.getLoss());
+        dto.setWinChanceLoss(annotation.getWinChanceLoss());
         dto.setBestEvaluation(annotation.getBestEvaluation());
         dto.setSecondBestEvaluation(annotation.getSecondBestEvaluation());
         dto.setBrilliantReason(reason(annotation.getBrilliantReason()));
