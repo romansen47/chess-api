@@ -25,6 +25,23 @@ public class EngineEvaluationDto {
     private List<EngineLineDto> lines;
 
     /**
+     * Whether the live historical-move assessment has a usable search result.
+     */
+    private boolean moveAnnotationReady;
+
+    /**
+     * Current search depth used for the live move annotation.
+     */
+    private int moveAnnotationDepth;
+
+    /**
+     * Current live annotation for the selected historical move.
+     * Null is also a valid ready result and means that the live engine does
+     * not currently assign one of the configured annotation symbols.
+     */
+    private MoveAnnotationDto moveAnnotation;
+
+    /**
      * Creates a new EngineEvaluationDto instance.
      */
     public EngineEvaluationDto() {
@@ -104,5 +121,29 @@ public class EngineEvaluationDto {
      */
     public void setLines(List<EngineLineDto> lines) {
         this.lines = lines;
+    }
+
+    public boolean isMoveAnnotationReady() {
+        return moveAnnotationReady;
+    }
+
+    public void setMoveAnnotationReady(boolean moveAnnotationReady) {
+        this.moveAnnotationReady = moveAnnotationReady;
+    }
+
+    public int getMoveAnnotationDepth() {
+        return moveAnnotationDepth;
+    }
+
+    public void setMoveAnnotationDepth(int moveAnnotationDepth) {
+        this.moveAnnotationDepth = moveAnnotationDepth;
+    }
+
+    public MoveAnnotationDto getMoveAnnotation() {
+        return moveAnnotation;
+    }
+
+    public void setMoveAnnotation(MoveAnnotationDto moveAnnotation) {
+        this.moveAnnotation = moveAnnotation;
     }
 }

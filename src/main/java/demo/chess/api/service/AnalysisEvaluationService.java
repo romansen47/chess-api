@@ -14,7 +14,6 @@ import demo.chess.api.dto.EngineLineDto;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.EvaluationEngine;
 import demo.chess.definitions.engines.UciEngineConfig;
-import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
@@ -40,6 +39,8 @@ public class AnalysisEvaluationService {
     private final AnalysisVariationService analysisVariationService;
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
     private final EngineLineDisplayService engineLineDisplayService;
+    private final AnalysisEvaluationEngineFactory engineFactory;
+    private final AnalysisMoveAssessmentService moveAssessmentService;
 
     private EvaluationEngine evaluationEngine;
     private String currentEvaluationEnginePath;
@@ -53,16 +54,22 @@ public class AnalysisEvaluationService {
      * @param analysisVariationService the analysis variation service
      * @param engineRuntimeSelectionService runtime engine profile selections
      * @param engineLineDisplayService the engine line display service
+     * @param engineFactory analysis evaluation engine factory
+     * @param moveAssessmentService live historical move assessment
      */
     public AnalysisEvaluationService(
             UciGameService uciGameService,
             AnalysisVariationService analysisVariationService,
             EngineRuntimeSelectionService engineRuntimeSelectionService,
-            EngineLineDisplayService engineLineDisplayService) {
+            EngineLineDisplayService engineLineDisplayService,
+            AnalysisEvaluationEngineFactory engineFactory,
+            AnalysisMoveAssessmentService moveAssessmentService) {
         this.uciGameService = uciGameService;
         this.analysisVariationService = analysisVariationService;
         this.engineRuntimeSelectionService = engineRuntimeSelectionService;
         this.engineLineDisplayService = engineLineDisplayService;
+        this.engineFactory = engineFactory;
+        this.moveAssessmentService = moveAssessmentService;
     }
 
     /**
@@ -79,7 +86,20 @@ public class AnalysisEvaluationService {
 
         try {
             Game game = createReplayGame(originalMoves, ply);
-            return evaluateGame(game, "ply:" + ply);
+            EngineEvaluationDto result = evaluateGame(game, "ply:" + ply);
+            boolean usableResult =
+                    (result.getLines() != null && !result.getLines().isEmpty())
+                    || Math.abs(result.getEval()) >= 99;
+            if (usableResult) {
+                AnalysisMoveAssessmentService.Result assessment =
+                        moveAssessmentService.assess(ply, result.getEval());
+                result.setMoveAnnotationReady(assessment.ready());
+                result.setMoveAnnotationDepth(assessment.depth());
+                result.setMoveAnnotation(
+                        demo.chess.api.mapper.MoveAnnotationDtoMapper.toDto(
+                                assessment.annotation()));
+            }
+            return result;
         } catch (NoMoveFoundException | IOException e) {
             throw new IllegalStateException("Could not reconstruct analysis position for ply " + ply, e);
         } catch (RuntimeException e) {
@@ -102,6 +122,8 @@ public class AnalysisEvaluationService {
         List<String> moves = request.getMoves() != null ? request.getMoves() : List.of();
         String positionKey = "variation:" + request.getAnchorPly() + ":" + String.join(" ", moves);
 
+        moveAssessmentService.stopEvaluation();
+
         try {
             Game game = analysisVariationService.createVariationGame(request.getAnchorPly(), moves);
             return evaluateGame(game, positionKey);
@@ -117,7 +139,7 @@ public class AnalysisEvaluationService {
     private EngineEvaluationDto evaluateGame(Game game, String positionKey) throws Exception {
         EngineEvaluationDto terminalEvaluation = evaluateTerminalPosition(game);
         if (terminalEvaluation != null) {
-            stopEvaluation();
+            stopContinuationEvaluation();
             return terminalEvaluation;
         }
 
@@ -178,6 +200,11 @@ public class AnalysisEvaluationService {
      * Stops the evaluation.
      */
     public synchronized void stopEvaluation() {
+        stopContinuationEvaluation();
+        moveAssessmentService.stopEvaluation();
+    }
+
+    private void stopContinuationEvaluation() {
         closeEvaluationEngine(evaluationEngine);
         evaluationEngine = null;
         currentEvaluationEnginePath = null;
@@ -243,28 +270,14 @@ public class AnalysisEvaluationService {
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
             closeEvaluationEngine(evaluationEngine);
             currentEvaluationEnginePath = configuredPath;
-            evaluationEngine = createEvaluationEngine(configuredPath);
+            evaluationEngine = engineFactory.create(
+                    configuredPath,
+                    "analysis evaluation");
             currentPositionKey = null;
             lastSeenSettingsVersion = -1L;
             lastValidEvaluation = null;
         }
         return evaluationEngine;
-    }
-
-    /**
-     * Creates the evaluation engine.
-     * @param enginePath the engine path
-     * @return the result of the operation
-     */
-    private EvaluationEngine createEvaluationEngine(String enginePath) {
-        logger.info("Initializing analysis evaluation engine at path: " + enginePath);
-        try {
-            EvaluationUciEngine engine = new EvaluationUciEngine(enginePath);
-            engine.setManagementLabel("analysis evaluation");
-            return engine;
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not start evaluation engine at " + enginePath, e);
-        }
     }
 
     /**
