@@ -7,14 +7,18 @@ import java.util.concurrent.ExecutionException;
 
 import org.springframework.stereotype.Service;
 
-import demo.chess.api.dto.AnalysisDepthCandidateDto;
-import demo.chess.api.dto.AnalysisDepthSnapshotDto;
 import demo.chess.api.dto.AnalysisProfilePointDto;
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.dto.BoardDto;
 import demo.chess.api.dto.EngineLineDto;
+import demo.chess.api.dto.MoveAnnotationDto;
+import demo.chess.analysis.annotation.BrilliantReason;
+import demo.chess.analysis.annotation.MoveAnnotation;
+import demo.chess.analysis.annotation.MoveAnnotationClassifier;
+import demo.chess.analysis.annotation.MoveAnnotationKind;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
+import demo.chess.definitions.engines.DeepAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
@@ -33,6 +37,7 @@ public class AnalysisReplayService {
     private final EvaluationService evaluationService;
     private final UciGameService uciGameService;
     private final EngineLineDisplayService engineLineDisplayService;
+    private final MoveAnnotationClassifier moveAnnotationClassifier = new MoveAnnotationClassifier();
     private AnalysisReplaySession session;
 
     /**
@@ -124,6 +129,11 @@ public class AnalysisReplayService {
         }
 
         Move originalMove = session.originalMoves.get(session.currentPly);
+        DeepAnalysisResult analysisBeforeMove = session.lastDeepAnalysisResult;
+        Game positionBeforeMove = analysisBeforeMove != null
+                ? Simulation.forkDummyFrom(session.replayGame.getMoveList())
+                : null;
+
         Move replayMove = session.replayGame.getPlayer().getMoveInSimulation(session.replayGame, originalMove);
         if (replayMove == null) {
             throw new NoMoveFoundException("Could not map analysis replay move: " + originalMove);
@@ -136,6 +146,15 @@ public class AnalysisReplayService {
 
         AnalysisEvaluation evaluation = analyzeCurrentReplayPosition(session);
 
+        MoveAnnotation annotation = null;
+        if (analysisBeforeMove != null && positionBeforeMove != null) {
+            annotation = moveAnnotationClassifier.classify(
+                    positionBeforeMove,
+                    originalMove.toString(),
+                    analysisBeforeMove,
+                    evaluation.evaluation);
+        }
+
         AnalysisProfilePointDto profilePoint = new AnalysisProfilePointDto(
                 session.currentPly,
                 from,
@@ -145,8 +164,9 @@ public class AnalysisReplayService {
                 evaluation.bar,
                 evaluation.depth,
                 evaluation.lines);
-        profilePoint.setDepthSnapshots(evaluation.depthSnapshots);
+        profilePoint.setAnnotation(toAnnotationDto(annotation));
         session.profile.add(profilePoint);
+        session.lastDeepAnalysisResult = evaluation.deepAnalysisResult;
 
         boolean done = session.currentPly >= session.originalMoves.size();
         if (done) {
@@ -212,12 +232,18 @@ public class AnalysisReplayService {
 
         try {
             source.engine.clearChachedLines();
-            List<EngineLine> bestLines = source.engine.getBestLines(
+            DeepAnalysisResult deepAnalysisResult = source.engine.analyze(
                     source.replayGame,
                     source.engineConfig);
+            List<EngineLine> bestLines = deepAnalysisResult.getFinalLines();
 
-            if (bestLines == null || bestLines.isEmpty()) {
-                return new AnalysisEvaluation(0.0, 0.5, 0, List.of());
+            if (bestLines.isEmpty()) {
+                return new AnalysisEvaluation(
+                        0.0,
+                        0.5,
+                        0,
+                        List.of(),
+                        deepAnalysisResult);
             }
 
             double eval = bestLines.get(0).getEvaluation();
@@ -230,26 +256,12 @@ public class AnalysisReplayService {
                 lines.add(engineLineDisplayService.toDto(displayGame, line));
             }
 
-            List<AnalysisDepthSnapshotDto> depthSnapshots = new ArrayList<>();
-            java.util.TreeMap<Integer, List<EngineLine>> depthHistory =
-                    new java.util.TreeMap<>(source.engine.getLastDepthHistory());
-            for (java.util.Map.Entry<Integer, List<EngineLine>> entry : depthHistory.entrySet()) {
-                List<AnalysisDepthCandidateDto> candidates = new ArrayList<>();
-                for (EngineLine line : entry.getValue()) {
-                    Game candidateGame = Simulation.forkDummyFrom(source.replayGame.getMoveList());
-                    String position = engineLineDisplayService.toFirstMovePosition(candidateGame, line);
-                    if (position != null) {
-                        candidates.add(new AnalysisDepthCandidateDto(
-                                Math.round(line.getEvaluation() * 100.0) / 100.0,
-                                position));
-                    }
-                }
-                if (!candidates.isEmpty()) {
-                    depthSnapshots.add(new AnalysisDepthSnapshotDto(entry.getKey(), candidates));
-                }
-            }
-
-            return new AnalysisEvaluation(eval, bar, depth, lines, depthSnapshots);
+            return new AnalysisEvaluation(
+                    eval,
+                    bar,
+                    depth,
+                    lines,
+                    deepAnalysisResult);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             safeStop(source.engine);
@@ -278,6 +290,62 @@ public class AnalysisReplayService {
                 List.of());
     }
 
+
+    private MoveAnnotationDto toAnnotationDto(MoveAnnotation annotation) {
+        if (annotation == null) {
+            return null;
+        }
+
+        MoveAnnotationDto dto = new MoveAnnotationDto();
+        dto.setSymbol(annotationSymbol(annotation.getKind()));
+        dto.setKind(annotationKind(annotation.getKind()));
+        dto.setLoss(annotation.getLoss());
+        dto.setBestEvaluation(annotation.getBestEvaluation());
+        dto.setSecondBestEvaluation(annotation.getSecondBestEvaluation());
+        dto.setBrilliantReason(brilliantReason(annotation.getBrilliantReason()));
+        dto.setMaterialInvestment(annotation.getMaterialInvestment());
+        dto.setEarlyDepth(annotation.getEarlyDepth());
+        dto.setEarlyRank(annotation.getEarlyRank());
+        dto.setFinalDepth(annotation.getFinalDepth());
+        dto.setFinalRank(annotation.getFinalRank());
+        return dto;
+    }
+
+    private String annotationSymbol(MoveAnnotationKind kind) {
+        if (kind == null) {
+            return "";
+        }
+        return switch (kind) {
+            case ONLY_MOVE -> "!";
+            case BRILLIANT -> "!!";
+            case MISTAKE -> "?";
+            case BLUNDER -> "??";
+        };
+    }
+
+    private String annotationKind(MoveAnnotationKind kind) {
+        if (kind == null) {
+            return null;
+        }
+        return switch (kind) {
+            case ONLY_MOVE -> "onlyMove";
+            case BRILLIANT -> "brilliant";
+            case MISTAKE -> "mistake";
+            case BLUNDER -> "blunder";
+        };
+    }
+
+    private String brilliantReason(BrilliantReason reason) {
+        if (reason == null) {
+            return null;
+        }
+        return switch (reason) {
+            case DEEP_DISCOVERY -> "deepDiscovery";
+            case MATERIAL_INVESTMENT -> "materialInvestment";
+            case DEEP_DISCOVERY_AND_MATERIAL_INVESTMENT ->
+                    "deepDiscoveryAndMaterialInvestment";
+        };
+    }
 
     private double latestEvaluation(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
@@ -369,10 +437,14 @@ public class AnalysisReplayService {
         private final double bar;
         private final int depth;
         private final List<EngineLineDto> lines;
-        private final List<AnalysisDepthSnapshotDto> depthSnapshots;
+        private final DeepAnalysisResult deepAnalysisResult;
 
-        private AnalysisEvaluation(double evaluation, double bar, int depth, List<EngineLineDto> lines) {
-            this(evaluation, bar, depth, lines, List.of());
+        private AnalysisEvaluation(
+                double evaluation,
+                double bar,
+                int depth,
+                List<EngineLineDto> lines) {
+            this(evaluation, bar, depth, lines, null);
         }
 
         private AnalysisEvaluation(
@@ -380,12 +452,12 @@ public class AnalysisReplayService {
                 double bar,
                 int depth,
                 List<EngineLineDto> lines,
-                List<AnalysisDepthSnapshotDto> depthSnapshots) {
+                DeepAnalysisResult deepAnalysisResult) {
             this.evaluation = evaluation;
             this.bar = bar;
             this.depth = depth;
             this.lines = lines;
-            this.depthSnapshots = depthSnapshots != null ? depthSnapshots : List.of();
+            this.deepAnalysisResult = deepAnalysisResult;
         }
     }
 
@@ -396,6 +468,7 @@ public class AnalysisReplayService {
         private final UciEngineConfig engineConfig;
         private final String engineName;
         private final List<AnalysisProfilePointDto> profile = new ArrayList<>();
+        private DeepAnalysisResult lastDeepAnalysisResult;
         private int currentPly = 0;
         private boolean active = true;
 
