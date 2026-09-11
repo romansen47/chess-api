@@ -12,7 +12,7 @@ public class AnalysisProfilePointDto {
     private double bar;
     private int depth;
     private List<EngineLineDto> lines = List.of();
-    private List<AnalysisDepthSnapshotDto> depthSnapshots = List.of();
+    private MoveAnnotationDto annotation;
 
     /**
      * Creates a new AnalysisProfilePointDto instance.
@@ -200,19 +200,18 @@ public class AnalysisProfilePointDto {
     }
 
     /**
-     * Returns finite DeepAnalysis snapshots collected while searching this
-     * position. Live evaluation never populates this field.
-     * @return depth snapshots
+     * Returns the move annotation calculated by the chess core.
+     * @return move annotation, or null
      */
-    public List<AnalysisDepthSnapshotDto> getDepthSnapshots() {
-        return depthSnapshots;
+    public MoveAnnotationDto getAnnotation() {
+        return annotation;
     }
 
     /**
-     * Sets the finite DeepAnalysis depth snapshots.
-     * @param depthSnapshots the depth snapshots
+     * Sets the move annotation calculated by the chess core.
+     * @param annotation move annotation
      */
-    public void setDepthSnapshots(List<AnalysisDepthSnapshotDto> depthSnapshots) {
-        this.depthSnapshots = depthSnapshots != null ? depthSnapshots : List.of();
+    public void setAnnotation(MoveAnnotationDto annotation) {
+        this.annotation = annotation;
     }
 }
