@@ -7,6 +7,8 @@ import java.util.concurrent.ExecutionException;
 
 import org.springframework.stereotype.Service;
 
+import demo.chess.api.dto.AnalysisDepthCandidateDto;
+import demo.chess.api.dto.AnalysisDepthSnapshotDto;
 import demo.chess.api.dto.AnalysisProfilePointDto;
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
@@ -134,7 +136,7 @@ public class AnalysisReplayService {
 
         AnalysisEvaluation evaluation = analyzeCurrentReplayPosition(session);
 
-        session.profile.add(new AnalysisProfilePointDto(
+        AnalysisProfilePointDto profilePoint = new AnalysisProfilePointDto(
                 session.currentPly,
                 from,
                 to,
@@ -142,7 +144,9 @@ public class AnalysisReplayService {
                 Math.round(evaluation.evaluation * 100.0) / 100.0,
                 evaluation.bar,
                 evaluation.depth,
-                evaluation.lines));
+                evaluation.lines);
+        profilePoint.setDepthSnapshots(evaluation.depthSnapshots);
+        session.profile.add(profilePoint);
 
         boolean done = session.currentPly >= session.originalMoves.size();
         if (done) {
@@ -226,7 +230,26 @@ public class AnalysisReplayService {
                 lines.add(engineLineDisplayService.toDto(displayGame, line));
             }
 
-            return new AnalysisEvaluation(eval, bar, depth, lines);
+            List<AnalysisDepthSnapshotDto> depthSnapshots = new ArrayList<>();
+            source.engine.getLastDepthHistory().entrySet().stream()
+                    .sorted(java.util.Map.Entry.comparingByKey())
+                    .forEach(entry -> {
+                        List<AnalysisDepthCandidateDto> candidates = new ArrayList<>();
+                        for (EngineLine line : entry.getValue()) {
+                            Game candidateGame = Simulation.forkDummyFrom(source.replayGame.getMoveList());
+                            String position = engineLineDisplayService.toFirstMovePosition(candidateGame, line);
+                            if (position != null) {
+                                candidates.add(new AnalysisDepthCandidateDto(
+                                        Math.round(line.getEvaluation() * 100.0) / 100.0,
+                                        position));
+                            }
+                        }
+                        if (!candidates.isEmpty()) {
+                            depthSnapshots.add(new AnalysisDepthSnapshotDto(entry.getKey(), candidates));
+                        }
+                    });
+
+            return new AnalysisEvaluation(eval, bar, depth, lines, depthSnapshots);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             safeStop(source.engine);
@@ -346,12 +369,23 @@ public class AnalysisReplayService {
         private final double bar;
         private final int depth;
         private final List<EngineLineDto> lines;
+        private final List<AnalysisDepthSnapshotDto> depthSnapshots;
 
         private AnalysisEvaluation(double evaluation, double bar, int depth, List<EngineLineDto> lines) {
+            this(evaluation, bar, depth, lines, List.of());
+        }
+
+        private AnalysisEvaluation(
+                double evaluation,
+                double bar,
+                int depth,
+                List<EngineLineDto> lines,
+                List<AnalysisDepthSnapshotDto> depthSnapshots) {
             this.evaluation = evaluation;
             this.bar = bar;
             this.depth = depth;
             this.lines = lines;
+            this.depthSnapshots = depthSnapshots != null ? depthSnapshots : List.of();
         }
     }
 
