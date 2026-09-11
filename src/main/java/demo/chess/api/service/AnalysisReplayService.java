@@ -231,23 +231,23 @@ public class AnalysisReplayService {
             }
 
             List<AnalysisDepthSnapshotDto> depthSnapshots = new ArrayList<>();
-            source.engine.getLastDepthHistory().entrySet().stream()
-                    .sorted(java.util.Map.Entry.comparingByKey())
-                    .forEach(entry -> {
-                        List<AnalysisDepthCandidateDto> candidates = new ArrayList<>();
-                        for (EngineLine line : entry.getValue()) {
-                            Game candidateGame = Simulation.forkDummyFrom(source.replayGame.getMoveList());
-                            String position = engineLineDisplayService.toFirstMovePosition(candidateGame, line);
-                            if (position != null) {
-                                candidates.add(new AnalysisDepthCandidateDto(
-                                        Math.round(line.getEvaluation() * 100.0) / 100.0,
-                                        position));
-                            }
-                        }
-                        if (!candidates.isEmpty()) {
-                            depthSnapshots.add(new AnalysisDepthSnapshotDto(entry.getKey(), candidates));
-                        }
-                    });
+            java.util.TreeMap<Integer, List<EngineLine>> depthHistory =
+                    new java.util.TreeMap<>(source.engine.getLastDepthHistory());
+            for (java.util.Map.Entry<Integer, List<EngineLine>> entry : depthHistory.entrySet()) {
+                List<AnalysisDepthCandidateDto> candidates = new ArrayList<>();
+                for (EngineLine line : entry.getValue()) {
+                    Game candidateGame = Simulation.forkDummyFrom(source.replayGame.getMoveList());
+                    String position = engineLineDisplayService.toFirstMovePosition(candidateGame, line);
+                    if (position != null) {
+                        candidates.add(new AnalysisDepthCandidateDto(
+                                Math.round(line.getEvaluation() * 100.0) / 100.0,
+                                position));
+                    }
+                }
+                if (!candidates.isEmpty()) {
+                    depthSnapshots.add(new AnalysisDepthSnapshotDto(entry.getKey(), candidates));
+                }
+            }
 
             return new AnalysisEvaluation(eval, bar, depth, lines, depthSnapshots);
         } catch (InterruptedException e) {
