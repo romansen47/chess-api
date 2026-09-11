@@ -167,9 +167,9 @@ public class AnalysisMoveAssessmentService {
                     resultingEvaluation);
 
             return new Result(true, depth, annotation);
-        } catch (NoMoveFoundException e) {
+        } catch (NoMoveFoundException | IOException e) {
             throw new IllegalStateException(
-                    "Could not resolve live assessment move "
+                    "Could not resolve or evaluate live assessment move "
                     + playedMoveUci,
                     e);
         } catch (InterruptedException e) {
