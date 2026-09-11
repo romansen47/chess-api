@@ -12,11 +12,9 @@ import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.dto.BoardDto;
 import demo.chess.api.dto.EngineLineDto;
-import demo.chess.api.dto.MoveAnnotationDto;
-import demo.chess.analysis.annotation.BrilliantReason;
 import demo.chess.analysis.annotation.MoveAnnotation;
 import demo.chess.analysis.annotation.MoveAnnotationClassifier;
-import demo.chess.analysis.annotation.MoveAnnotationKind;
+import demo.chess.api.mapper.MoveAnnotationDtoMapper;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.DeepAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
@@ -164,7 +162,7 @@ public class AnalysisReplayService {
                 evaluation.bar,
                 evaluation.depth,
                 evaluation.lines);
-        profilePoint.setAnnotation(toAnnotationDto(annotation));
+        profilePoint.setAnnotation(MoveAnnotationDtoMapper.toDto(annotation));
         session.profile.add(profilePoint);
         session.lastDeepAnalysisResult = evaluation.deepAnalysisResult;
 
@@ -290,62 +288,6 @@ public class AnalysisReplayService {
                 List.of());
     }
 
-
-    private MoveAnnotationDto toAnnotationDto(MoveAnnotation annotation) {
-        if (annotation == null) {
-            return null;
-        }
-
-        MoveAnnotationDto dto = new MoveAnnotationDto();
-        dto.setSymbol(annotationSymbol(annotation.getKind()));
-        dto.setKind(annotationKind(annotation.getKind()));
-        dto.setLoss(annotation.getLoss());
-        dto.setBestEvaluation(annotation.getBestEvaluation());
-        dto.setSecondBestEvaluation(annotation.getSecondBestEvaluation());
-        dto.setBrilliantReason(brilliantReason(annotation.getBrilliantReason()));
-        dto.setMaterialInvestment(annotation.getMaterialInvestment());
-        dto.setEarlyDepth(annotation.getEarlyDepth());
-        dto.setEarlyRank(annotation.getEarlyRank());
-        dto.setFinalDepth(annotation.getFinalDepth());
-        dto.setFinalRank(annotation.getFinalRank());
-        return dto;
-    }
-
-    private String annotationSymbol(MoveAnnotationKind kind) {
-        if (kind == null) {
-            return "";
-        }
-        return switch (kind) {
-            case ONLY_MOVE -> "!";
-            case BRILLIANT -> "!!";
-            case MISTAKE -> "?";
-            case BLUNDER -> "??";
-        };
-    }
-
-    private String annotationKind(MoveAnnotationKind kind) {
-        if (kind == null) {
-            return null;
-        }
-        return switch (kind) {
-            case ONLY_MOVE -> "onlyMove";
-            case BRILLIANT -> "brilliant";
-            case MISTAKE -> "mistake";
-            case BLUNDER -> "blunder";
-        };
-    }
-
-    private String brilliantReason(BrilliantReason reason) {
-        if (reason == null) {
-            return null;
-        }
-        return switch (reason) {
-            case DEEP_DISCOVERY -> "deepDiscovery";
-            case MATERIAL_INVESTMENT -> "materialInvestment";
-            case DEEP_DISCOVERY_AND_MATERIAL_INVESTMENT ->
-                    "deepDiscoveryAndMaterialInvestment";
-        };
-    }
 
     private double latestEvaluation(AnalysisReplaySession source) {
         if (source == null || source.profile.isEmpty()) {
