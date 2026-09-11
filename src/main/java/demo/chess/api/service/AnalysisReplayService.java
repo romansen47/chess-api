@@ -83,13 +83,14 @@ public class AnalysisReplayService {
                 engineConfig,
                 engineName);
 
+        double initialEvaluation = 0.3;
         newSession.profile.add(new AnalysisProfilePointDto(
                 0,
                 null,
                 null,
                 "Start",
-                0.0,
-                0.5,
+                initialEvaluation,
+                EvaluationBarMapper.toBar(initialEvaluation),
                 0));
 
         this.session = newSession;
