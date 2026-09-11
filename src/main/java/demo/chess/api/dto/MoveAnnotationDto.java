@@ -8,7 +8,7 @@ public class MoveAnnotationDto {
 
     private String symbol;
     private String kind;
-    private Double loss;
+    private Double winChanceLoss;
     private double bestEvaluation;
     private Double secondBestEvaluation;
     private String brilliantReason;
@@ -37,12 +37,12 @@ public class MoveAnnotationDto {
         this.kind = kind;
     }
 
-    public Double getLoss() {
-        return loss;
+    public Double getWinChanceLoss() {
+        return winChanceLoss;
     }
 
-    public void setLoss(Double loss) {
-        this.loss = loss;
+    public void setWinChanceLoss(Double winChanceLoss) {
+        this.winChanceLoss = winChanceLoss;
     }
 
     public double getBestEvaluation() {
