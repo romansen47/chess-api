@@ -12,6 +12,7 @@ public class AnalysisProfilePointDto {
     private double bar;
     private int depth;
     private List<EngineLineDto> lines = List.of();
+    private MoveAnnotationDto annotation;
 
     /**
      * Creates a new AnalysisProfilePointDto instance.
@@ -196,5 +197,21 @@ public class AnalysisProfilePointDto {
      */
     public void setLines(List<EngineLineDto> lines) {
         this.lines = lines != null ? lines : List.of();
+    }
+
+    /**
+     * Returns the move annotation calculated by the chess core.
+     * @return move annotation, or null
+     */
+    public MoveAnnotationDto getAnnotation() {
+        return annotation;
+    }
+
+    /**
+     * Sets the move annotation calculated by the chess core.
+     * @param annotation move annotation
+     */
+    public void setAnnotation(MoveAnnotationDto annotation) {
+        this.annotation = annotation;
     }
 }
