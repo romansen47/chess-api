@@ -21,6 +21,7 @@ import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
+import demo.chess.game.LegalMoveResolver;
 import demo.chess.game.impl.Simulation;
 
 /**
@@ -90,13 +91,47 @@ public class AnalysisMoveAssessmentService {
                         "Could not map live assessment move: " + originalMove);
             }
 
+            return assessPosition(
+                    positionBeforeMove,
+                    replayMove.toString(),
+                    "ply:" + ply,
+                    resultingEvaluation);
+        } catch (NoMoveFoundException | IOException e) {
+            throw new IllegalStateException(
+                    "Could not reconstruct live move assessment for ply " + ply,
+                    e);
+        }
+    }
+
+    /**
+     * Returns the current live classification for an arbitrary analysis move.
+     *
+     * <p>This is used for temporary analysis variations. The caller provides
+     * the position before the move and a stable selection key. Nothing is
+     * persisted by this service.</p>
+     *
+     * @param positionBeforeMove position before the candidate move
+     * @param playedMoveUci candidate move in UCI form
+     * @param selectionKey logical live-search identity
+     * @param resultingEvaluation current evaluation after the candidate move
+     * @return live assessment state
+     */
+    public synchronized Result assessPosition(
+            Game positionBeforeMove,
+            String playedMoveUci,
+            String selectionKey,
+            double resultingEvaluation) {
+        try {
+            Move replayMove = LegalMoveResolver.resolveUci(
+                    positionBeforeMove,
+                    playedMoveUci);
+
             UciEngineConfig config = createInfiniteEvaluationConfig();
             EvaluationUciEngine engine = getAssessmentEngine();
             long settingsVersion =
                     engineRuntimeSelectionService.getEvaluationVersion();
             String enginePositionKey =
                     positionBeforeMove.getMoveList().toString();
-            String selectionKey = "ply:" + ply;
 
             if (!Objects.equals(selectionKey, currentSelectionKey)
                     || !Objects.equals(
@@ -132,18 +167,21 @@ public class AnalysisMoveAssessmentService {
                     resultingEvaluation);
 
             return new Result(true, depth, annotation);
-        } catch (NoMoveFoundException | IOException e) {
+        } catch (NoMoveFoundException e) {
             throw new IllegalStateException(
-                    "Could not reconstruct live move assessment for ply " + ply,
+                    "Could not resolve live assessment move "
+                    + playedMoveUci,
                     e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(
-                    "Live move assessment interrupted for ply " + ply,
+                    "Live move assessment interrupted for "
+                    + selectionKey,
                     e);
         } catch (ExecutionException e) {
             throw new IllegalStateException(
-                    "Live move assessment failed for ply " + ply,
+                    "Live move assessment failed for "
+                    + selectionKey,
                     e);
         }
     }
