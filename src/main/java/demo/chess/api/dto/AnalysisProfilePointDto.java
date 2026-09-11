@@ -12,6 +12,7 @@ public class AnalysisProfilePointDto {
     private double bar;
     private int depth;
     private List<EngineLineDto> lines = List.of();
+    private List<AnalysisDepthSnapshotDto> depthSnapshots = List.of();
 
     /**
      * Creates a new AnalysisProfilePointDto instance.
@@ -196,5 +197,22 @@ public class AnalysisProfilePointDto {
      */
     public void setLines(List<EngineLineDto> lines) {
         this.lines = lines != null ? lines : List.of();
+    }
+
+    /**
+     * Returns finite DeepAnalysis snapshots collected while searching this
+     * position. Live evaluation never populates this field.
+     * @return depth snapshots
+     */
+    public List<AnalysisDepthSnapshotDto> getDepthSnapshots() {
+        return depthSnapshots;
+    }
+
+    /**
+     * Sets the finite DeepAnalysis depth snapshots.
+     * @param depthSnapshots the depth snapshots
+     */
+    public void setDepthSnapshots(List<AnalysisDepthSnapshotDto> depthSnapshots) {
+        this.depthSnapshots = depthSnapshots != null ? depthSnapshots : List.of();
     }
 }
