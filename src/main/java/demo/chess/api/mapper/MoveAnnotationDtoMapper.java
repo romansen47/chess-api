@@ -1,10 +1,10 @@
 package demo.chess.api.mapper;
 
 import demo.chess.api.dto.MoveAnnotationDto;
-import demo.chess.analysis.annotation.BrilliantReason;
+import demo.chess.analysis.annotation.ExtraordinaryReason;
+import demo.chess.analysis.annotation.MaterialSacrificeType;
 import demo.chess.analysis.annotation.MoveAnnotation;
 import demo.chess.analysis.annotation.MoveAnnotationKind;
-import demo.chess.analysis.annotation.MaterialSacrificeType;
 
 /**
  * Maps chess-core annotation domain objects to the stable API representation.
@@ -25,20 +25,22 @@ public final class MoveAnnotationDtoMapper {
         dto.setWinChanceLoss(annotation.getWinChanceLoss());
         dto.setBestEvaluation(annotation.getBestEvaluation());
         dto.setSecondBestEvaluation(annotation.getSecondBestEvaluation());
-        dto.setBrilliantReason(reason(annotation.getBrilliantReason()));
-        dto.setMaterialInvestment(annotation.getMaterialInvestment());
-        dto.setSacrificeType(sacrificeType(annotation.getSacrificeType()));
+
+        dto.setExtraordinaryReason(
+                reason(annotation.getExtraordinaryReason()));
+        dto.setMaterialInvestment(
+                annotation.getMaterialInvestment());
+        dto.setSacrificeType(
+                sacrificeType(annotation.getSacrificeType()));
+
         dto.setEarlyDepth(annotation.getEarlyDepth());
         dto.setEarlyRank(annotation.getEarlyRank());
         dto.setFinalDepth(annotation.getFinalDepth());
         dto.setFinalRank(annotation.getFinalRank());
         dto.setGivesCheck(annotation.getGivesCheck());
         dto.setEarlyRegret(annotation.getEarlyRegret());
-        dto.setMiddleRegret(annotation.getMiddleRegret());
-        dto.setLateRegret(annotation.getLateRegret());
         dto.setEarlyStrength(annotation.getEarlyStrength());
-        dto.setMiddleStrength(annotation.getMiddleStrength());
-        dto.setLateStrength(annotation.getLateStrength());
+        dto.setFinalStrength(annotation.getFinalStrength());
         return dto;
     }
 
@@ -48,7 +50,7 @@ public final class MoveAnnotationDtoMapper {
         }
         return switch (kind) {
             case ONLY_MOVE -> "!";
-            case BRILLIANT -> "!!";
+            case EXTRAORDINARY -> "!!";
             case MISTAKE -> "?";
             case BLUNDER -> "??";
         };
@@ -60,7 +62,7 @@ public final class MoveAnnotationDtoMapper {
         }
         return switch (kind) {
             case ONLY_MOVE -> "onlyMove";
-            case BRILLIANT -> "brilliant";
+            case EXTRAORDINARY -> "extraordinary";
             case MISTAKE -> "mistake";
             case BLUNDER -> "blunder";
         };
@@ -77,15 +79,15 @@ public final class MoveAnnotationDtoMapper {
         };
     }
 
-    private static String reason(BrilliantReason reason) {
+    private static String reason(ExtraordinaryReason reason) {
         if (reason == null) {
             return null;
         }
         return switch (reason) {
             case DEEP_DISCOVERY -> "deepDiscovery";
-            case MATERIAL_INVESTMENT -> "materialInvestment";
-            case DEEP_DISCOVERY_AND_MATERIAL_INVESTMENT ->
-                    "deepDiscoveryAndMaterialInvestment";
+            case MATERIAL_SACRIFICE -> "materialSacrifice";
+            case DEEP_DISCOVERY_AND_MATERIAL_SACRIFICE ->
+                    "deepDiscoveryAndMaterialSacrifice";
         };
     }
 }
