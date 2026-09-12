@@ -92,7 +92,7 @@ public class UciGameService {
         return gameSaver.toPgn(
                 getAnalysisMoveListSnapshot(),
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
-                importedAnalysisGame != null ? importedAnnotations : Map.of());
+                importedAnnotations);
     }
 
     public synchronized List<Move> getAnalysisMoveListSnapshot() {
@@ -152,9 +152,7 @@ public class UciGameService {
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
                 updated);
 
-        if (importedAnalysisGame != null) {
-            importedAnnotations = updated;
-        }
+        importedAnnotations = updated;
         return pgn;
     }
 
@@ -192,8 +190,8 @@ public class UciGameService {
                         moveDtos,
                         whitePlayerName,
                         blackPlayerName,
-                        imported ? importedDatabaseGameId : null,
-                        imported ? annotationDtos(importedAnnotations) : List.of()));
+                        importedDatabaseGameId,
+                        annotationDtos(importedAnnotations)));
     }
 
     /**
