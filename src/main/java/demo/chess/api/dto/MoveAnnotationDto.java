@@ -17,6 +17,7 @@ public class MoveAnnotationDto {
     private String sacrificeType;
     private Boolean shortTermMaterialCompensated;
     private Integer materialCompensationPlies;
+    private Integer forcedMateDistance;
 
     private Integer earlyDepth;
     private Integer earlyRank;
@@ -112,6 +113,14 @@ public class MoveAnnotationDto {
             Integer materialCompensationPlies) {
         this.materialCompensationPlies =
                 materialCompensationPlies;
+    }
+
+    public Integer getForcedMateDistance() {
+        return forcedMateDistance;
+    }
+
+    public void setForcedMateDistance(Integer forcedMateDistance) {
+        this.forcedMateDistance = forcedMateDistance;
     }
 
     public Integer getEarlyDepth() {

@@ -36,6 +36,8 @@ public final class MoveAnnotationDtoMapper {
                 annotation.getShortTermMaterialCompensated());
         dto.setMaterialCompensationPlies(
                 annotation.getMaterialCompensationPlies());
+        dto.setForcedMateDistance(
+                annotation.getForcedMateDistance());
 
         dto.setEarlyDepth(annotation.getEarlyDepth());
         dto.setEarlyRank(annotation.getEarlyRank());
