@@ -124,7 +124,8 @@ public class MoveController {
                     san,
                     sideToMove,
                     position,
-                    gameState);
+                    gameState,
+                    game.getMoveList().size());
 
             return ResponseEntity.ok(result);
 

@@ -11,6 +11,7 @@ public class MoveResultDto {
     private String sideToMove;   // "white" or "black"
     private String position;     // 64-character board position after this move
     private String gameState;    // terminal game state, if the game ended after this move
+    private Integer ply;          // 1-based half-move number after this move
 
     /**
      * Creates a new MoveResultDto instance.
@@ -29,7 +30,7 @@ public class MoveResultDto {
      */
     public MoveResultDto(boolean success, String message, String from, String to,
                          String san, String sideToMove) {
-        this(success, message, from, to, san, sideToMove, null, null);
+        this(success, message, from, to, san, sideToMove, null, null, null);
     }
 
     /**
@@ -44,7 +45,7 @@ public class MoveResultDto {
      */
     public MoveResultDto(boolean success, String message, String from, String to,
                          String san, String sideToMove, String position) {
-        this(success, message, from, to, san, sideToMove, position, null);
+        this(success, message, from, to, san, sideToMove, position, null, null);
     }
 
     /**
@@ -60,6 +61,23 @@ public class MoveResultDto {
      */
     public MoveResultDto(boolean success, String message, String from, String to,
                          String san, String sideToMove, String position, String gameState) {
+        this(success, message, from, to, san, sideToMove, position, gameState, null);
+    }
+
+    /**
+     * Creates a new MoveResultDto instance.
+     * @param success the success
+     * @param message the message
+     * @param from the from
+     * @param to the to
+     * @param san the san
+     * @param sideToMove the side to move
+     * @param position the position
+     * @param gameState the game state
+     * @param ply the 1-based half-move number after this move
+     */
+    public MoveResultDto(boolean success, String message, String from, String to,
+                         String san, String sideToMove, String position, String gameState, Integer ply) {
         this.success = success;
         this.message = message;
         this.from = from;
@@ -68,6 +86,7 @@ public class MoveResultDto {
         this.sideToMove = sideToMove;
         this.position = position;
         this.gameState = gameState;
+        this.ply = ply;
     }
 
     /**
@@ -196,5 +215,21 @@ public class MoveResultDto {
      */
     public void setGameState(String gameState) {
         this.gameState = gameState;
+    }
+
+    /**
+     * Returns the 1-based half-move number after this move.
+     * @return the ply, or null when unavailable
+     */
+    public Integer getPly() {
+        return ply;
+    }
+
+    /**
+     * Sets the 1-based half-move number after this move.
+     * @param ply the ply
+     */
+    public void setPly(Integer ply) {
+        this.ply = ply;
     }
 }
