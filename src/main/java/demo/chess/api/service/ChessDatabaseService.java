@@ -145,7 +145,7 @@ public class ChessDatabaseService {
         return gameId;
     }
 
-    public void saveAnnotatedPgn(long gameId, String pgn) throws SQLException {
+    public void saveAnnotatedPgn(long gameId, String pgn) throws SQLException, IOException {
         database().saveAnnotatedPgn(gameId, pgn);
     }
 
