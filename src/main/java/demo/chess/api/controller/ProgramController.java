@@ -6,11 +6,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import demo.chess.api.dto.ProgramFeaturesDto;
+import demo.chess.api.service.ProgramFeatureService;
 import demo.chess.definitions.engines.management.UciEngineProcessInfo;
 import demo.chess.definitions.engines.management.UciEngineProcessManager;
 
@@ -23,34 +26,60 @@ public class ProgramController {
     private static final long SHUTDOWN_DELAY_MILLIS = 500L;
 
     private final ConfigurableApplicationContext applicationContext;
-    private final AtomicBoolean terminationScheduled = new AtomicBoolean(false);
+    private final ProgramFeatureService programFeatureService;
+    private final AtomicBoolean terminationScheduled =
+            new AtomicBoolean(false);
 
     /**
      * Creates a new ProgramController instance.
+     *
      * @param applicationContext the application context
+     * @param programFeatureService runtime feature switches
      */
-    public ProgramController(ConfigurableApplicationContext applicationContext) {
+    public ProgramController(
+            ConfigurableApplicationContext applicationContext,
+            ProgramFeatureService programFeatureService) {
         this.applicationContext = applicationContext;
+        this.programFeatureService = programFeatureService;
+    }
+
+    /**
+     * Returns runtime feature switches that affect the frontend.
+     *
+     * @return current program features
+     */
+    @GetMapping("/features")
+    public ProgramFeaturesDto getProgramFeatures() {
+        return new ProgramFeaturesDto(
+                programFeatureService.isDebugModeEnabled());
     }
 
     /**
      * Performs the terminate program operation.
+     *
      * @param terminateHeader the terminate header
      * @return the result of the operation
      */
     @PostMapping("/terminate")
     public ResponseEntity<Map<String, Object>> terminateProgram(
-            @RequestHeader(name = TERMINATE_HEADER, required = false) String terminateHeader) {
+            @RequestHeader(
+                    name = TERMINATE_HEADER,
+                    required = false)
+                    String terminateHeader) {
         if (!TERMINATE_HEADER_VALUE.equals(terminateHeader)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of(
                             "accepted", false,
-                            "message", "Missing or invalid termination header"));
+                            "message",
+                            "Missing or invalid termination header"));
         }
 
-        boolean newlyScheduled = terminationScheduled.compareAndSet(false, true);
+        boolean newlyScheduled =
+                terminationScheduled.compareAndSet(false, true);
         if (newlyScheduled) {
-            Thread shutdownThread = new Thread(this::shutdownApplication, "chess-program-shutdown");
+            Thread shutdownThread = new Thread(
+                    this::shutdownApplication,
+                    "chess-program-shutdown");
             shutdownThread.setDaemon(false);
             shutdownThread.start();
         }
@@ -58,7 +87,8 @@ public class ProgramController {
         return ResponseEntity.accepted()
                 .body(Map.of(
                         "accepted", true,
-                        "alreadyScheduled", !newlyScheduled));
+                        "alreadyScheduled",
+                        !newlyScheduled));
     }
 
     /**
@@ -71,7 +101,8 @@ public class ProgramController {
             Thread.currentThread().interrupt();
         }
 
-        for (UciEngineProcessInfo processInfo : UciEngineProcessManager.list()) {
+        for (UciEngineProcessInfo processInfo
+                : UciEngineProcessManager.list()) {
             if (!processInfo.processAlive()) {
                 continue;
             }
@@ -79,7 +110,8 @@ public class ProgramController {
             try {
                 UciEngineProcessManager.terminate(processInfo.id());
             } catch (RuntimeException ignored) {
-                // Continue shutdown even if one external UCI process resists termination.
+                // Continue shutdown even if one external UCI process resists
+                // termination.
             }
         }
 
