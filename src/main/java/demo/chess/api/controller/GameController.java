@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import demo.chess.api.dto.GameAnnotationsRequestDto;
 import demo.chess.api.dto.GameSettingsDto;
 import demo.chess.api.dto.GameSnapshotDto;
 import demo.chess.api.dto.UciGameDto;
@@ -122,6 +123,36 @@ public class GameController {
     }
 
     /**
+     * Replaces the persistable annotation state of the current game.
+     */
+    @PostMapping(
+            value = "/game/annotations",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> saveGameAnnotations(@RequestBody GameAnnotationsRequestDto request) {
+        try {
+            String pgn = uciGameService.updateAnnotations(
+                    request == null ? null : request.annotations(),
+                    request != null && request.whiteComputer(),
+                    request != null && request.blackComputer());
+
+            Long gameId = uciGameService.getImportedDatabaseGameId();
+            if (gameId == null) {
+                gameId = chessDatabaseService.importSingleGameAndResolveId(pgn);
+                uciGameService.setImportedDatabaseGameId(gameId);
+            }
+            chessDatabaseService.saveAnnotatedPgn(gameId, pgn);
+            return ResponseEntity.ok(uciGameService.getAnnotationDtos());
+        } catch (NoMoveFoundException | IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (SQLException | IOException e) {
+            return ResponseEntity.internalServerError().body("Could not save game annotations: " + e.getMessage());
+        }
+    }
+
+    /**
      * Imports exactly one PGN game for analysis and stores it in the local database.
      *
      * <p>The request body is consumed as a stream. Reading stops immediately when
@@ -181,8 +212,8 @@ public class GameController {
         analysisReplayService.cancel();
 
         try {
-            chessDatabaseService.importSingleGame(content);
-            UciGameDto importedGame = uciGameService.importGame(content);
+            long gameId = chessDatabaseService.importSingleGameAndResolveId(content);
+            UciGameDto importedGame = uciGameService.importGame(content, gameId);
             return ResponseEntity.ok(importedGame);
         } catch (NoMoveFoundException | IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());

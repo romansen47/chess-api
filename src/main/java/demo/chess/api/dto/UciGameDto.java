@@ -11,6 +11,8 @@ public class UciGameDto {
     private List<UciGameMoveDto> moves = new ArrayList<>();
     private String whitePlayerName;
     private String blackPlayerName;
+    private Long databaseGameId;
+    private List<GameAnnotationDto> annotations = new ArrayList<>();
 
     /**
      * Creates a new UciGameDto instance.
@@ -34,12 +36,29 @@ public class UciGameDto {
             List<UciGameMoveDto> moves,
             String whitePlayerName,
             String blackPlayerName) {
+        this(totalPlies, sideToMove, position, moves, whitePlayerName, blackPlayerName, null, List.of());
+    }
+
+    /**
+     * Creates a game DTO including optional persisted PGN annotations.
+     */
+    public UciGameDto(
+            int totalPlies,
+            String sideToMove,
+            String position,
+            List<UciGameMoveDto> moves,
+            String whitePlayerName,
+            String blackPlayerName,
+            Long databaseGameId,
+            List<GameAnnotationDto> annotations) {
         this.totalPlies = totalPlies;
         this.sideToMove = sideToMove;
         this.position = position;
         this.moves = moves != null ? moves : new ArrayList<>();
         this.whitePlayerName = whitePlayerName;
         this.blackPlayerName = blackPlayerName;
+        this.databaseGameId = databaseGameId;
+        this.annotations = annotations != null ? new ArrayList<>(annotations) : new ArrayList<>();
     }
 
     /**
@@ -136,5 +155,21 @@ public class UciGameDto {
      */
     public void setBlackPlayerName(String blackPlayerName) {
         this.blackPlayerName = blackPlayerName;
+    }
+
+    public Long getDatabaseGameId() {
+        return databaseGameId;
+    }
+
+    public void setDatabaseGameId(Long databaseGameId) {
+        this.databaseGameId = databaseGameId;
+    }
+
+    public List<GameAnnotationDto> getAnnotations() {
+        return annotations;
+    }
+
+    public void setAnnotations(List<GameAnnotationDto> annotations) {
+        this.annotations = annotations != null ? new ArrayList<>(annotations) : new ArrayList<>();
     }
 }

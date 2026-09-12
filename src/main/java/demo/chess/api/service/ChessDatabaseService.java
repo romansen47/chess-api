@@ -36,6 +36,7 @@ import demo.chess.game.DummyGame;
 import demo.chess.game.LegalMoveResolver;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
+import demo.chess.notation.PgnAnnotationParser;
 import demo.chess.notation.PgnNotation;
 import jakarta.annotation.PreDestroy;
 
@@ -48,6 +49,7 @@ public class ChessDatabaseService {
     private final UciGameService uciGameService;
     private final Path databasePath;
     private final GameLoader gameLoader = new GameLoader();
+    private final PgnAnnotationParser annotationParser = new PgnAnnotationParser();
     private final ExecutorService importExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "chess-database-import");
         thread.setDaemon(true);
@@ -127,6 +129,24 @@ public class ChessDatabaseService {
         } finally {
             activeImportId.compareAndSet(importId, null);
         }
+    }
+
+    /**
+     * Imports one game, resolves its database id and preserves any annotations from
+     * the uploaded PGN.
+     */
+    public long importSingleGameAndResolveId(String content)
+            throws SQLException, IOException, NoMoveFoundException {
+        importSingleGame(content);
+        long gameId = database().findGameId(content);
+        if (!annotationParser.parse(content).isEmpty()) {
+            database().saveAnnotatedPgn(gameId, content);
+        }
+        return gameId;
+    }
+
+    public void saveAnnotatedPgn(long gameId, String pgn) throws SQLException {
+        database().saveAnnotatedPgn(gameId, pgn);
     }
 
     /**
@@ -233,7 +253,7 @@ public class ChessDatabaseService {
     public UciGameDto loadGame(long gameId)
             throws SQLException, IOException, NoMoveFoundException {
         String pgn = database().getGameAsPgn(gameId);
-        return uciGameService.importGame(pgn);
+        return uciGameService.importGame(pgn, gameId);
     }
 
     /**

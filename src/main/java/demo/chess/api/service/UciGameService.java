@@ -11,6 +11,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
+import demo.chess.api.dto.GameAnnotationDto;
 import demo.chess.api.dto.GameSnapshotDto;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.api.dto.UciGameMoveDto;
@@ -21,6 +22,8 @@ import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
+import demo.chess.notation.PgnAnnotationParser;
+import demo.chess.notation.PgnMoveAnnotation;
 import demo.chess.notation.PgnNotation;
 import demo.chess.save.GameSaver;
 
@@ -33,6 +36,7 @@ public class UciGameService {
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
     private final GameLoader gameLoader = new GameLoader();
     private final GameSaver gameSaver = new GameSaver();
+    private final PgnAnnotationParser annotationParser = new PgnAnnotationParser();
 
     /**
      * Optional analysis-only game loaded from a PGN file. It deliberately does not
@@ -40,6 +44,8 @@ public class UciGameService {
      */
     private Game importedAnalysisGame;
     private Map<String, String> importedPgnTags = new LinkedHashMap<>();
+    private Long importedDatabaseGameId;
+    private Map<Integer, PgnMoveAnnotation> importedAnnotations = new LinkedHashMap<>();
 
     public UciGameService(
             GameService gameService,
@@ -49,6 +55,11 @@ public class UciGameService {
     }
 
     public synchronized UciGameDto importGame(String content) throws NoMoveFoundException, IOException {
+        return importGame(content, null);
+    }
+
+    public synchronized UciGameDto importGame(String content, Long databaseGameId)
+            throws NoMoveFoundException, IOException {
         List<String> uciMoves = gameLoader.parsePgnMoveList(content);
 
         Simulation importedGame = Simulation.createSimulation();
@@ -58,6 +69,8 @@ public class UciGameService {
         Map<String, String> pgnTags = new LinkedHashMap<>(gameLoader.parsePgnTags(content));
         this.importedAnalysisGame = importedGame;
         this.importedPgnTags = pgnTags;
+        this.importedDatabaseGameId = databaseGameId;
+        this.importedAnnotations = new LinkedHashMap<>(annotationParser.parse(content));
 
         String sideToMove = importedGame.getPlayer() != null && importedGame.getPlayer().getColor() != null
                 ? importedGame.getPlayer().getColor().name().toLowerCase(Locale.ROOT)
@@ -69,14 +82,17 @@ public class UciGameService {
                 BoardPositionSerializer.toPositionString(importedGame),
                 moveDtos,
                 playerName(pgnTags.get("White"), "White"),
-                playerName(pgnTags.get("Black"), "Black"));
+                playerName(pgnTags.get("Black"), "Black"),
+                importedDatabaseGameId,
+                annotationDtos(importedAnnotations));
     }
 
     public synchronized String exportGame(boolean whiteComputerControlled, boolean blackComputerControlled)
             throws NoMoveFoundException, IOException {
         return gameSaver.toPgn(
                 getAnalysisMoveListSnapshot(),
-                getPgnTagsForExport(whiteComputerControlled, blackComputerControlled));
+                getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
+                importedAnalysisGame != null ? importedAnnotations : Map.of());
     }
 
     public synchronized List<Move> getAnalysisMoveListSnapshot() {
@@ -93,6 +109,53 @@ public class UciGameService {
     public synchronized void clearImportedGame() {
         importedAnalysisGame = null;
         importedPgnTags = new LinkedHashMap<>();
+        importedDatabaseGameId = null;
+        importedAnnotations = new LinkedHashMap<>();
+    }
+
+    public synchronized Long getImportedDatabaseGameId() {
+        return importedDatabaseGameId;
+    }
+
+    public synchronized void setImportedDatabaseGameId(Long databaseGameId) {
+        this.importedDatabaseGameId = databaseGameId;
+    }
+
+    public synchronized List<GameAnnotationDto> getAnnotationDtos() {
+        return annotationDtos(importedAnnotations);
+    }
+
+    public synchronized String updateAnnotations(
+            List<GameAnnotationDto> annotations,
+            boolean whiteComputerControlled,
+            boolean blackComputerControlled)
+            throws NoMoveFoundException, IOException {
+        Map<Integer, PgnMoveAnnotation> updated = new LinkedHashMap<>();
+        if (annotations != null) {
+            for (GameAnnotationDto annotation : annotations) {
+                if (annotation == null || annotation.ply() <= 0) {
+                    continue;
+                }
+                PgnMoveAnnotation value = new PgnMoveAnnotation(
+                        annotation.nag(),
+                        annotation.comment(),
+                        annotation.evaluation(),
+                        annotation.variations());
+                if (!value.isEmpty()) {
+                    updated.put(annotation.ply(), value);
+                }
+            }
+        }
+
+        String pgn = gameSaver.toPgn(
+                getAnalysisMoveListSnapshot(),
+                getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
+                updated);
+
+        if (importedAnalysisGame != null) {
+            importedAnnotations = updated;
+        }
+        return pgn;
     }
 
     public synchronized GameSnapshotDto getCurrentGameSnapshot() throws NoMoveFoundException, IOException {
@@ -128,7 +191,9 @@ public class UciGameService {
                         BoardPositionSerializer.toPositionString(sourceGame),
                         moveDtos,
                         whitePlayerName,
-                        blackPlayerName));
+                        blackPlayerName,
+                        imported ? importedDatabaseGameId : null,
+                        imported ? annotationDtos(importedAnnotations) : List.of()));
     }
 
     /**
@@ -159,6 +224,21 @@ public class UciGameService {
         }
 
         return result;
+    }
+
+    private List<GameAnnotationDto> annotationDtos(Map<Integer, PgnMoveAnnotation> annotations) {
+        if (annotations == null || annotations.isEmpty()) {
+            return List.of();
+        }
+        return annotations.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(entry -> new GameAnnotationDto(
+                        entry.getKey(),
+                        entry.getValue().nag(),
+                        entry.getValue().comment(),
+                        entry.getValue().evaluation(),
+                        entry.getValue().variations()))
+                .toList();
     }
 
     private Map<String, String> getPgnTagsForExport(
