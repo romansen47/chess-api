@@ -122,11 +122,44 @@ public class AnalysisEvaluationService {
         List<String> moves = request.getMoves() != null ? request.getMoves() : List.of();
         String positionKey = "variation:" + request.getAnchorPly() + ":" + String.join(" ", moves);
 
-        moveAssessmentService.stopEvaluation();
-
         try {
-            Game game = analysisVariationService.createVariationGame(request.getAnchorPly(), moves);
-            return evaluateGame(game, positionKey);
+            Game game = analysisVariationService.createVariationGame(
+                    request.getAnchorPly(),
+                    moves);
+            EngineEvaluationDto result = evaluateGame(game, positionKey);
+
+            boolean usableResult =
+                    (result.getLines() != null && !result.getLines().isEmpty())
+                    || Math.abs(result.getEval()) >= 99;
+
+            if (moves.isEmpty()) {
+                moveAssessmentService.stopEvaluation();
+                return result;
+            }
+
+            if (usableResult) {
+                List<String> prefix = moves.subList(0, moves.size() - 1);
+                String playedMoveUci = moves.get(moves.size() - 1);
+                Game positionBeforeMove =
+                        analysisVariationService.createVariationGame(
+                                request.getAnchorPly(),
+                                prefix);
+
+                AnalysisMoveAssessmentService.Result assessment =
+                        moveAssessmentService.assessPosition(
+                                positionBeforeMove,
+                                playedMoveUci,
+                                positionKey,
+                                result.getEval());
+
+                result.setMoveAnnotationReady(assessment.ready());
+                result.setMoveAnnotationDepth(assessment.depth());
+                result.setMoveAnnotation(
+                        demo.chess.api.mapper.MoveAnnotationDtoMapper.toDto(
+                                assessment.annotation()));
+            }
+
+            return result;
         } catch (NoMoveFoundException | IOException e) {
             throw new IllegalStateException("Could not reconstruct analysis variation", e);
         } catch (RuntimeException e) {
