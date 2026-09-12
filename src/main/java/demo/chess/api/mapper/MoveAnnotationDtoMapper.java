@@ -4,6 +4,7 @@ import demo.chess.api.dto.MoveAnnotationDto;
 import demo.chess.analysis.annotation.BrilliantReason;
 import demo.chess.analysis.annotation.MoveAnnotation;
 import demo.chess.analysis.annotation.MoveAnnotationKind;
+import demo.chess.analysis.annotation.MaterialSacrificeType;
 
 /**
  * Maps chess-core annotation domain objects to the stable API representation.
@@ -26,6 +27,7 @@ public final class MoveAnnotationDtoMapper {
         dto.setSecondBestEvaluation(annotation.getSecondBestEvaluation());
         dto.setBrilliantReason(reason(annotation.getBrilliantReason()));
         dto.setMaterialInvestment(annotation.getMaterialInvestment());
+        dto.setSacrificeType(sacrificeType(annotation.getSacrificeType()));
         dto.setEarlyDepth(annotation.getEarlyDepth());
         dto.setEarlyRank(annotation.getEarlyRank());
         dto.setFinalDepth(annotation.getFinalDepth());
@@ -61,6 +63,17 @@ public final class MoveAnnotationDtoMapper {
             case BRILLIANT -> "brilliant";
             case MISTAKE -> "mistake";
             case BLUNDER -> "blunder";
+        };
+    }
+
+    private static String sacrificeType(MaterialSacrificeType type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case ACTIVE_INVESTMENT -> "activeInvestment";
+            case NEW_MATERIAL_OFFER -> "newMaterialOffer";
+            case DECLINED_MATERIAL_SAVE -> "declinedMaterialSave";
         };
     }
 
