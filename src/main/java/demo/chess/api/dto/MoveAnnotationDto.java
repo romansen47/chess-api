@@ -13,6 +13,7 @@ public class MoveAnnotationDto {
     private Double secondBestEvaluation;
     private String brilliantReason;
     private Double materialInvestment;
+    private String sacrificeType;
     private Integer earlyDepth;
     private Integer earlyRank;
     private Integer finalDepth;
@@ -82,6 +83,14 @@ public class MoveAnnotationDto {
 
     public void setMaterialInvestment(Double materialInvestment) {
         this.materialInvestment = materialInvestment;
+    }
+
+    public String getSacrificeType() {
+        return sacrificeType;
+    }
+
+    public void setSacrificeType(String sacrificeType) {
+        this.sacrificeType = sacrificeType;
     }
 
     public Integer getEarlyDepth() {
