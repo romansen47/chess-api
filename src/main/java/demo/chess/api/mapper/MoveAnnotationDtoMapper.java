@@ -30,6 +30,13 @@ public final class MoveAnnotationDtoMapper {
         dto.setEarlyRank(annotation.getEarlyRank());
         dto.setFinalDepth(annotation.getFinalDepth());
         dto.setFinalRank(annotation.getFinalRank());
+        dto.setGivesCheck(annotation.getGivesCheck());
+        dto.setEarlyRegret(annotation.getEarlyRegret());
+        dto.setMiddleRegret(annotation.getMiddleRegret());
+        dto.setLateRegret(annotation.getLateRegret());
+        dto.setEarlyStrength(annotation.getEarlyStrength());
+        dto.setMiddleStrength(annotation.getMiddleStrength());
+        dto.setLateStrength(annotation.getLateStrength());
         return dto;
     }
 
