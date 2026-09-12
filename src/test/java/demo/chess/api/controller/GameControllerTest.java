@@ -52,7 +52,8 @@ class GameControllerTest {
                 1. e4 e5 *
                 """;
         UciGameDto importedGame = new UciGameDto();
-        when(uciGameService.importGame(pgn)).thenReturn(importedGame);
+        when(chessDatabaseService.importSingleGameAndResolveId(pgn)).thenReturn(42L);
+        when(uciGameService.importGame(pgn, 42L)).thenReturn(importedGame);
 
         ResponseEntity<?> response = controller.importPgnGame(pgn);
 
@@ -61,8 +62,8 @@ class GameControllerTest {
         verify(analysisReplayService).cancel();
 
         InOrder importOrder = inOrder(chessDatabaseService, uciGameService);
-        importOrder.verify(chessDatabaseService).importSingleGame(pgn);
-        importOrder.verify(uciGameService).importGame(pgn);
+        importOrder.verify(chessDatabaseService).importSingleGameAndResolveId(pgn);
+        importOrder.verify(uciGameService).importGame(pgn, 42L);
     }
 
     /**
