@@ -138,7 +138,7 @@ class AnalysisMoveAssessmentServiceTest {
         assertTrue(result.ready());
         assertNotNull(result.annotation());
         assertEquals(
-                MoveAnnotationKind.BRILLIANT,
+                MoveAnnotationKind.EXTRAORDINARY,
                 result.annotation().getKind());
     }
 
