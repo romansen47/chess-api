@@ -129,7 +129,7 @@ public class AnalysisReplayService {
         Move originalMove = session.originalMoves.get(session.currentPly);
         DeepAnalysisResult analysisBeforeMove = session.lastDeepAnalysisResult;
         Game positionBeforeMove = analysisBeforeMove != null
-                ? Simulation.forkDummyFrom(session.replayGame.getMoveList())
+                ? Simulation.forkSimulationFrom(session.replayGame.getMoveList())
                 : null;
 
         Move replayMove = session.replayGame.getPlayer().getMoveInSimulation(session.replayGame, originalMove);
