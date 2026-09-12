@@ -32,6 +32,10 @@ public final class MoveAnnotationDtoMapper {
                 annotation.getMaterialInvestment());
         dto.setSacrificeType(
                 sacrificeType(annotation.getSacrificeType()));
+        dto.setShortTermMaterialCompensated(
+                annotation.getShortTermMaterialCompensated());
+        dto.setMaterialCompensationPlies(
+                annotation.getMaterialCompensationPlies());
 
         dto.setEarlyDepth(annotation.getEarlyDepth());
         dto.setEarlyRank(annotation.getEarlyRank());

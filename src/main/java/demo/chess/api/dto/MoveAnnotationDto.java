@@ -15,6 +15,8 @@ public class MoveAnnotationDto {
     private String extraordinaryReason;
     private Double materialInvestment;
     private String sacrificeType;
+    private Boolean shortTermMaterialCompensated;
+    private Integer materialCompensationPlies;
 
     private Integer earlyDepth;
     private Integer earlyRank;
@@ -90,6 +92,26 @@ public class MoveAnnotationDto {
 
     public void setSacrificeType(String sacrificeType) {
         this.sacrificeType = sacrificeType;
+    }
+
+    public Boolean getShortTermMaterialCompensated() {
+        return shortTermMaterialCompensated;
+    }
+
+    public void setShortTermMaterialCompensated(
+            Boolean shortTermMaterialCompensated) {
+        this.shortTermMaterialCompensated =
+                shortTermMaterialCompensated;
+    }
+
+    public Integer getMaterialCompensationPlies() {
+        return materialCompensationPlies;
+    }
+
+    public void setMaterialCompensationPlies(
+            Integer materialCompensationPlies) {
+        this.materialCompensationPlies =
+                materialCompensationPlies;
     }
 
     public Integer getEarlyDepth() {
