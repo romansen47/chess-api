@@ -1,8 +1,11 @@
 package demo.chess.api.service;
 
+import org.springframework.stereotype.Service;
+
 /**
  * Reads runtime feature switches from JVM system properties.
  */
+@Service
 public final class ProgramFeatureService {
 
     static final String DEBUG_MODE_PROPERTY = "debugMode";
