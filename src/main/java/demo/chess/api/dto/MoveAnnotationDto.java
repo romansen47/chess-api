@@ -17,6 +17,13 @@ public class MoveAnnotationDto {
     private Integer earlyRank;
     private Integer finalDepth;
     private Integer finalRank;
+    private Boolean givesCheck;
+    private Double earlyRegret;
+    private Double middleRegret;
+    private Double lateRegret;
+    private Double earlyStrength;
+    private Double middleStrength;
+    private Double lateStrength;
 
     public MoveAnnotationDto() {
     }
@@ -107,5 +114,61 @@ public class MoveAnnotationDto {
 
     public void setFinalRank(Integer finalRank) {
         this.finalRank = finalRank;
+    }
+
+    public Boolean getGivesCheck() {
+        return givesCheck;
+    }
+
+    public void setGivesCheck(Boolean givesCheck) {
+        this.givesCheck = givesCheck;
+    }
+
+    public Double getEarlyRegret() {
+        return earlyRegret;
+    }
+
+    public void setEarlyRegret(Double earlyRegret) {
+        this.earlyRegret = earlyRegret;
+    }
+
+    public Double getMiddleRegret() {
+        return middleRegret;
+    }
+
+    public void setMiddleRegret(Double middleRegret) {
+        this.middleRegret = middleRegret;
+    }
+
+    public Double getLateRegret() {
+        return lateRegret;
+    }
+
+    public void setLateRegret(Double lateRegret) {
+        this.lateRegret = lateRegret;
+    }
+
+    public Double getEarlyStrength() {
+        return earlyStrength;
+    }
+
+    public void setEarlyStrength(Double earlyStrength) {
+        this.earlyStrength = earlyStrength;
+    }
+
+    public Double getMiddleStrength() {
+        return middleStrength;
+    }
+
+    public void setMiddleStrength(Double middleStrength) {
+        this.middleStrength = middleStrength;
+    }
+
+    public Double getLateStrength() {
+        return lateStrength;
+    }
+
+    public void setLateStrength(Double lateStrength) {
+        this.lateStrength = lateStrength;
     }
 }
