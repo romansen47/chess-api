@@ -11,20 +11,19 @@ public class MoveAnnotationDto {
     private Double winChanceLoss;
     private double bestEvaluation;
     private Double secondBestEvaluation;
-    private String brilliantReason;
+
+    private String extraordinaryReason;
     private Double materialInvestment;
     private String sacrificeType;
+
     private Integer earlyDepth;
     private Integer earlyRank;
     private Integer finalDepth;
     private Integer finalRank;
     private Boolean givesCheck;
     private Double earlyRegret;
-    private Double middleRegret;
-    private Double lateRegret;
     private Double earlyStrength;
-    private Double middleStrength;
-    private Double lateStrength;
+    private Double finalStrength;
 
     public MoveAnnotationDto() {
     }
@@ -69,12 +68,12 @@ public class MoveAnnotationDto {
         this.secondBestEvaluation = secondBestEvaluation;
     }
 
-    public String getBrilliantReason() {
-        return brilliantReason;
+    public String getExtraordinaryReason() {
+        return extraordinaryReason;
     }
 
-    public void setBrilliantReason(String brilliantReason) {
-        this.brilliantReason = brilliantReason;
+    public void setExtraordinaryReason(String extraordinaryReason) {
+        this.extraordinaryReason = extraordinaryReason;
     }
 
     public Double getMaterialInvestment() {
@@ -141,22 +140,6 @@ public class MoveAnnotationDto {
         this.earlyRegret = earlyRegret;
     }
 
-    public Double getMiddleRegret() {
-        return middleRegret;
-    }
-
-    public void setMiddleRegret(Double middleRegret) {
-        this.middleRegret = middleRegret;
-    }
-
-    public Double getLateRegret() {
-        return lateRegret;
-    }
-
-    public void setLateRegret(Double lateRegret) {
-        this.lateRegret = lateRegret;
-    }
-
     public Double getEarlyStrength() {
         return earlyStrength;
     }
@@ -165,19 +148,11 @@ public class MoveAnnotationDto {
         this.earlyStrength = earlyStrength;
     }
 
-    public Double getMiddleStrength() {
-        return middleStrength;
+    public Double getFinalStrength() {
+        return finalStrength;
     }
 
-    public void setMiddleStrength(Double middleStrength) {
-        this.middleStrength = middleStrength;
-    }
-
-    public Double getLateStrength() {
-        return lateStrength;
-    }
-
-    public void setLateStrength(Double lateStrength) {
-        this.lateStrength = lateStrength;
+    public void setFinalStrength(Double finalStrength) {
+        this.finalStrength = finalStrength;
     }
 }
