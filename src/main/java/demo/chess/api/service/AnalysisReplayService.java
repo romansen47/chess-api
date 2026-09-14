@@ -135,6 +135,20 @@ public class AnalysisReplayService {
     }
 
     /**
+     * Clears the shared replay session without creating a new one.
+     *
+     * <p>Used when the global game changes so passive tabs no longer rehydrate
+     * an analysis that belongs to the previous game.</p>
+     */
+    public synchronized void clear() {
+        if (session != null) {
+            session.active = false;
+            closeSessionEngine();
+            session = null;
+        }
+    }
+
+    /**
      * Performs the next operation.
      * @return the result of the operation
      */
