@@ -15,6 +15,19 @@ import demo.chess.api.service.AnalysisReplayService;
 class AnalysisReplayControllerTest {
 
     @Test
+    void stateDelegatesToReplayService() {
+        AnalysisReplayService service = mock(AnalysisReplayService.class);
+        AnalysisReplayStepDto expected = new AnalysisReplayStepDto();
+        when(service.state()).thenReturn(expected);
+
+        AnalysisReplayController controller = new AnalysisReplayController(service);
+        ResponseEntity<?> response = controller.state();
+
+        assertSame(expected, response.getBody());
+        verify(service).state();
+    }
+
+    @Test
     void startDelegatesToReplayService() throws Exception {
         AnalysisReplayService service = mock(AnalysisReplayService.class);
         AnalysisReplaySettingsDto settings = new AnalysisReplaySettingsDto();

@@ -186,6 +186,28 @@ public class AnalysisReplayService {
 
 
     /**
+     * Returns the current analysis replay state without advancing it.
+     *
+     * @return current replay state, or null when no replay session exists
+     */
+    public synchronized AnalysisReplayStepDto state() {
+        if (session == null) {
+            return null;
+        }
+
+        return toStepDto(
+                session,
+                !session.active,
+                null,
+                null,
+                null,
+                latestEvaluation(session),
+                latestBar(session),
+                latestDepth(session),
+                null);
+    }
+
+    /**
      * Cancels the current analysis replay.
      * @return current replay state
      */
@@ -206,6 +228,14 @@ public class AnalysisReplayService {
                 latestBar(session),
                 latestDepth(session),
                 "Analysis replay cancelled.");
+    }
+
+    /**
+     * Discards the replay session because the underlying game is being replaced.
+     */
+    public synchronized void clear() {
+        closeSessionEngine();
+        session = null;
     }
 
     private DeepAnalysisEngine createDeepAnalysisEngine(String enginePath) {

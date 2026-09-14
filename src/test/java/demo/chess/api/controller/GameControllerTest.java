@@ -59,7 +59,7 @@ class GameControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertSame(importedGame, response.getBody());
-        verify(analysisReplayService).cancel();
+        verify(analysisReplayService).clear();
 
         InOrder importOrder = inOrder(chessDatabaseService, uciGameService);
         importOrder.verify(chessDatabaseService).importSingleGameAndResolveId(pgn);
@@ -104,7 +104,7 @@ class GameControllerTest {
                 "code", "PGN_MULTIPLE_GAMES",
                 "gameCount", 2,
                 "earlyAbort", true), response.getBody());
-        verify(analysisReplayService, never()).cancel();
+        verify(analysisReplayService, never()).clear();
         verifyNoInteractions(chessDatabaseService, uciGameService);
     }
 
