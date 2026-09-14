@@ -2,14 +2,12 @@ package demo.chess.api.controller;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
-import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.service.AnalysisReplayService;
 
 @RestController
@@ -24,18 +22,6 @@ public class AnalysisReplayController {
      */
     public AnalysisReplayController(AnalysisReplayService analysisReplayService) {
         this.analysisReplayService = analysisReplayService;
-    }
-
-    /**
-     * Returns the current shared replay state without changing it.
-     * @return current replay state, or 204 when no replay session exists
-     */
-    @GetMapping("/state")
-    public ResponseEntity<?> state() {
-        AnalysisReplayStepDto state = analysisReplayService.getState();
-        return state == null
-                ? ResponseEntity.noContent().build()
-                : ResponseEntity.ok(state);
     }
 
     /**
