@@ -9,9 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,9 +37,7 @@ import demo.chess.game.LegalMoveResolver;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
 import demo.chess.notation.PgnAnnotationParser;
-import demo.chess.notation.PgnMoveAnnotation;
 import demo.chess.notation.PgnNotation;
-import demo.chess.save.GameSaver;
 import jakarta.annotation.PreDestroy;
 
 /**
@@ -53,8 +49,9 @@ public class ChessDatabaseService {
     private final UciGameService uciGameService;
     private final Path databasePath;
     private final GameLoader gameLoader = new GameLoader();
-    private final GameSaver gameSaver = new GameSaver();
     private final PgnAnnotationParser annotationParser = new PgnAnnotationParser();
+    private final ChessAnalysisDiagnosticPgnSanitizer diagnosticPgnSanitizer =
+            new ChessAnalysisDiagnosticPgnSanitizer();
     private final ExecutorService importExecutor = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "chess-database-import");
         thread.setDaemon(true);
@@ -264,29 +261,6 @@ public class ChessDatabaseService {
             database().saveAnnotatedPgn(gameId, sanitizedPgn);
         }
         return uciGameService.importGame(sanitizedPgn, gameId);
-    }
-
-    /**
-     * Rewrites old ChessAnalysisTool diagnostic exports into normal annotated PGN.
-     *
-     * <p>Only persistable PGN annotations survive. Internal diagnostic fields such
-     * as depth, classifier data and principal variations are intentionally dropped,
-     * while standard evaluations and any real PGN annotations remain available.</p>
-     */
-    private String sanitizeDiagnosticPgn(String content)
-            throws IOException, NoMoveFoundException {
-        Map<String, String> tags = new LinkedHashMap<>(gameLoader.parsePgnTags(content));
-        String format = tags.get("AnalysisFormat");
-        if (format == null || !format.startsWith("ChessAnalysisTool-Diagnostic-")) {
-            return content;
-        }
-
-        Map<Integer, PgnMoveAnnotation> annotations = annotationParser.parse(content);
-        Simulation simulation = Simulation.createSimulation();
-        gameLoader.loadGame(gameLoader.parsePgnMoveList(content), simulation);
-
-        tags.remove("AnalysisFormat");
-        return gameSaver.toPgn(simulation.getMoveList(), tags, annotations);
     }
 
     /**
