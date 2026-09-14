@@ -141,7 +141,7 @@ public class ChessDatabaseService {
             throws SQLException, IOException, NoMoveFoundException {
         importSingleGame(content);
         long gameId = database().findGameId(content);
-        String storedPgn = sanitizeDiagnosticPgn(content);
+        String storedPgn = diagnosticPgnSanitizer.sanitize(content);
         if (!annotationParser.parse(storedPgn).isEmpty()) {
             database().saveAnnotatedPgn(gameId, storedPgn);
         }
@@ -256,7 +256,7 @@ public class ChessDatabaseService {
     public UciGameDto loadGame(long gameId)
             throws SQLException, IOException, NoMoveFoundException {
         String pgn = database().getGameAsPgn(gameId);
-        String sanitizedPgn = sanitizeDiagnosticPgn(pgn);
+        String sanitizedPgn = diagnosticPgnSanitizer.sanitize(pgn);
         if (!sanitizedPgn.equals(pgn)) {
             database().saveAnnotatedPgn(gameId, sanitizedPgn);
         }
