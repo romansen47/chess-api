@@ -59,38 +59,13 @@ public class EvaluationService {
     }
 
     /**
-     * Starts the normal live evaluation when necessary and returns one snapshot.
-     *
-     * <p>This is an explicit state-changing operation. Passive callers should use
-     * {@link #getCurrentEvaluation()} so opening or refreshing a browser tab can
-     * never create an engine process.</p>
-     *
-     * @return evaluation snapshot
+     * Returns the evaluation.
+     * @return the evaluation
      */
     public synchronized EngineEvaluationDto getEvaluation() {
-        return evaluateWithEngine(getEvaluationEngine());
-    }
-
-    /**
-     * Returns one snapshot only when the normal evaluation engine already exists.
-     *
-     * <p>No engine is created, replaced or restarted by this method.</p>
-     *
-     * @return current evaluation snapshot, or {@code null} when no matching live
-     *         evaluation engine is running
-     */
-    public synchronized EngineEvaluationDto getCurrentEvaluation() {
-        String configuredPath = engineRuntimeSelectionService.getEvaluationEnginePath();
-        if (evaluationEngine == null
-                || !configuredPath.equals(currentEvaluationEnginePath)) {
-            return null;
-        }
-        return evaluateWithEngine(evaluationEngine);
-    }
-
-    private EngineEvaluationDto evaluateWithEngine(EvaluationEngine engine) {
         Game game = gameService.getCurrentGame();
         EngineConfig engineConfig = engineRuntimeSelectionService.getEvaluationConfig();
+        EvaluationEngine engine = getEvaluationEngine();
         long settingsVersion = engineRuntimeSelectionService.getEvaluationVersion();
 
         logger.debug("Requesting best lines from engine (single snapshot)...");
