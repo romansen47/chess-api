@@ -33,35 +33,16 @@ public class EngineController {
     }
 
     /**
-     * Returns the current evaluation without creating an engine.
-     * @return current evaluation, or 204 when no evaluation engine is running
+     * Returns the evaluation.
+     * @return the evaluation
      */
     @GetMapping("/eval")
     public ResponseEntity<?> getEvaluation() {
         try {
-            EngineEvaluationDto dto = evaluationService.getCurrentEvaluation();
-            return dto == null
-                    ? ResponseEntity.noContent().build()
-                    : ResponseEntity.ok(dto);
+            EngineEvaluationDto dto = evaluationService.getEvaluation();
+            return ResponseEntity.ok(dto);
         } catch (RuntimeException e) {
-            System.err.println("[EngineController] Error while reading evaluation: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Engine error: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Explicitly starts the normal evaluation engine and returns one snapshot.
-     * @return evaluation snapshot
-     */
-    @PostMapping("/eval/start")
-    public ResponseEntity<?> startEvaluation() {
-        try {
-            return ResponseEntity.ok(evaluationService.getEvaluation());
-        } catch (RuntimeException e) {
-            System.err.println("[EngineController] Error while starting evaluation: " + e.getMessage());
+            System.err.println("[EngineController] Error while evaluating position: " + e.getMessage());
             e.printStackTrace();
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
