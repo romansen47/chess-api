@@ -148,7 +148,7 @@ public class ChessDatabaseController {
             value = "/games/{gameId}/load",
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> loadGame(@PathVariable long gameId) {
-        analysisReplayService.cancel();
+        analysisReplayService.clear();
 
         try {
             UciGameDto game = chessDatabaseService.loadGame(gameId);
