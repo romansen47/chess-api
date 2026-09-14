@@ -21,9 +21,52 @@ import demo.chess.definitions.engines.DeepAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
+import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
+import demo.chess.game.LegalMoveResolver;
+import demo.chess.game.impl.Simulation;
 
 class AnalysisEvaluationServiceTest {
+
+    @Test
+    void reclassifiesHistoricalMoveWithSingleLiveEngine()
+            throws Exception {
+        Simulation original = Simulation.createSimulation();
+        Move e4 = LegalMoveResolver.resolveUci(
+                original,
+                "e2e4");
+        original.apply(e4);
+
+        TestContext context =
+                createContext(List.of(e4));
+
+        when(context.engine.getBestLines(any(Game.class), any()))
+                .thenAnswer(invocation -> {
+                    Game game = invocation.getArgument(0);
+                    return game.getMoveList().isEmpty()
+                            ? rootBlunderLines()
+                            : List.of(
+                                    line(-3.0, 20, "e7e5"));
+                });
+
+        EngineEvaluationDto result =
+                context.service.getEvaluation(1);
+
+        assertTrue(result.isMoveAnnotationReady());
+        assertNotNull(result.getMoveAnnotation());
+        assertEquals(
+                "blunder",
+                result.getMoveAnnotation().getKind());
+        assertEquals(
+                20,
+                result.getMoveAnnotationDepth());
+
+        verify(context.factory, times(1)).create(
+                "fake-engine",
+                "analysis evaluation");
+        verify(context.engine, times(2))
+                .getBestLines(any(Game.class), any());
+    }
 
     @Test
     void reusesSingleLiveEngineForVariationAnnotation()
@@ -115,10 +158,15 @@ class AnalysisEvaluationServiceTest {
     }
 
     private TestContext createContext() throws Exception {
+        return createContext(List.of());
+    }
+
+    private TestContext createContext(
+            List<Move> originalMoves) throws Exception {
         UciGameService uciGameService =
                 mock(UciGameService.class);
         when(uciGameService.getAnalysisMoveListSnapshot())
-                .thenReturn(List.of());
+                .thenReturn(originalMoves);
 
         AnalysisVariationService variationService =
                 new AnalysisVariationService(uciGameService);
