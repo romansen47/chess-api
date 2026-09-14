@@ -2,9 +2,7 @@ package demo.chess.api.service;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import org.springframework.stereotype.Service;
@@ -166,11 +164,6 @@ public class AnalysisReplayService {
                 evaluation.lines);
         profilePoint.setAnnotation(MoveAnnotationDtoMapper.toDto(annotation));
         session.profile.add(profilePoint);
-        if (evaluation.deepAnalysisResult != null) {
-            session.deepAnalysisResultsByPly.put(
-                    session.currentPly,
-                    evaluation.deepAnalysisResult);
-        }
         session.lastDeepAnalysisResult = evaluation.deepAnalysisResult;
 
         boolean done = session.currentPly >= session.originalMoves.size();
@@ -191,24 +184,6 @@ public class AnalysisReplayService {
                 done ? "Analysis replay finished." : null);
     }
 
-
-    /**
-     * Returns the completed DeepAnalysis result for the position after the
-     * requested ply.
-     *
-     * <p>The result remains available after the replay has finished so a later
-     * interactive analysis variation can use it as a bootstrap until the live
-     * evaluation engine has produced its own snapshot.</p>
-     *
-     * @param ply original-game ply identifying the analyzed position
-     * @return immutable DeepAnalysis result, or null when unavailable
-     */
-    public synchronized DeepAnalysisResult getDeepAnalysisResultForPly(int ply) {
-        if (session == null) {
-            return null;
-        }
-        return session.deepAnalysisResultsByPly.get(ply);
-    }
 
     /**
      * Cancels the current analysis replay.
@@ -435,8 +410,6 @@ public class AnalysisReplayService {
         private final UciEngineConfig engineConfig;
         private final String engineName;
         private final List<AnalysisProfilePointDto> profile = new ArrayList<>();
-        private final Map<Integer, DeepAnalysisResult> deepAnalysisResultsByPly =
-                new HashMap<>();
         private DeepAnalysisResult lastDeepAnalysisResult;
         private int currentPly = 0;
         private boolean active = true;
