@@ -632,6 +632,9 @@ public class AnalysisEvaluationService {
         currentDepthHistory.clear();
         currentFinalLines = List.of();
         liveSnapshots.clear();
+        historicalAssessmentTargetPly = null;
+        historicalAssessmentSettingsVersion = -1L;
+        historicalAnalysisBeforeMove = null;
         lastSeenSettingsVersion = -1L;
         lastValidEvaluation = null;
     }
