@@ -66,6 +66,9 @@ public class AnalysisEvaluationService {
     private long lastSeenSettingsVersion = -1L;
     private List<EngineLine> currentFinalLines = List.of();
     private EngineEvaluationDto lastValidEvaluation;
+    private Integer historicalAssessmentTargetPly;
+    private long historicalAssessmentSettingsVersion = -1L;
+    private DeepAnalysisResult historicalAnalysisBeforeMove;
 
     /**
      * Creates a new AnalysisEvaluationService instance.
@@ -96,9 +99,11 @@ public class AnalysisEvaluationService {
     /**
      * Returns the live evaluation for one original-game ply.
      *
-     * <p>Existing DeepAnalysis annotations deliberately remain untouched here.
-     * Live move annotations are produced only for newly played temporary
-     * analysis moves.</p>
+     * <p>For a historical move, the single live evaluation engine first
+     * analyzes the position before that move. As soon as a usable snapshot is
+     * available, the same engine switches to the selected position and the
+     * move is classified from the live before/after data. No second engine
+     * instance is created.</p>
      *
      * @param ply the ply
      * @return the evaluation
@@ -113,8 +118,80 @@ public class AnalysisEvaluationService {
         }
 
         try {
-            Game game = createReplayGame(originalMoves, ply);
-            return evaluateGame(game, "ply:" + ply);
+            long settingsVersion =
+                    engineRuntimeSelectionService.getEvaluationVersion();
+            String configuredPath =
+                    engineRuntimeSelectionService.getEvaluationEnginePath();
+
+            resetForChangedSettingsIfNecessary(
+                    settingsVersion,
+                    configuredPath);
+            ensureHistoricalAssessmentTarget(
+                    ply,
+                    settingsVersion);
+
+            if (!hasUsableAnalysis(historicalAnalysisBeforeMove)) {
+                String beforePositionKey =
+                        "ply:" + (ply - 1);
+                historicalAnalysisBeforeMove =
+                        liveAnalysisForPosition(
+                                beforePositionKey,
+                                settingsVersion);
+
+                if (!hasUsableAnalysis(historicalAnalysisBeforeMove)) {
+                    Game positionBeforeMove =
+                            createReplayGame(
+                                    originalMoves,
+                                    ply - 1);
+                    evaluateGame(
+                            positionBeforeMove,
+                            beforePositionKey);
+                    historicalAnalysisBeforeMove =
+                            liveAnalysisForPosition(
+                                    beforePositionKey,
+                                    settingsVersion);
+                }
+
+                if (!hasUsableAnalysis(historicalAnalysisBeforeMove)) {
+                    return pendingHistoricalEvaluation();
+                }
+            }
+
+            Game game =
+                    createReplayGame(originalMoves, ply);
+            EngineEvaluationDto result =
+                    evaluateGame(
+                            game,
+                            "ply:" + ply);
+
+            boolean usableResult =
+                    (result.getLines() != null
+                            && !result.getLines().isEmpty())
+                    || Math.abs(result.getEval()) >= 99;
+            if (!usableResult) {
+                return result;
+            }
+
+            Game positionBeforeMove =
+                    createReplayGame(
+                            originalMoves,
+                            ply - 1);
+            String playedMoveUci =
+                    originalMoves.get(ply - 1).toString();
+            MoveAnnotation annotation =
+                    moveAnnotationClassifier.classify(
+                            positionBeforeMove,
+                            playedMoveUci,
+                            historicalAnalysisBeforeMove,
+                            result.getEval());
+
+            result.setMoveAnnotationReady(true);
+            result.setMoveAnnotationDepth(
+                    finalDepth(
+                            historicalAnalysisBeforeMove));
+            result.setMoveAnnotation(
+                    MoveAnnotationDtoMapper.toDto(annotation));
+            return result;
         } catch (NoMoveFoundException | IOException e) {
             throw new IllegalStateException(
                     "Could not reconstruct analysis position for ply " + ply,
@@ -333,6 +410,9 @@ public class AnalysisEvaluationService {
         currentFinalLines = List.of();
         liveSnapshots.clear();
         lastValidEvaluation = null;
+        historicalAssessmentTargetPly = null;
+        historicalAssessmentSettingsVersion = -1L;
+        historicalAnalysisBeforeMove = null;
         lastSeenSettingsVersion = -1L;
     }
 
@@ -373,6 +453,55 @@ public class AnalysisEvaluationService {
                             .next();
             liveSnapshots.remove(oldest);
         }
+    }
+
+    private void ensureHistoricalAssessmentTarget(
+            int ply,
+            long settingsVersion) {
+        if (historicalAssessmentTargetPly != null
+                && historicalAssessmentTargetPly == ply
+                && historicalAssessmentSettingsVersion == settingsVersion) {
+            return;
+        }
+
+        historicalAssessmentTargetPly = ply;
+        historicalAssessmentSettingsVersion = settingsVersion;
+        historicalAnalysisBeforeMove = null;
+    }
+
+    private DeepAnalysisResult liveAnalysisForPosition(
+            String positionKey,
+            long settingsVersion) {
+        if (positionKey.equals(currentPositionKey)
+                && settingsVersion == lastSeenSettingsVersion
+                && currentFinalLines != null
+                && !currentFinalLines.isEmpty()) {
+            return new DeepAnalysisResult(
+                    currentFinalLines,
+                    copyCurrentDepthHistory());
+        }
+
+        LiveAnalysisSnapshot snapshot =
+                liveSnapshots.get(positionKey);
+        if (snapshot != null
+                && snapshot.settingsVersion() == settingsVersion
+                && hasUsableAnalysis(snapshot.result())) {
+            return snapshot.result();
+        }
+
+        return null;
+    }
+
+    private EngineEvaluationDto pendingHistoricalEvaluation() {
+        EngineEvaluationDto result =
+                new EngineEvaluationDto(
+                        0.0,
+                        0.5,
+                        List.of());
+        result.setEngineName(
+                engineRuntimeSelectionService
+                        .getEvaluationEngineName());
+        return result;
     }
 
     private DeepAnalysisResult analysisBeforeVariationMove(
