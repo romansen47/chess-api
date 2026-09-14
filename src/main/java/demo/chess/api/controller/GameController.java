@@ -95,7 +95,6 @@ public class GameController {
      */
     @PostMapping("/new-game")
     public ResponseEntity<GameSettingsDto> startNewGame(@RequestBody(required = false) GameSettingsDto settings) {
-        analysisReplayService.clear();
         GameSettingsDto appliedSettings = gameLifecycleService.startNewGame(settings);
         uciGameService.clearImportedGame();
         return ResponseEntity.ok(appliedSettings);
@@ -210,7 +209,7 @@ public class GameController {
         }
 
         String content = probe.content();
-        analysisReplayService.clear();
+        analysisReplayService.cancel();
 
         try {
             long gameId = chessDatabaseService.importSingleGameAndResolveId(content);
