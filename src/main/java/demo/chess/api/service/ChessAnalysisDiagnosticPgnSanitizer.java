@@ -57,14 +57,13 @@ final class ChessAnalysisDiagnosticPgnSanitizer {
     }
 
     private String keepOnlyPersistableCommentTags(String content) {
-        String braceSanitized = rewriteComments(content, BRACE_COMMENT, true);
-        return rewriteComments(braceSanitized, SEMICOLON_COMMENT, false);
+        String braceSanitized = rewriteComments(content, BRACE_COMMENT);
+        return rewriteComments(braceSanitized, SEMICOLON_COMMENT);
     }
 
     private String rewriteComments(
             String content,
-            Pattern commentPattern,
-            boolean braceComment) {
+            Pattern commentPattern) {
         Matcher matcher = commentPattern.matcher(content);
         StringBuffer result = new StringBuffer();
 
@@ -72,9 +71,7 @@ final class ChessAnalysisDiagnosticPgnSanitizer {
             String evaluations = evaluationTags(matcher.group(1));
             String replacement = evaluations.isEmpty()
                     ? ""
-                    : braceComment
-                            ? "{ " + evaluations + " }"
-                            : "{ " + evaluations + " }";
+                    : "{ " + evaluations + " }";
             matcher.appendReplacement(
                     result,
                     Matcher.quoteReplacement(replacement));
