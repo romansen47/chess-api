@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
+import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.service.AnalysisReplayService;
 
 @RestController
