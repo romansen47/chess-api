@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
@@ -109,6 +110,7 @@ class EngineRuntimeWithoutNativeEngineTest {
                 new EngineLineDisplayService());
 
         assertUnavailable(NativeEngineRole.DEEP_ANALYSIS, () -> replayService.start(null));
+        verifyNoInteractions(evaluationService);
     }
 
     @Test
