@@ -12,6 +12,7 @@ public class MoveResultDto {
     private String position;     // 64-character board position after this move
     private String gameState;    // terminal game state, if the game ended after this move
     private Integer ply;          // 1-based half-move number after this move
+    private String uci;           // canonical UCI move, including promotion suffix
 
     /**
      * Creates a new MoveResultDto instance.
@@ -215,6 +216,22 @@ public class MoveResultDto {
      */
     public void setGameState(String gameState) {
         this.gameState = gameState;
+    }
+
+    /**
+     * Returns the canonical UCI move.
+     * @return the UCI move, or null when unavailable
+     */
+    public String getUci() {
+        return uci;
+    }
+
+    /**
+     * Sets the canonical UCI move.
+     * @param uci the UCI move
+     */
+    public void setUci(String uci) {
+        this.uci = uci;
     }
 
     /**
