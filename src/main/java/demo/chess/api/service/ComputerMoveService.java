@@ -107,7 +107,7 @@ public class ComputerMoveService {
         String position = gameService.getCurrentPositionString();
         String gameState = game.getState() != null ? game.getState().name() : null;
 
-        return new MoveResultDto(
+        MoveResultDto result = new MoveResultDto(
                 true,
                 null,
                 from,
@@ -117,6 +117,8 @@ public class ComputerMoveService {
                 position,
                 gameState,
                 game.getMoveList().size());
+        result.setUci(bestMove.toString());
+        return result;
     }
 
     /**
