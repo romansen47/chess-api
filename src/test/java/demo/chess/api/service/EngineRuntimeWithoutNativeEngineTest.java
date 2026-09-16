@@ -22,9 +22,9 @@ import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
 
 /**
- * Verifies that application services can exist and reset normally when no
- * native UCI engine is configured. Actual engine-use error semantics belong to
- * the subsequent runtime error-handling step.
+ * Verifies both sides of the no-engine runtime contract: ordinary application
+ * lifecycle operations remain valid, while operations that actually require a
+ * native UCI engine fail with an explicit, role-specific application error.
  */
 class EngineRuntimeWithoutNativeEngineTest {
 
