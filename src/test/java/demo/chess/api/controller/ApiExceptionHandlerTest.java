@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
+import demo.chess.api.service.AnalysisEvaluationService;
 import demo.chess.api.service.AnalysisReplayService;
 import demo.chess.api.service.ComputerMoveService;
 import demo.chess.api.service.EvaluationService;
@@ -65,6 +66,27 @@ class ApiExceptionHandlerTest {
                 .andExpect(jsonPath(
                         "$.message",
                         is("No native engine is configured for white player")));
+    }
+
+    @Test
+    void analysisEvaluationEndpointReturnsStructured503() throws Exception {
+        AnalysisEvaluationService analysisEvaluationService =
+                mock(AnalysisEvaluationService.class);
+        when(analysisEvaluationService.getEvaluation(12)).thenThrow(
+                new NativeEngineUnavailableException(NativeEngineRole.EVALUATION));
+
+        MockMvc mvc = MockMvcBuilders
+                .standaloneSetup(new AnalysisEvaluationController(analysisEvaluationService))
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mvc.perform(get("/api/analysis-eval").param("ply", "12"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code", is("ENGINE_UNAVAILABLE")))
+                .andExpect(jsonPath("$.role", is("EVALUATION")))
+                .andExpect(jsonPath(
+                        "$.message",
+                        is("No native engine is configured for evaluation")));
     }
 
     @Test
