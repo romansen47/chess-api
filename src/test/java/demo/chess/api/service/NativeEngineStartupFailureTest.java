@@ -62,6 +62,28 @@ class NativeEngineStartupFailureTest {
     }
 
     @Test
+    void liveEvaluationReportsConfiguredEngineThatStopsSpeakingUci() throws Exception {
+        TestContext context = createConfiguredContext();
+        Files.writeString(
+                context.enginePath(),
+                "#!/bin/sh\necho not-a-uci-engine\n",
+                StandardCharsets.UTF_8);
+        assertTrue(Files.isExecutable(context.enginePath()));
+
+        EvaluationService service = new EvaluationService(
+                new GameService(),
+                context.runtimeSelectionService(),
+                new LiveEvaluationStreamService(),
+                new EngineLineDisplayService());
+
+        NativeEngineUnavailableException exception = assertThrows(
+                NativeEngineUnavailableException.class,
+                service::getEvaluation);
+
+        assertStartFailure(exception, NativeEngineRole.EVALUATION);
+    }
+
+    @Test
     void computerMoveReportsConfiguredPlayerEngineThatDisappearedBeforeStart() throws Exception {
         TestContext context = createConfiguredContext();
         GameService gameService = new GameService();
