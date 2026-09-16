@@ -68,9 +68,6 @@ public class AnalysisReplayService {
      */
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
             throws NoMoveFoundException, IOException {
-        closeSessionEngine();
-        evaluationService.stopLiveEvaluation();
-
         List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
         String requestedProfileId = settings != null ? settings.getEngineProfileId() : null;
         int depth = settings != null ? Math.max(0, settings.getDepth()) : 0;
@@ -83,6 +80,10 @@ public class AnalysisReplayService {
                 engineProfileId,
                 depth,
                 moveTimeSeconds);
+
+        closeSessionEngine();
+        evaluationService.stopLiveEvaluation();
+
         DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine(engineConfig.getEngine());
         String engineName = engineConfig.getEngineName();
 
