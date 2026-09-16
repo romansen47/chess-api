@@ -21,6 +21,7 @@ import demo.chess.api.service.GameService;
 import demo.chess.definitions.board.Board;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.fields.Field;
+import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
 
 @RestController
@@ -99,7 +100,7 @@ public class MoveController {
 
         try {
             // Zug im Backend ausführen
-            gameService.applyMove(from, to, promotion);
+            Move appliedMove = gameService.applyMove(from, to, promotion);
 
             Game game = gameService.getCurrentGame();
 
@@ -126,6 +127,7 @@ public class MoveController {
                     position,
                     gameState,
                     game.getMoveList().size());
+            result.setUci(appliedMove.toString());
 
             return ResponseEntity.ok(result);
 
