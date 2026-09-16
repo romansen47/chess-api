@@ -11,8 +11,8 @@ import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineEvaluationDto;
 import demo.chess.api.dto.EngineLineDto;
-import demo.chess.definitions.engines.EngineConfig;
 import demo.chess.definitions.engines.EngineLine;
+import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.EvaluationEngine;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.game.Game;
@@ -64,7 +64,7 @@ public class EvaluationService {
      */
     public synchronized EngineEvaluationDto getEvaluation() {
         Game game = gameService.getCurrentGame();
-        EngineConfig engineConfig = engineRuntimeSelectionService.requireEvaluationConfig();
+        UciEngineConfig engineConfig = engineRuntimeSelectionService.requireEvaluationConfig();
         EvaluationEngine engine = getEvaluationEngine(engineConfig.getEngine());
         long settingsVersion = engineRuntimeSelectionService.getEvaluationVersion();
 

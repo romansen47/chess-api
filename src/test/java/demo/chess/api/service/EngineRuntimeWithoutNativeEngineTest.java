@@ -96,8 +96,7 @@ class EngineRuntimeWithoutNativeEngineTest {
 
     @Test
     void deepAnalysisReportsMissingNativeEngineWithoutDefaultPathFallback() throws Exception {
-        EngineRuntimeSelectionService runtimeSelection = createRuntimeSelectionWithoutEngine();
-        EngineSettingsService settingsService = getSettingsService(runtimeSelection);
+        EngineSettingsService settingsService = createSettingsServiceWithoutEngine();
         EvaluationService evaluationService = mock(EvaluationService.class);
         UciGameService uciGameService = mock(UciGameService.class);
         when(uciGameService.getAnalysisMoveListSnapshot()).thenReturn(java.util.List.of());
@@ -169,23 +168,17 @@ class EngineRuntimeWithoutNativeEngineTest {
         assertEquals(expectedRole, exception.getRole());
     }
 
-    private EngineSettingsService getSettingsService(
-            EngineRuntimeSelectionService runtimeSelection) throws Exception {
-        java.lang.reflect.Field field =
-                EngineRuntimeSelectionService.class.getDeclaredField("engineSettingsService");
-        field.setAccessible(true);
-        return (EngineSettingsService) field.get(runtimeSelection);
+    private EngineRuntimeSelectionService createRuntimeSelectionWithoutEngine() throws Exception {
+        return new EngineRuntimeSelectionService(createSettingsServiceWithoutEngine());
     }
 
-    private EngineRuntimeSelectionService createRuntimeSelectionWithoutEngine() throws Exception {
+    private EngineSettingsService createSettingsServiceWithoutEngine() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
         configureProperties(games);
 
-        EngineSettingsService settingsService = new EngineSettingsService(
+        return new EngineSettingsService(
                 new ObjectMapper(),
                 new EngineDiscoveryService());
-
-        return new EngineRuntimeSelectionService(settingsService);
     }
 
     private void configureProperties(Path games) {
