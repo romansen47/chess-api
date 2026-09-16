@@ -63,9 +63,12 @@ class EngineAvailabilityServiceTest {
         createUciEngine(games.resolve("stockfish"), "Stockfish Test");
         TestContext context = createContext(games);
 
+        var availabilities = context.availabilityService().getAvailabilities();
+        assertEquals(NativeEngineRole.values().length, availabilities.size());
+
         for (NativeEngineRole role : NativeEngineRole.values()) {
             assertAvailability(
-                    context.availabilityService().getAvailability(role),
+                    availabilities.get(role),
                     role,
                     true,
                     true,
