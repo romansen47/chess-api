@@ -78,15 +78,18 @@ public class EngineSettingsService {
         this.defaultEnginePath = engineDiscoveryService.getPreferredEnginePath();
         this.storePath = resolveStorePath();
 
+        boolean storedConfigurationExists = Files.isRegularFile(storePath);
         loadStore();
 
-        // Discovery is automatic only for an empty installation. A normal
-        // restart never re-adds engines that a user deliberately removed.
-        if (engines.isEmpty() && profiles.isEmpty()) {
+        // Automatic discovery is only a first-install convenience. Once a
+        // configuration file exists, even an intentionally empty registry is
+        // a persisted user choice and must survive application restarts.
+        if (!storedConfigurationExists && engines.isEmpty() && profiles.isEmpty()) {
             discoverSystemEnginesInternal();
         }
 
-        ensureFallbackAndAssignments();
+        repairFallbackAndAssignments();
+        persistStore();
     }
 
     /**
@@ -104,7 +107,7 @@ public class EngineSettingsService {
         defaultDeepAnalysisProfileId = null;
 
         discoverSystemEnginesInternal();
-        ensureFallbackAndAssignments();
+        repairFallbackAndAssignments();
 
         whitePlayerVersion++;
         blackPlayerVersion++;
@@ -122,8 +125,24 @@ public class EngineSettingsService {
      * @return the result of the operation
      */
     public synchronized EngineConfigOverviewDto discoverSystemEngines() {
+        String previousWhite = defaultWhitePlayerProfileId;
+        String previousBlack = defaultBlackPlayerProfileId;
+        String previousEvaluation = defaultEvaluationProfileId;
+
         int addedEngines = discoverSystemEnginesInternal();
         if (addedEngines > 0) {
+            repairFallbackAndAssignments();
+
+            if (!Objects.equals(previousWhite, defaultWhitePlayerProfileId)) {
+                whitePlayerVersion++;
+            }
+            if (!Objects.equals(previousBlack, defaultBlackPlayerProfileId)) {
+                blackPlayerVersion++;
+            }
+            if (!Objects.equals(previousEvaluation, defaultEvaluationProfileId)) {
+                evaluationVersion++;
+            }
+
             version++;
             persistStore();
         }
@@ -167,22 +186,22 @@ public class EngineSettingsService {
         String deepAnalysis = resolveProfileId(incoming.getDeepAnalysisProfileId(), fallbackProfileId);
 
         boolean changed = false;
-        if (!white.equals(defaultWhitePlayerProfileId)) {
+        if (!Objects.equals(white, defaultWhitePlayerProfileId)) {
             defaultWhitePlayerProfileId = white;
             whitePlayerVersion++;
             changed = true;
         }
-        if (!black.equals(defaultBlackPlayerProfileId)) {
+        if (!Objects.equals(black, defaultBlackPlayerProfileId)) {
             defaultBlackPlayerProfileId = black;
             blackPlayerVersion++;
             changed = true;
         }
-        if (!evaluation.equals(defaultEvaluationProfileId)) {
+        if (!Objects.equals(evaluation, defaultEvaluationProfileId)) {
             defaultEvaluationProfileId = evaluation;
             evaluationVersion++;
             changed = true;
         }
-        if (!deepAnalysis.equals(defaultDeepAnalysisProfileId)) {
+        if (!Objects.equals(deepAnalysis, defaultDeepAnalysisProfileId)) {
             defaultDeepAnalysisProfileId = deepAnalysis;
             changed = true;
         }
@@ -293,9 +312,9 @@ public class EngineSettingsService {
 
         // Deleting an engine is a cascading operation. Any defaults or fallback
         // that pointed to one of its profiles are repaired against the remaining
-        // registry. If the last engine is deleted, the compatibility fallback
-        // keeps the application operational.
-        ensureFallbackAndAssignments();
+        // registry. Deleting the last engine intentionally leaves a valid empty
+        // configuration instead of inventing a synthetic executable.
+        repairFallbackAndAssignments();
 
         if (whiteChanged) {
             whitePlayerVersion++;
@@ -753,20 +772,31 @@ public class EngineSettingsService {
     }
 
     /**
-     * Performs the ensure fallback and assignments operation.
+     * Repairs the fallback profile and default assignments against the current
+     * native-engine registry.
+     *
+     * An empty registry is a valid persisted state. In that case there is no
+     * fallback profile and no default assignment for any native-engine use case.
      */
-    private void ensureFallbackAndAssignments() {
+    private void repairFallbackAndAssignments() {
+        if (engines.isEmpty()) {
+            profiles.clear();
+            fallbackProfileId = null;
+            defaultWhitePlayerProfileId = null;
+            defaultBlackPlayerProfileId = null;
+            defaultEvaluationProfileId = null;
+            defaultDeepAnalysisProfileId = null;
+            return;
+        }
+
         ManagedProfile fallback = validProfile(fallbackProfileId);
         ManagedEngineDefinition fallbackEngine = fallback == null ? null : engines.get(fallback.engineId);
 
         if (fallbackEngine == null) {
             fallbackEngine = findEngineByPath(defaultEnginePath);
         }
-        if (fallbackEngine == null && !engines.isEmpty()) {
-            fallbackEngine = engines.values().iterator().next();
-        }
         if (fallbackEngine == null) {
-            fallbackEngine = createCompatibilityFallbackEngine();
+            fallbackEngine = engines.values().iterator().next();
         }
 
         if (fallback == null || !fallback.engineId.equals(fallbackEngine.id)) {
@@ -782,37 +812,6 @@ public class EngineSettingsService {
         defaultBlackPlayerProfileId = resolveProfileId(defaultBlackPlayerProfileId, fallbackProfileId);
         defaultEvaluationProfileId = resolveProfileId(defaultEvaluationProfileId, fallbackProfileId);
         defaultDeepAnalysisProfileId = resolveProfileId(defaultDeepAnalysisProfileId, fallbackProfileId);
-
-        persistStore();
-    }
-
-    /**
-     * Creates the compatibility fallback engine.
-     * @return the result of the operation
-     */
-    private ManagedEngineDefinition createCompatibilityFallbackEngine() {
-        UciEngineDefinition definition;
-        try {
-            definition = UciEngineInspector.inspect(defaultEnginePath);
-        } catch (Exception e) {
-            logger.warn("No responsive UCI engine was discovered in "
-                    + engineDiscoveryService.getDiscoveryDirectory()
-                    + ". Keeping the legacy fallback path " + defaultEnginePath
-                    + " so the application can still start: " + e.getMessage());
-            definition = new UciEngineDefinition(
-                    defaultEnginePath,
-                    fallbackEngineName(defaultEnginePath),
-                    "",
-                    Map.of());
-        }
-
-        String engineId = UUID.randomUUID().toString();
-        ManagedEngineDefinition managed = new ManagedEngineDefinition(
-                engineId,
-                definition.getEngineName(),
-                definition);
-        engines.put(engineId, managed);
-        return managed;
     }
 
     /**
@@ -1275,7 +1274,7 @@ public class EngineSettingsService {
         if (!profiles.isEmpty()) {
             return profiles.values().iterator().next().id;
         }
-        throw new IllegalStateException("No engine profiles available");
+        return null;
     }
 
     /**

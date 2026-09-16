@@ -2,6 +2,7 @@ package demo.chess.api.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -37,6 +38,93 @@ class EngineSettingsDiscoveryTest {
     void restoreProperties() {
         restoreProperty(DIRECTORY_PROPERTY, previousDirectoryProperty);
         restoreProperty(STORE_PROPERTY, previousStoreProperty);
+    }
+
+    /**
+     * Verifies that a fresh installation without discoverable engines starts
+     * with an explicit empty native-engine configuration.
+     */
+    @Test
+    void startsWithEmptyConfigurationWhenNoUciEngineIsDiscovered() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        configureProperties(games);
+
+        EngineSettingsService service = new EngineSettingsService(
+                new ObjectMapper(),
+                new EngineDiscoveryService());
+
+        assertEmptyConfiguration(service.getOverview());
+    }
+
+    /**
+     * Verifies that resetting settings does not invent a compatibility engine
+     * when the discovery directory contains no usable UCI engine.
+     */
+    @Test
+    void resetWithoutDiscoveredEnginesKeepsEmptyConfiguration() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        Path stockfish = createUciEngine(games.resolve("stockfish"), "Stockfish Test", 16);
+        configureProperties(games);
+
+        EngineSettingsService service = new EngineSettingsService(
+                new ObjectMapper(),
+                new EngineDiscoveryService());
+        assertEquals(1, service.getOverview().getEngines().size());
+
+        Files.delete(stockfish);
+
+        assertEmptyConfiguration(service.resetToFallbackDefaults());
+    }
+
+    /**
+     * Verifies that deliberately deleting the final engine persists an empty
+     * configuration instead of rediscovering the still-present executable on
+     * the next application start.
+     */
+    @Test
+    void deletingLastEnginePersistsEmptyConfigurationAcrossRestart() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        createUciEngine(games.resolve("stockfish"), "Stockfish Test", 16);
+        configureProperties(games);
+
+        EngineSettingsService service = new EngineSettingsService(
+                new ObjectMapper(),
+                new EngineDiscoveryService());
+        String engineId = service.getOverview().getEngines().get(0).getId();
+
+        service.deleteEngine(engineId);
+        assertEmptyConfiguration(service.getOverview());
+
+        EngineSettingsService restarted = new EngineSettingsService(
+                new ObjectMapper(),
+                new EngineDiscoveryService());
+        assertEmptyConfiguration(restarted.getOverview());
+    }
+
+    /**
+     * Verifies that explicit discovery can populate a previously persisted
+     * empty registry and assigns the discovered engine as fallback/default.
+     */
+    @Test
+    void manualDiscoveryPopulatesPersistedEmptyConfiguration() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        configureProperties(games);
+
+        EngineSettingsService service = new EngineSettingsService(
+                new ObjectMapper(),
+                new EngineDiscoveryService());
+        assertEmptyConfiguration(service.getOverview());
+
+        createUciEngine(games.resolve("stockfish"), "Stockfish Test", 16);
+        EngineConfigOverviewDto overview = service.discoverSystemEngines();
+
+        assertEquals(1, overview.getEngines().size());
+        assertEquals(1, overview.getProfiles().size());
+        assertNotNull(overview.getFallbackProfileId());
+        assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getWhitePlayerProfileId());
+        assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getBlackPlayerProfileId());
+        assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getEvaluationProfileId());
+        assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getDeepAnalysisProfileId());
     }
 
     /**
@@ -166,6 +254,20 @@ class EngineSettingsDiscoveryTest {
         assertEquals(after.getFallbackProfileId(), after.getDefaults().getBlackPlayerProfileId());
         assertEquals(after.getFallbackProfileId(), after.getDefaults().getEvaluationProfileId());
         assertEquals(after.getFallbackProfileId(), after.getDefaults().getDeepAnalysisProfileId());
+    }
+
+    /**
+     * Asserts the canonical state when no native engine is configured.
+     * @param overview the engine configuration overview
+     */
+    private void assertEmptyConfiguration(EngineConfigOverviewDto overview) {
+        assertTrue(overview.getEngines().isEmpty());
+        assertTrue(overview.getProfiles().isEmpty());
+        assertNull(overview.getFallbackProfileId());
+        assertNull(overview.getDefaults().getWhitePlayerProfileId());
+        assertNull(overview.getDefaults().getBlackPlayerProfileId());
+        assertNull(overview.getDefaults().getEvaluationProfileId());
+        assertNull(overview.getDefaults().getDeepAnalysisProfileId());
     }
 
     /**
