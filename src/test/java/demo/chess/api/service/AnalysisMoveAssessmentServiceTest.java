@@ -161,9 +161,7 @@ class AnalysisMoveAssessmentServiceTest {
                 "Fake Engine",
                 "",
                 Map.of());
-        when(runtime.getEvaluationConfig()).thenReturn(config);
-        when(runtime.getEvaluationEnginePath())
-                .thenReturn("fake-engine");
+        when(runtime.requireEvaluationConfig()).thenReturn(config);
         when(runtime.getEvaluationVersion()).thenReturn(1L);
         when(factory.create(
                 "fake-engine",
