@@ -2,6 +2,8 @@ package demo.chess.api.service;
 
 import org.springframework.stereotype.Component;
 
+import demo.chess.api.engine.NativeEngineRole;
+import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 
 /**
@@ -19,8 +21,8 @@ public class AnalysisEvaluationEngineFactory {
             engine.setManagementLabel(managementLabel);
             return engine;
         } catch (Exception e) {
-            throw new IllegalStateException(
-                    "Could not start evaluation engine at " + enginePath,
+            throw NativeEngineUnavailableException.startFailure(
+                    NativeEngineRole.EVALUATION,
                     e);
         }
     }

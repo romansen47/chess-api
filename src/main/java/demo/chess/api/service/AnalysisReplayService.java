@@ -81,9 +81,6 @@ public class AnalysisReplayService {
                 depth,
                 moveTimeSeconds);
 
-        closeSessionEngine();
-        evaluationService.stopLiveEvaluation();
-
         DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine(engineConfig.getEngine());
         String engineName = engineConfig.getEngineName();
 
@@ -104,6 +101,8 @@ public class AnalysisReplayService {
                 EvaluationBarMapper.toBar(initialEvaluation),
                 0));
 
+        closeSessionEngine();
+        evaluationService.stopLiveEvaluation();
         this.session = newSession;
         return toStepDto(newSession, false, null, null, null, 0.0, 0.5, 0, "Analysis replay started.");
     }
@@ -246,7 +245,10 @@ public class AnalysisReplayService {
 
     private DeepAnalysisEngine createDeepAnalysisEngine(String enginePath) {
         if (enginePath == null || enginePath.isBlank()) {
-            throw new IllegalStateException("Deep analysis engine profile has no executable path");
+            throw NativeEngineUnavailableException.startFailure(
+                    NativeEngineRole.DEEP_ANALYSIS,
+                    new IllegalStateException(
+                            "Deep analysis engine profile has no executable path"));
         }
         String effectivePath = enginePath.trim();
         try {
@@ -254,7 +256,9 @@ public class AnalysisReplayService {
             engine.setManagementLabel("deep analysis");
             return engine;
         } catch (Exception ex) {
-            throw new IllegalStateException("Could not start deep analysis engine at " + effectivePath, ex);
+            throw NativeEngineUnavailableException.startFailure(
+                    NativeEngineRole.DEEP_ANALYSIS,
+                    ex);
         }
     }
 

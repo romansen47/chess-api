@@ -11,6 +11,8 @@ import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineEvaluationDto;
 import demo.chess.api.dto.EngineLineDto;
+import demo.chess.api.engine.NativeEngineRole;
+import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.EvaluationEngine;
@@ -189,10 +191,14 @@ public class EvaluationService {
 
     private synchronized EvaluationEngine getEvaluationEngine(String configuredPath) {
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
-            closeEvaluationEngine(evaluationEngine);
+            EvaluationEngine replacement = createEvaluationEngine(configuredPath);
+            EvaluationEngine previous = evaluationEngine;
+
+            evaluationEngine = replacement;
             currentEvaluationEnginePath = configuredPath;
-            evaluationEngine = createEvaluationEngine(configuredPath);
             lastSeenSettingsVersion = -1L;
+
+            closeEvaluationEngine(previous);
         }
         return evaluationEngine;
     }
@@ -206,8 +212,9 @@ public class EvaluationService {
             return engine;
         } catch (Exception e) {
             logger.error("Could not start evaluation engine: " + e.getMessage());
-            e.printStackTrace();
-            throw new IllegalStateException("Could not start evaluation engine at " + enginePath, e);
+            throw NativeEngineUnavailableException.startFailure(
+                    NativeEngineRole.EVALUATION,
+                    e);
         }
     }
 

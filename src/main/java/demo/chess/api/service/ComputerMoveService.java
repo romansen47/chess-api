@@ -10,6 +10,8 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.MoveResultDto;
+import demo.chess.api.engine.NativeEngineRole;
+import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.definitions.Color;
 import demo.chess.definitions.engines.EngineConfig;
 import demo.chess.definitions.engines.PlayerEngine;
@@ -170,10 +172,16 @@ public class ComputerMoveService {
             EngineConfig config = engineRuntimeSelectionService.getWhitePlayerConfig();
             String configuredPath = config.getEngine();
             if (whitePlayerEngine == null || !configuredPath.equals(currentWhitePlayerEnginePath)) {
+                PlayerEngine replacement = createPlayerEngine(
+                        configuredPath,
+                        "white player",
+                        NativeEngineRole.WHITE_PLAYER);
                 PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
+
+                whitePlayerEngine = replacement;
                 currentWhitePlayerEnginePath = configuredPath;
-                whitePlayerEngine = createPlayerEngine(configuredPath, "white player");
                 whitePlayerEngineGeneration++;
+
                 closePlayerEngine(oldWhitePlayerEngine, "white player");
             }
             return new PlayerEngineSnapshot(
@@ -185,10 +193,16 @@ public class ComputerMoveService {
         EngineConfig config = engineRuntimeSelectionService.getBlackPlayerConfig();
         String configuredPath = config.getEngine();
         if (blackPlayerEngine == null || !configuredPath.equals(currentBlackPlayerEnginePath)) {
+            PlayerEngine replacement = createPlayerEngine(
+                    configuredPath,
+                    "black player",
+                    NativeEngineRole.BLACK_PLAYER);
             PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
+
+            blackPlayerEngine = replacement;
             currentBlackPlayerEnginePath = configuredPath;
-            blackPlayerEngine = createPlayerEngine(configuredPath, "black player");
             blackPlayerEngineGeneration++;
+
             closePlayerEngine(oldBlackPlayerEngine, "black player");
         }
         return new PlayerEngineSnapshot(
@@ -227,7 +241,10 @@ public class ComputerMoveService {
      * @param label the label
      * @return the result of the operation
      */
-    private PlayerEngine createPlayerEngine(String enginePath, String label) {
+    private PlayerEngine createPlayerEngine(
+            String enginePath,
+            String label,
+            NativeEngineRole role) {
         logger.info("Initializing " + label + " engine at path: " + enginePath);
         try {
             PlayerUciEngine engine = new PlayerUciEngine(enginePath);
@@ -235,8 +252,7 @@ public class ComputerMoveService {
             return engine;
         } catch (Exception e) {
             logger.error("Could not start " + label + " engine: " + e.getMessage());
-            e.printStackTrace();
-            throw new IllegalStateException("Could not start " + label + " engine at " + enginePath, e);
+            throw NativeEngineUnavailableException.startFailure(role, e);
         }
     }
 

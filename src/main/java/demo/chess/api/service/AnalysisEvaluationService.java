@@ -298,14 +298,18 @@ public class AnalysisEvaluationService {
      */
     private EvaluationEngine getEvaluationEngine(String configuredPath) {
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
-            closeEvaluationEngine(evaluationEngine);
-            currentEvaluationEnginePath = configuredPath;
-            evaluationEngine = engineFactory.create(
+            EvaluationEngine replacement = engineFactory.create(
                     configuredPath,
                     "analysis evaluation");
+            EvaluationEngine previous = evaluationEngine;
+
+            evaluationEngine = replacement;
+            currentEvaluationEnginePath = configuredPath;
             currentPositionKey = null;
             lastSeenSettingsVersion = -1L;
             lastValidEvaluation = null;
+
+            closeEvaluationEngine(previous);
         }
         return evaluationEngine;
     }

@@ -208,17 +208,20 @@ public class AnalysisMoveAssessmentService {
     private EvaluationUciEngine getAssessmentEngine(String configuredPath) {
         if (assessmentEngine == null
                 || !configuredPath.equals(currentAssessmentEnginePath)) {
-            closeAssessmentEngine();
-            currentAssessmentEnginePath = configuredPath;
-            assessmentEngine = engineFactory.create(
+            EvaluationUciEngine replacement = engineFactory.create(
                     configuredPath,
                     "analysis move assessment");
-            assessmentEngine.setEvaluationUpdateListener(
-                    this::recordDepthSnapshot);
+            replacement.setEvaluationUpdateListener(this::recordDepthSnapshot);
+            EvaluationUciEngine previous = assessmentEngine;
+
+            assessmentEngine = replacement;
+            currentAssessmentEnginePath = configuredPath;
             currentSelectionKey = null;
             currentEnginePositionKey = null;
             lastSeenSettingsVersion = -1L;
             depthHistory.clear();
+
+            closeAssessmentEngine(previous);
         }
         return assessmentEngine;
     }
@@ -281,25 +284,30 @@ public class AnalysisMoveAssessmentService {
     }
 
     private void closeAssessmentEngine() {
-        if (assessmentEngine == null) {
+        EvaluationUciEngine previous = assessmentEngine;
+        assessmentEngine = null;
+        currentAssessmentEnginePath = null;
+        closeAssessmentEngine(previous);
+    }
+
+    private void closeAssessmentEngine(EvaluationUciEngine engine) {
+        if (engine == null) {
             return;
         }
         try {
-            assessmentEngine.stopEvaluation();
+            engine.stopEvaluation();
         } catch (Exception e) {
             logger.debug(
                     "Could not stop analysis move-assessment engine: "
                     + e.getMessage());
         }
         try {
-            assessmentEngine.close();
+            engine.close();
         } catch (Exception e) {
             logger.debug(
                     "Could not close analysis move-assessment engine: "
                     + e.getMessage());
         }
-        assessmentEngine = null;
-        currentAssessmentEnginePath = null;
     }
 
     public record Result(

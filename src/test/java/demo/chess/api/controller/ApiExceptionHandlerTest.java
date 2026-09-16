@@ -49,6 +49,30 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
+    void configuredButUnstartableEngineUsesSameStructured503Contract() throws Exception {
+        EvaluationService evaluationService = mock(EvaluationService.class);
+        when(evaluationService.getEvaluation()).thenThrow(
+                NativeEngineUnavailableException.startFailure(
+                        NativeEngineRole.EVALUATION,
+                        new IllegalStateException("UCI handshake failed")));
+
+        MockMvc mvc = MockMvcBuilders
+                .standaloneSetup(new EngineController(
+                        evaluationService,
+                        mock(LiveEvaluationStreamService.class)))
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mvc.perform(get("/api/eval"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.code", is("ENGINE_UNAVAILABLE")))
+                .andExpect(jsonPath("$.role", is("EVALUATION")))
+                .andExpect(jsonPath(
+                        "$.message",
+                        is("Native engine for evaluation is configured but could not be started")));
+    }
+
+    @Test
     void computerMoveEndpointReturnsRoleSpecificStructured503() throws Exception {
         ComputerMoveService computerMoveService = mock(ComputerMoveService.class);
         when(computerMoveService.makeComputerMove()).thenThrow(
