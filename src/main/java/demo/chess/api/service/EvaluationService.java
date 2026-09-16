@@ -49,7 +49,7 @@ public class EvaluationService {
         this.engineRuntimeSelectionService = engineRuntimeSelectionService;
         this.liveEvaluationStreamService = liveEvaluationStreamService;
         this.engineLineDisplayService = engineLineDisplayService;
-        this.currentEvaluationEnginePath = engineRuntimeSelectionService.getEvaluationEnginePath();
+        this.currentEvaluationEnginePath = null;
         this.evaluationEngine = null;
         this.liveEvaluationPushExecutor = Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "live-evaluation-sse-publisher");
@@ -105,7 +105,7 @@ public class EvaluationService {
         logger.info("Resetting evaluation engine for new game");
         closeEvaluationEngine(evaluationEngine);
         evaluationEngine = null;
-        currentEvaluationEnginePath = engineRuntimeSelectionService.getEvaluationEnginePath();
+        currentEvaluationEnginePath = null;
         lastSeenSettingsVersion = -1L;
     }
 

@@ -46,8 +46,8 @@ public class ComputerMoveService {
         this.gameService = gameService;
         this.engineRuntimeSelectionService = engineRuntimeSelectionService;
 
-        this.currentWhitePlayerEnginePath = engineRuntimeSelectionService.getWhitePlayerEnginePath();
-        this.currentBlackPlayerEnginePath = engineRuntimeSelectionService.getBlackPlayerEnginePath();
+        this.currentWhitePlayerEnginePath = null;
+        this.currentBlackPlayerEnginePath = null;
         this.whitePlayerEngine = null;
         this.blackPlayerEngine = null;
     }
@@ -126,8 +126,8 @@ public class ComputerMoveService {
         PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
         PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
 
-        currentWhitePlayerEnginePath = engineRuntimeSelectionService.getWhitePlayerEnginePath();
-        currentBlackPlayerEnginePath = engineRuntimeSelectionService.getBlackPlayerEnginePath();
+        currentWhitePlayerEnginePath = null;
+        currentBlackPlayerEnginePath = null;
         whitePlayerEngine = null;
         blackPlayerEngine = null;
         whitePlayerEngineGeneration++;
@@ -145,7 +145,7 @@ public class ComputerMoveService {
         if (color == Color.WHITE) {
             logger.info("Cancelling white player engine");
             PlayerEngine oldWhitePlayerEngine = whitePlayerEngine;
-            currentWhitePlayerEnginePath = engineRuntimeSelectionService.getWhitePlayerEnginePath();
+            currentWhitePlayerEnginePath = null;
             whitePlayerEngine = null;
             whitePlayerEngineGeneration++;
             closePlayerEngine(oldWhitePlayerEngine, "cancelled white player");
@@ -154,7 +154,7 @@ public class ComputerMoveService {
 
         logger.info("Cancelling black player engine");
         PlayerEngine oldBlackPlayerEngine = blackPlayerEngine;
-        currentBlackPlayerEnginePath = engineRuntimeSelectionService.getBlackPlayerEnginePath();
+        currentBlackPlayerEnginePath = null;
         blackPlayerEngine = null;
         blackPlayerEngineGeneration++;
         closePlayerEngine(oldBlackPlayerEngine, "cancelled black player");

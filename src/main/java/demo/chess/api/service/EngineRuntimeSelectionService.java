@@ -1,6 +1,7 @@
 package demo.chess.api.service;
 
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 
@@ -79,6 +80,18 @@ public class EngineRuntimeSelectionService {
         return override != null ? override : engineSettingsService.getDefaultEvaluationProfileId();
     }
 
+    public synchronized Optional<UciEngineConfig> findWhitePlayerConfig() {
+        return findConfig(getEffectiveWhitePlayerProfileId());
+    }
+
+    public synchronized Optional<UciEngineConfig> findBlackPlayerConfig() {
+        return findConfig(getEffectiveBlackPlayerProfileId());
+    }
+
+    public synchronized Optional<UciEngineConfig> findEvaluationConfig() {
+        return findConfig(getEffectiveEvaluationProfileId());
+    }
+
     public synchronized UciEngineConfig getWhitePlayerConfig() {
         return engineSettingsService.getConfig(getEffectiveWhitePlayerProfileId());
     }
@@ -89,6 +102,18 @@ public class EngineRuntimeSelectionService {
 
     public synchronized UciEngineConfig getEvaluationConfig() {
         return engineSettingsService.getConfig(getEffectiveEvaluationProfileId());
+    }
+
+    public synchronized Optional<String> findWhitePlayerEnginePath() {
+        return findWhitePlayerConfig().map(UciEngineConfig::getEngine);
+    }
+
+    public synchronized Optional<String> findBlackPlayerEnginePath() {
+        return findBlackPlayerConfig().map(UciEngineConfig::getEngine);
+    }
+
+    public synchronized Optional<String> findEvaluationEnginePath() {
+        return findEvaluationConfig().map(UciEngineConfig::getEngine);
     }
 
     public synchronized String getWhitePlayerEnginePath() {
@@ -125,6 +150,17 @@ public class EngineRuntimeSelectionService {
 
     public synchronized long getEvaluationVersion() {
         return combinedVersion(evaluationSelectionVersion);
+    }
+
+    private Optional<UciEngineConfig> findConfig(String profileId) {
+        if (profileId == null || profileId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(engineSettingsService.getConfig(profileId));
+        } catch (IllegalArgumentException e) {
+            return Optional.empty();
+        }
     }
 
     private String normalizeOverride(String profileId) {
