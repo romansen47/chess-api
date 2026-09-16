@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.AnalysisVariationRequestDto;
+import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.api.service.AnalysisEvaluationService;
 
 @RestController
@@ -37,6 +38,8 @@ public class AnalysisEvaluationController {
             return ResponseEntity.ok(analysisEvaluationService.getEvaluation(ply));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (NativeEngineUnavailableException e) {
+            throw e;
         } catch (RuntimeException e) {
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -55,6 +58,8 @@ public class AnalysisEvaluationController {
             return ResponseEntity.ok(analysisEvaluationService.getVariationEvaluation(request));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (NativeEngineUnavailableException e) {
+            throw e;
         } catch (RuntimeException e) {
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)

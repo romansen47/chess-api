@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
+import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.api.service.AnalysisReplayService;
 
 @RestController
@@ -48,6 +49,8 @@ public class AnalysisReplayController {
     public ResponseEntity<?> start(@RequestBody(required = false) AnalysisReplaySettingsDto settings) {
         try {
             return ResponseEntity.ok(analysisReplayService.start(settings));
+        } catch (NativeEngineUnavailableException e) {
+            throw e;
         } catch (Exception e) {
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -63,6 +66,8 @@ public class AnalysisReplayController {
     public ResponseEntity<?> next() {
         try {
             return ResponseEntity.ok(analysisReplayService.next());
+        } catch (NativeEngineUnavailableException e) {
+            throw e;
         } catch (Exception e) {
             return ResponseEntity
                     .status(HttpStatus.INTERNAL_SERVER_ERROR)

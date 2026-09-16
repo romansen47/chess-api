@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import demo.chess.api.dto.EngineEvaluationDto;
+import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.api.service.EvaluationService;
 import demo.chess.api.service.LiveEvaluationStreamService;
 
@@ -41,6 +42,8 @@ public class EngineController {
         try {
             EngineEvaluationDto dto = evaluationService.getEvaluation();
             return ResponseEntity.ok(dto);
+        } catch (NativeEngineUnavailableException e) {
+            throw e;
         } catch (RuntimeException e) {
             System.err.println("[EngineController] Error while evaluating position: " + e.getMessage());
             e.printStackTrace();

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.MoveResultDto;
+import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.api.service.ComputerMoveService;
 import demo.chess.definitions.Color;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
@@ -52,6 +53,8 @@ public class ComputerMoveController {
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body(
                     new MoveResultDto(false, "I/O error while applying engine move", null, null, null, null));
+        } catch (NativeEngineUnavailableException e) {
+            throw e;
         } catch (RuntimeException e) {
             return ResponseEntity.internalServerError().body(
                     new MoveResultDto(false, "Engine move failed: " + e.getMessage(), null, null, null, null));
