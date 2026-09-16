@@ -38,6 +38,8 @@ class MoveControllerTest {
         assertNotNull(blackResponse.getBody());
         assertEquals(1, whiteResponse.getBody().getPly());
         assertEquals(2, blackResponse.getBody().getPly());
+        assertEquals("e2e4", whiteResponse.getBody().getUci());
+        assertEquals("e7e5", blackResponse.getBody().getUci());
     }
 
     private void stopClock(demo.chess.definitions.clocks.impl.ChessClock clock) {
