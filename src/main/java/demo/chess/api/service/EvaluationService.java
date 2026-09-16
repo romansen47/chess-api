@@ -64,8 +64,8 @@ public class EvaluationService {
      */
     public synchronized EngineEvaluationDto getEvaluation() {
         Game game = gameService.getCurrentGame();
-        EngineConfig engineConfig = engineRuntimeSelectionService.getEvaluationConfig();
-        EvaluationEngine engine = getEvaluationEngine();
+        EngineConfig engineConfig = engineRuntimeSelectionService.requireEvaluationConfig();
+        EvaluationEngine engine = getEvaluationEngine(engineConfig.getEngine());
         long settingsVersion = engineRuntimeSelectionService.getEvaluationVersion();
 
         logger.debug("Requesting best lines from engine (single snapshot)...");
@@ -94,7 +94,7 @@ public class EvaluationService {
         return toEvaluationDto(
                 game,
                 bestLines,
-                engineRuntimeSelectionService.getEvaluationEngineName());
+                engineConfig.getEngineName());
     }
 
 
@@ -187,8 +187,7 @@ public class EvaluationService {
         return result;
     }
 
-    private synchronized EvaluationEngine getEvaluationEngine() {
-        String configuredPath = engineRuntimeSelectionService.getEvaluationEnginePath();
+    private synchronized EvaluationEngine getEvaluationEngine(String configuredPath) {
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
             closeEvaluationEngine(evaluationEngine);
             currentEvaluationEnginePath = configuredPath;

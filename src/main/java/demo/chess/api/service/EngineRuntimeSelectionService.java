@@ -6,6 +6,8 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineRuntimeAssignmentsDto;
+import demo.chess.api.exception.NativeEngineUnavailableException;
+import demo.chess.api.exception.NativeEngineUnavailableException.Role;
 import demo.chess.definitions.engines.UciEngineConfig;
 
 /**
@@ -92,16 +94,31 @@ public class EngineRuntimeSelectionService {
         return findConfig(getEffectiveEvaluationProfileId());
     }
 
+    public synchronized UciEngineConfig requireWhitePlayerConfig() {
+        return findWhitePlayerConfig()
+                .orElseThrow(() -> new NativeEngineUnavailableException(Role.WHITE_PLAYER));
+    }
+
+    public synchronized UciEngineConfig requireBlackPlayerConfig() {
+        return findBlackPlayerConfig()
+                .orElseThrow(() -> new NativeEngineUnavailableException(Role.BLACK_PLAYER));
+    }
+
+    public synchronized UciEngineConfig requireEvaluationConfig() {
+        return findEvaluationConfig()
+                .orElseThrow(() -> new NativeEngineUnavailableException(Role.EVALUATION));
+    }
+
     public synchronized UciEngineConfig getWhitePlayerConfig() {
-        return engineSettingsService.getConfig(getEffectiveWhitePlayerProfileId());
+        return requireWhitePlayerConfig();
     }
 
     public synchronized UciEngineConfig getBlackPlayerConfig() {
-        return engineSettingsService.getConfig(getEffectiveBlackPlayerProfileId());
+        return requireBlackPlayerConfig();
     }
 
     public synchronized UciEngineConfig getEvaluationConfig() {
-        return engineSettingsService.getConfig(getEffectiveEvaluationProfileId());
+        return requireEvaluationConfig();
     }
 
     public synchronized Optional<String> findWhitePlayerEnginePath() {
@@ -117,15 +134,15 @@ public class EngineRuntimeSelectionService {
     }
 
     public synchronized String getWhitePlayerEnginePath() {
-        return getWhitePlayerConfig().getEngine();
+        return requireWhitePlayerConfig().getEngine();
     }
 
     public synchronized String getBlackPlayerEnginePath() {
-        return getBlackPlayerConfig().getEngine();
+        return requireBlackPlayerConfig().getEngine();
     }
 
     public synchronized String getEvaluationEnginePath() {
-        return getEvaluationConfig().getEngine();
+        return requireEvaluationConfig().getEngine();
     }
 
     public synchronized String getWhitePlayerEngineName() {

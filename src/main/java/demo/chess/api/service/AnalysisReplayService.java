@@ -12,6 +12,8 @@ import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.dto.BoardDto;
 import demo.chess.api.dto.EngineLineDto;
+import demo.chess.api.exception.NativeEngineUnavailableException;
+import demo.chess.api.exception.NativeEngineUnavailableException.Role;
 import demo.chess.analysis.annotation.MoveAnnotation;
 import demo.chess.analysis.annotation.MoveAnnotationClassifier;
 import demo.chess.api.mapper.MoveAnnotationDtoMapper;
@@ -74,6 +76,9 @@ public class AnalysisReplayService {
         int depth = settings != null ? Math.max(0, settings.getDepth()) : 0;
         int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
         String engineProfileId = engineSettingsService.normalizeDeepAnalysisProfileId(requestedProfileId);
+        if (engineProfileId == null) {
+            throw new NativeEngineUnavailableException(Role.DEEP_ANALYSIS);
+        }
         UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
                 engineProfileId,
                 depth,
@@ -239,9 +244,10 @@ public class AnalysisReplayService {
     }
 
     private DeepAnalysisEngine createDeepAnalysisEngine(String enginePath) {
-        String effectivePath = enginePath == null || enginePath.isBlank()
-                ? engineSettingsService.getDefaultEnginePath()
-                : enginePath.trim();
+        if (enginePath == null || enginePath.isBlank()) {
+            throw new IllegalStateException("Deep analysis engine profile has no executable path");
+        }
+        String effectivePath = enginePath.trim();
         try {
             DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(effectivePath);
             engine.setManagementLabel("deep analysis");

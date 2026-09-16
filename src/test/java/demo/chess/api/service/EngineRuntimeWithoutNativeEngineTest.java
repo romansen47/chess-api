@@ -1,8 +1,12 @@
 package demo.chess.api.service;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +18,8 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
 
 import demo.chess.api.dto.GameSettingsDto;
+import demo.chess.api.exception.NativeEngineUnavailableException;
+import demo.chess.api.exception.NativeEngineUnavailableException.Role;
 
 /**
  * Verifies that application services can exist and reset normally when no
@@ -52,6 +58,58 @@ class EngineRuntimeWithoutNativeEngineTest {
         assertTrue(runtimeSelection.findWhitePlayerEnginePath().isEmpty());
         assertTrue(runtimeSelection.findBlackPlayerEnginePath().isEmpty());
         assertTrue(runtimeSelection.findEvaluationEnginePath().isEmpty());
+    }
+
+    @Test
+    void requiredRuntimeConfigsReportStableMissingEngineRoles() throws Exception {
+        EngineRuntimeSelectionService runtimeSelection = createRuntimeSelectionWithoutEngine();
+
+        assertUnavailable(Role.WHITE_PLAYER, runtimeSelection::requireWhitePlayerConfig);
+        assertUnavailable(Role.BLACK_PLAYER, runtimeSelection::requireBlackPlayerConfig);
+        assertUnavailable(Role.EVALUATION, runtimeSelection::requireEvaluationConfig);
+
+        assertUnavailable(Role.WHITE_PLAYER, runtimeSelection::getWhitePlayerConfig);
+        assertUnavailable(Role.BLACK_PLAYER, runtimeSelection::getBlackPlayerConfig);
+        assertUnavailable(Role.EVALUATION, runtimeSelection::getEvaluationConfig);
+    }
+
+    @Test
+    void liveEvaluationReportsMissingNativeEvaluationEngine() throws Exception {
+        EngineRuntimeSelectionService runtimeSelection = createRuntimeSelectionWithoutEngine();
+        EvaluationService evaluationService = new EvaluationService(
+                new GameService(),
+                runtimeSelection,
+                new LiveEvaluationStreamService(),
+                new EngineLineDisplayService());
+
+        assertUnavailable(Role.EVALUATION, evaluationService::getEvaluation);
+    }
+
+    @Test
+    void computerMoveReportsMissingNativePlayerEngine() throws Exception {
+        EngineRuntimeSelectionService runtimeSelection = createRuntimeSelectionWithoutEngine();
+        ComputerMoveService computerMoveService =
+                new ComputerMoveService(new GameService(), runtimeSelection);
+
+        assertUnavailable(Role.WHITE_PLAYER, computerMoveService::makeComputerMove);
+    }
+
+    @Test
+    void deepAnalysisReportsMissingNativeEngineWithoutDefaultPathFallback() throws Exception {
+        EngineRuntimeSelectionService runtimeSelection = createRuntimeSelectionWithoutEngine();
+        EngineSettingsService settingsService = getSettingsService(runtimeSelection);
+        EvaluationService evaluationService = mock(EvaluationService.class);
+        UciGameService uciGameService = mock(UciGameService.class);
+        when(uciGameService.getAnalysisMoveListSnapshot()).thenReturn(java.util.List.of());
+
+        AnalysisReplayService replayService = new AnalysisReplayService(
+                new GameService(),
+                settingsService,
+                evaluationService,
+                uciGameService,
+                new EngineLineDisplayService());
+
+        assertUnavailable(Role.DEEP_ANALYSIS, () -> replayService.start(null));
     }
 
     @Test
@@ -101,6 +159,22 @@ class EngineRuntimeWithoutNativeEngineTest {
                         0)));
 
         assertTrue(settings.getVersion() > 0);
+    }
+
+    private void assertUnavailable(
+            Role expectedRole,
+            org.junit.jupiter.api.function.Executable operation) {
+        NativeEngineUnavailableException exception =
+                assertThrows(NativeEngineUnavailableException.class, operation);
+        assertEquals(expectedRole, exception.getRole());
+    }
+
+    private EngineSettingsService getSettingsService(
+            EngineRuntimeSelectionService runtimeSelection) throws Exception {
+        java.lang.reflect.Field field =
+                EngineRuntimeSelectionService.class.getDeclaredField("engineSettingsService");
+        field.setAccessible(true);
+        return (EngineSettingsService) field.get(runtimeSelection);
     }
 
     private EngineRuntimeSelectionService createRuntimeSelectionWithoutEngine() throws Exception {

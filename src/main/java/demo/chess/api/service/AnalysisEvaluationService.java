@@ -177,7 +177,7 @@ public class AnalysisEvaluationService {
         }
 
         UciEngineConfig engineConfig = createInfiniteEvaluationConfig();
-        EvaluationEngine engine = getEvaluationEngine();
+        EvaluationEngine engine = getEvaluationEngine(engineConfig.getEngine());
         long settingsVersion = engineRuntimeSelectionService.getEvaluationVersion();
 
         if (!positionKey.equals(currentPositionKey)
@@ -199,7 +199,7 @@ public class AnalysisEvaluationService {
             }
 
             EngineEvaluationDto result = new EngineEvaluationDto(0.0, 0.5, List.of());
-            result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
+            result.setEngineName(engineConfig.getEngineName());
             return result;
         }
 
@@ -213,7 +213,7 @@ public class AnalysisEvaluationService {
         }
 
         EngineEvaluationDto result = new EngineEvaluationDto(evaluation, bar, lines);
-        result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
+        result.setEngineName(engineConfig.getEngineName());
         lastValidEvaluation = result;
         return result;
     }
@@ -223,7 +223,7 @@ public class AnalysisEvaluationService {
      * @return the result of the operation
      */
     private UciEngineConfig createInfiniteEvaluationConfig() {
-        UciEngineConfig config = engineRuntimeSelectionService.getEvaluationConfig();
+        UciEngineConfig config = engineRuntimeSelectionService.requireEvaluationConfig();
         config.setDepth(0);
         config.setMoveTimeSeconds(0);
         return config;
@@ -286,20 +286,17 @@ public class AnalysisEvaluationService {
      * @return the result of the operation
      */
     private EngineEvaluationDto terminalEvaluation(double evaluation) {
-        EngineEvaluationDto result = new EngineEvaluationDto(
+        return new EngineEvaluationDto(
                 evaluation,
                 EvaluationBarMapper.toBar(evaluation),
                 List.of());
-        result.setEngineName(engineRuntimeSelectionService.getEvaluationEngineName());
-        return result;
     }
 
     /**
      * Returns the evaluation engine.
      * @return the evaluation engine
      */
-    private EvaluationEngine getEvaluationEngine() {
-        String configuredPath = engineRuntimeSelectionService.getEvaluationEnginePath();
+    private EvaluationEngine getEvaluationEngine(String configuredPath) {
         if (evaluationEngine == null || !configuredPath.equals(currentEvaluationEnginePath)) {
             closeEvaluationEngine(evaluationEngine);
             currentEvaluationEnginePath = configuredPath;

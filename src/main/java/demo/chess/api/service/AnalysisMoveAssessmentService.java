@@ -127,7 +127,7 @@ public class AnalysisMoveAssessmentService {
                     playedMoveUci);
 
             UciEngineConfig config = createInfiniteEvaluationConfig();
-            EvaluationUciEngine engine = getAssessmentEngine();
+            EvaluationUciEngine engine = getAssessmentEngine(config.getEngine());
             long settingsVersion =
                     engineRuntimeSelectionService.getEvaluationVersion();
             String enginePositionKey =
@@ -199,15 +199,13 @@ public class AnalysisMoveAssessmentService {
 
     private UciEngineConfig createInfiniteEvaluationConfig() {
         UciEngineConfig config =
-                engineRuntimeSelectionService.getEvaluationConfig();
+                engineRuntimeSelectionService.requireEvaluationConfig();
         config.setDepth(0);
         config.setMoveTimeSeconds(0);
         return config;
     }
 
-    private EvaluationUciEngine getAssessmentEngine() {
-        String configuredPath =
-                engineRuntimeSelectionService.getEvaluationEnginePath();
+    private EvaluationUciEngine getAssessmentEngine(String configuredPath) {
         if (assessmentEngine == null
                 || !configuredPath.equals(currentAssessmentEnginePath)) {
             closeAssessmentEngine();
