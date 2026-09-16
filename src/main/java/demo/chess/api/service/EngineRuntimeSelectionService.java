@@ -156,11 +156,7 @@ public class EngineRuntimeSelectionService {
         if (profileId == null || profileId.isBlank()) {
             return Optional.empty();
         }
-        try {
-            return Optional.of(engineSettingsService.getConfig(profileId));
-        } catch (IllegalArgumentException e) {
-            return Optional.empty();
-        }
+        return Optional.of(engineSettingsService.getConfig(profileId));
     }
 
     private String normalizeOverride(String profileId) {
