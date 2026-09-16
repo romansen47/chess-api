@@ -2,10 +2,13 @@ package demo.chess.api.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -15,6 +18,8 @@ import java.util.function.BiConsumer;
 
 import org.junit.jupiter.api.Test;
 
+import demo.chess.api.engine.NativeEngineRole;
+import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.analysis.annotation.MoveAnnotationKind;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
@@ -80,6 +85,40 @@ class AnalysisMoveAssessmentServiceTest {
         assertEquals(
                 MoveAnnotationKind.BLUNDER,
                 result.annotation().getKind());
+    }
+
+    @Test
+    void failedEngineReplacementKeepsExistingAssessmentEngine() throws Exception {
+        TestContext context = contextWithSingleMove();
+
+        List<EngineLine> finalLines = List.of(
+                line(1.0, 20, "e2e4"));
+        when(context.engine.getBestLines(any(Game.class), any()))
+                .thenReturn(finalLines);
+
+        AnalysisMoveAssessmentService.Result initial =
+                context.service.assess(1, 1.0);
+        assertTrue(initial.ready());
+
+        UciEngineConfig replacementConfig = new UciEngineConfig(
+                "missing-engine",
+                "Missing Engine",
+                "",
+                Map.of());
+        when(context.runtime.requireEvaluationConfig())
+                .thenReturn(replacementConfig);
+        when(context.factory.create(
+                "missing-engine",
+                "analysis move assessment"))
+                .thenThrow(NativeEngineUnavailableException.startFailure(
+                        NativeEngineRole.EVALUATION,
+                        new IllegalStateException("UCI handshake failed")));
+
+        assertThrows(
+                NativeEngineUnavailableException.class,
+                () -> context.service.assess(1, 1.0));
+
+        verify(context.engine, never()).close();
     }
 
     @Test
@@ -181,7 +220,7 @@ class AnalysisMoveAssessmentServiceTest {
                         runtime,
                         factory);
 
-        return new TestContext(service, engine, listener);
+        return new TestContext(service, engine, listener, runtime, factory);
     }
 
     private EngineLine line(double evaluation, int depth, String moves) {
@@ -191,6 +230,8 @@ class AnalysisMoveAssessmentServiceTest {
     private record TestContext(
             AnalysisMoveAssessmentService service,
             EvaluationUciEngine engine,
-            AtomicReference<BiConsumer<String, List<EngineLine>>> listener) {
+            AtomicReference<BiConsumer<String, List<EngineLine>>> listener,
+            EngineRuntimeSelectionService runtime,
+            AnalysisEvaluationEngineFactory factory) {
     }
 }
