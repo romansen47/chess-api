@@ -77,6 +77,32 @@ class EngineSettingsDiscoveryTest {
     }
 
     /**
+     * Verifies that a corrupt persisted store still falls back to automatic
+     * discovery instead of being mistaken for an intentional empty registry.
+     */
+    @Test
+    void corruptStoredConfigurationRecoversThroughDiscovery() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        Path stockfish = createUciEngine(games.resolve("stockfish"), "Stockfish Test", 16);
+        configureProperties(games);
+        Files.writeString(
+                tempDir.resolve("engine-configs.json"),
+                "{not-valid-json",
+                StandardCharsets.UTF_8);
+
+        EngineSettingsService service = new EngineSettingsService(
+                new ObjectMapper(),
+                new EngineDiscoveryService());
+        EngineConfigOverviewDto overview = service.getOverview();
+
+        assertEquals(1, overview.getEngines().size());
+        assertEquals(
+                stockfish.toAbsolutePath().normalize().toString(),
+                overview.getEngines().get(0).getEngine());
+        assertNotNull(overview.getFallbackProfileId());
+    }
+
+    /**
      * Verifies that deliberately deleting the final engine persists an empty
      * configuration instead of rediscovering the still-present executable on
      * the next application start.

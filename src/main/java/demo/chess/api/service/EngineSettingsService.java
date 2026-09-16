@@ -78,13 +78,12 @@ public class EngineSettingsService {
         this.defaultEnginePath = engineDiscoveryService.getPreferredEnginePath();
         this.storePath = resolveStorePath();
 
-        boolean storedConfigurationExists = Files.isRegularFile(storePath);
-        loadStore();
+        boolean storedConfigurationLoaded = loadStore();
 
-        // Automatic discovery is only a first-install convenience. Once a
-        // configuration file exists, even an intentionally empty registry is
-        // a persisted user choice and must survive application restarts.
-        if (!storedConfigurationExists && engines.isEmpty() && profiles.isEmpty()) {
+        // Automatic discovery is a first-install and recovery convenience.
+        // A successfully loaded configuration, even an intentionally empty one,
+        // is a persisted user choice and must survive application restarts.
+        if (!storedConfigurationLoaded && engines.isEmpty() && profiles.isEmpty()) {
             discoverSystemEnginesInternal();
         }
 
@@ -870,9 +869,9 @@ public class EngineSettingsService {
     /**
      * Loads the store.
      */
-    private void loadStore() {
+    private boolean loadStore() {
         if (!Files.isRegularFile(storePath)) {
-            return;
+            return false;
         }
         try {
             EngineConfigStoreDto store = objectMapper.readValue(storePath.toFile(), EngineConfigStoreDto.class);
@@ -893,6 +892,7 @@ public class EngineSettingsService {
             }
 
             applyLegacyAssignments(store);
+            return true;
         } catch (Exception e) {
             logger.warn("Could not load engine config store " + storePath + ": " + e.getMessage());
             engines.clear();
@@ -902,6 +902,7 @@ public class EngineSettingsService {
             defaultBlackPlayerProfileId = null;
             defaultEvaluationProfileId = null;
             defaultDeepAnalysisProfileId = null;
+            return false;
         }
     }
 
