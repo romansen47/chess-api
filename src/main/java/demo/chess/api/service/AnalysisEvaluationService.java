@@ -90,7 +90,7 @@ public class AnalysisEvaluationService {
             boolean usableResult =
                     (result.getLines() != null && !result.getLines().isEmpty())
                     || Math.abs(result.getEval()) >= 99;
-            if (usableResult) {
+            if (usableResult && engineRuntimeSelectionService.findEvaluationConfig().isPresent()) {
                 AnalysisMoveAssessmentService.Result assessment =
                         moveAssessmentService.assess(ply, result.getEval());
                 result.setMoveAnnotationReady(assessment.ready());
@@ -137,7 +137,7 @@ public class AnalysisEvaluationService {
                 return result;
             }
 
-            if (usableResult) {
+            if (usableResult && engineRuntimeSelectionService.findEvaluationConfig().isPresent()) {
                 List<String> prefix = moves.subList(0, moves.size() - 1);
                 String playedMoveUci = moves.get(moves.size() - 1);
                 Game positionBeforeMove =
