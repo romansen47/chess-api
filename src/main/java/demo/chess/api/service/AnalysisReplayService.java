@@ -12,8 +12,8 @@ import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.dto.BoardDto;
 import demo.chess.api.dto.EngineLineDto;
+import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
-import demo.chess.api.exception.NativeEngineUnavailableException.Role;
 import demo.chess.analysis.annotation.MoveAnnotation;
 import demo.chess.analysis.annotation.MoveAnnotationClassifier;
 import demo.chess.api.mapper.MoveAnnotationDtoMapper;
@@ -77,7 +77,7 @@ public class AnalysisReplayService {
         int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
         String engineProfileId = engineSettingsService.normalizeDeepAnalysisProfileId(requestedProfileId);
         if (engineProfileId == null) {
-            throw new NativeEngineUnavailableException(Role.DEEP_ANALYSIS);
+            throw new NativeEngineUnavailableException(NativeEngineRole.DEEP_ANALYSIS);
         }
         UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
                 engineProfileId,

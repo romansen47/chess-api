@@ -6,8 +6,8 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineRuntimeAssignmentsDto;
+import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
-import demo.chess.api.exception.NativeEngineUnavailableException.Role;
 import demo.chess.definitions.engines.UciEngineConfig;
 
 /**
@@ -96,17 +96,17 @@ public class EngineRuntimeSelectionService {
 
     public synchronized UciEngineConfig requireWhitePlayerConfig() {
         return findWhitePlayerConfig()
-                .orElseThrow(() -> new NativeEngineUnavailableException(Role.WHITE_PLAYER));
+                .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.WHITE_PLAYER));
     }
 
     public synchronized UciEngineConfig requireBlackPlayerConfig() {
         return findBlackPlayerConfig()
-                .orElseThrow(() -> new NativeEngineUnavailableException(Role.BLACK_PLAYER));
+                .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.BLACK_PLAYER));
     }
 
     public synchronized UciEngineConfig requireEvaluationConfig() {
         return findEvaluationConfig()
-                .orElseThrow(() -> new NativeEngineUnavailableException(Role.EVALUATION));
+                .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.EVALUATION));
     }
 
     public synchronized UciEngineConfig getWhitePlayerConfig() {

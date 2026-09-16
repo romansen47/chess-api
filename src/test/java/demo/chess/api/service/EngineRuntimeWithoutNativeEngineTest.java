@@ -18,8 +18,8 @@ import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
 
 import demo.chess.api.dto.GameSettingsDto;
+import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
-import demo.chess.api.exception.NativeEngineUnavailableException.Role;
 
 /**
  * Verifies that application services can exist and reset normally when no
@@ -64,13 +64,13 @@ class EngineRuntimeWithoutNativeEngineTest {
     void requiredRuntimeConfigsReportStableMissingEngineRoles() throws Exception {
         EngineRuntimeSelectionService runtimeSelection = createRuntimeSelectionWithoutEngine();
 
-        assertUnavailable(Role.WHITE_PLAYER, runtimeSelection::requireWhitePlayerConfig);
-        assertUnavailable(Role.BLACK_PLAYER, runtimeSelection::requireBlackPlayerConfig);
-        assertUnavailable(Role.EVALUATION, runtimeSelection::requireEvaluationConfig);
+        assertUnavailable(NativeEngineRole.WHITE_PLAYER, runtimeSelection::requireWhitePlayerConfig);
+        assertUnavailable(NativeEngineRole.BLACK_PLAYER, runtimeSelection::requireBlackPlayerConfig);
+        assertUnavailable(NativeEngineRole.EVALUATION, runtimeSelection::requireEvaluationConfig);
 
-        assertUnavailable(Role.WHITE_PLAYER, runtimeSelection::getWhitePlayerConfig);
-        assertUnavailable(Role.BLACK_PLAYER, runtimeSelection::getBlackPlayerConfig);
-        assertUnavailable(Role.EVALUATION, runtimeSelection::getEvaluationConfig);
+        assertUnavailable(NativeEngineRole.WHITE_PLAYER, runtimeSelection::getWhitePlayerConfig);
+        assertUnavailable(NativeEngineRole.BLACK_PLAYER, runtimeSelection::getBlackPlayerConfig);
+        assertUnavailable(NativeEngineRole.EVALUATION, runtimeSelection::getEvaluationConfig);
     }
 
     @Test
@@ -82,7 +82,7 @@ class EngineRuntimeWithoutNativeEngineTest {
                 new LiveEvaluationStreamService(),
                 new EngineLineDisplayService());
 
-        assertUnavailable(Role.EVALUATION, evaluationService::getEvaluation);
+        assertUnavailable(NativeEngineRole.EVALUATION, evaluationService::getEvaluation);
     }
 
     @Test
@@ -91,7 +91,7 @@ class EngineRuntimeWithoutNativeEngineTest {
         ComputerMoveService computerMoveService =
                 new ComputerMoveService(new GameService(), runtimeSelection);
 
-        assertUnavailable(Role.WHITE_PLAYER, computerMoveService::makeComputerMove);
+        assertUnavailable(NativeEngineRole.WHITE_PLAYER, computerMoveService::makeComputerMove);
     }
 
     @Test
@@ -108,7 +108,7 @@ class EngineRuntimeWithoutNativeEngineTest {
                 uciGameService,
                 new EngineLineDisplayService());
 
-        assertUnavailable(Role.DEEP_ANALYSIS, () -> replayService.start(null));
+        assertUnavailable(NativeEngineRole.DEEP_ANALYSIS, () -> replayService.start(null));
     }
 
     @Test
@@ -161,7 +161,7 @@ class EngineRuntimeWithoutNativeEngineTest {
     }
 
     private void assertUnavailable(
-            Role expectedRole,
+            NativeEngineRole expectedRole,
             org.junit.jupiter.api.function.Executable operation) {
         NativeEngineUnavailableException exception =
                 assertThrows(NativeEngineUnavailableException.class, operation);
