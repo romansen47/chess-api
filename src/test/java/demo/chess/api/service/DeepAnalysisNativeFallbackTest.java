@@ -1,5 +1,6 @@
 package demo.chess.api.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,6 +19,7 @@ import demo.chess.api.dto.EngineConfigOverviewDto;
 import demo.chess.api.dto.EngineDefinitionDto;
 import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.engine.NativeEngineRole;
+import demo.chess.definitions.ChessStartingPosition;
 
 class DeepAnalysisNativeFallbackTest {
 
@@ -39,8 +41,8 @@ class DeepAnalysisNativeFallbackTest {
     @Test
     void fallsBackToAnotherWorkingNativeProfileBeforeReportingBrowserOnlyMode() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
-        createUciEngine(games.resolve("stockfish"), "Engine A");
-        createUciEngine(games.resolve("lc0"), "Engine B");
+        createUciEngine(games.resolve("stockfish"), "Engine A", false);
+        createUciEngine(games.resolve("lc0"), "Engine B", false);
         configureProperties(games);
 
         EngineSettingsService settings = new EngineSettingsService(
@@ -68,13 +70,58 @@ class DeepAnalysisNativeFallbackTest {
         assertTrue(availability.getAvailability(NativeEngineRole.DEEP_ANALYSIS).available());
     }
 
-    private Path createUciEngine(Path path, String name) throws IOException {
+    @Test
+    void chess960SkipsResponsiveProfileWithoutChess960Capability() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        Path classical = createUciEngine(games.resolve("stockfish"), "Classical Engine", false);
+        Path chess960 = createUciEngine(games.resolve("lc0"), "Chess960 Engine", true);
+        configureProperties(games);
+
+        EngineSettingsService settings = new EngineSettingsService(
+                new ObjectMapper(), new EngineDiscoveryService());
+        EngineRuntimeSelectionService runtime = new EngineRuntimeSelectionService(settings);
+        EngineAvailabilityService availability = new EngineAvailabilityService(runtime, settings);
+        EngineConfigOverviewDto overview = settings.getOverview();
+
+        String classicalProfileId = profileIdForPath(overview, classical);
+        String chess960ProfileId = profileIdForPath(overview, chess960);
+
+        String resolved = availability.findAvailableDeepAnalysisProfileId(
+                        classicalProfileId,
+                        ChessStartingPosition.of(0))
+                .orElseThrow();
+
+        assertEquals(chess960ProfileId, resolved);
+        assertTrue(availability.getAvailability(
+                NativeEngineRole.DEEP_ANALYSIS,
+                ChessStartingPosition.of(0)).available());
+    }
+
+    private String profileIdForPath(EngineConfigOverviewDto overview, Path path) {
+        String engineId = overview.getEngines().stream()
+                .filter(engine -> Path.of(engine.getEngine()).toAbsolutePath().normalize()
+                        .equals(path.toAbsolutePath().normalize()))
+                .map(EngineDefinitionDto::getId)
+                .findFirst()
+                .orElseThrow();
+        return overview.getProfiles().stream()
+                .filter(profile -> engineId.equals(profile.getEngineId()))
+                .map(EngineProfileDto::getId)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private Path createUciEngine(Path path, String name, boolean chess960) throws IOException {
+        String chess960Option = chess960
+                ? "      echo \"option name UCI_Chess960 type check default false\"\n"
+                : "";
         String script = "#!/bin/sh\n"
                 + "while IFS= read -r command; do\n"
                 + "  case \"$command\" in\n"
                 + "    uci)\n"
                 + "      echo \"id name " + name + "\"\n"
                 + "      echo \"id author Test\"\n"
+                + chess960Option
                 + "      echo \"uciok\"\n"
                 + "      ;;\n"
                 + "    quit) exit 0 ;;\n"

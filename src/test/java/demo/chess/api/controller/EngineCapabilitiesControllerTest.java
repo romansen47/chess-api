@@ -8,9 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.EnumMap;
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -19,19 +16,45 @@ import demo.chess.api.engine.NativeEngineAvailability;
 import demo.chess.api.engine.NativeEngineAvailabilityReason;
 import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.service.EngineAvailabilityService;
+import demo.chess.api.service.GameService;
+import demo.chess.api.service.UciGameService;
+import demo.chess.definitions.ChessStartingPosition;
+import demo.chess.game.Game;
 
-/**
- * Verifies the public engine-capability REST contract.
- */
+/** Verifies the public, variant-aware engine-capability REST contract. */
 class EngineCapabilitiesControllerTest {
 
     @Test
-    void exposesStableCapabilitySnapshot() throws Exception {
+    void exposesCapabilitiesForLiveAndSelectedAnalysisVariants() throws Exception {
         EngineAvailabilityService service = mock(EngineAvailabilityService.class);
-        when(service.getAvailabilities()).thenReturn(capabilities());
+        GameService gameService = mock(GameService.class);
+        UciGameService uciGameService = mock(UciGameService.class);
+        Game liveGame = mock(Game.class);
+
+        ChessStartingPosition livePosition = ChessStartingPosition.of(0);
+        ChessStartingPosition analysisPosition = ChessStartingPosition.of(959);
+        when(gameService.getCurrentGame()).thenReturn(liveGame);
+        when(liveGame.getStartingPosition()).thenReturn(livePosition);
+        when(uciGameService.getAnalysisStartingPosition()).thenReturn(analysisPosition);
+
+        when(service.getAvailability(NativeEngineRole.WHITE_PLAYER, livePosition))
+                .thenReturn(NativeEngineAvailability.available(NativeEngineRole.WHITE_PLAYER));
+        when(service.getAvailability(NativeEngineRole.BLACK_PLAYER, livePosition))
+                .thenReturn(NativeEngineAvailability.notConfigured(NativeEngineRole.BLACK_PLAYER));
+        when(service.getAvailability(NativeEngineRole.EVALUATION, livePosition))
+                .thenReturn(NativeEngineAvailability.unavailable(
+                        NativeEngineRole.EVALUATION,
+                        NativeEngineAvailabilityReason.EXECUTABLE_NOT_FOUND));
+        when(service.getAvailability(NativeEngineRole.DEEP_ANALYSIS, analysisPosition))
+                .thenReturn(NativeEngineAvailability.unavailable(
+                        NativeEngineRole.DEEP_ANALYSIS,
+                        NativeEngineAvailabilityReason.CHESS960_UNSUPPORTED));
 
         MockMvc mvc = MockMvcBuilders
-                .standaloneSetup(new EngineCapabilitiesController(service))
+                .standaloneSetup(new EngineCapabilitiesController(
+                        service,
+                        gameService,
+                        uciGameService))
                 .build();
 
         mvc.perform(get("/api/engines/capabilities"))
@@ -47,30 +70,11 @@ class EngineCapabilitiesControllerTest {
                 .andExpect(jsonPath("$.evaluation.reason", is("EXECUTABLE_NOT_FOUND")))
                 .andExpect(jsonPath("$.deepAnalysis.configured", is(true)))
                 .andExpect(jsonPath("$.deepAnalysis.available", is(false)))
-                .andExpect(jsonPath("$.deepAnalysis.reason", is("UCI_UNRESPONSIVE")));
+                .andExpect(jsonPath("$.deepAnalysis.reason", is("CHESS960_UNSUPPORTED")));
 
-        verify(service).getAvailabilities();
-    }
-
-    private Map<NativeEngineRole, NativeEngineAvailability> capabilities() {
-        EnumMap<NativeEngineRole, NativeEngineAvailability> result =
-                new EnumMap<>(NativeEngineRole.class);
-        result.put(
-                NativeEngineRole.WHITE_PLAYER,
-                NativeEngineAvailability.available(NativeEngineRole.WHITE_PLAYER));
-        result.put(
-                NativeEngineRole.BLACK_PLAYER,
-                NativeEngineAvailability.notConfigured(NativeEngineRole.BLACK_PLAYER));
-        result.put(
-                NativeEngineRole.EVALUATION,
-                NativeEngineAvailability.unavailable(
-                        NativeEngineRole.EVALUATION,
-                        NativeEngineAvailabilityReason.EXECUTABLE_NOT_FOUND));
-        result.put(
-                NativeEngineRole.DEEP_ANALYSIS,
-                NativeEngineAvailability.unavailable(
-                        NativeEngineRole.DEEP_ANALYSIS,
-                        NativeEngineAvailabilityReason.UCI_UNRESPONSIVE));
-        return result;
+        verify(service).getAvailability(NativeEngineRole.WHITE_PLAYER, livePosition);
+        verify(service).getAvailability(NativeEngineRole.BLACK_PLAYER, livePosition);
+        verify(service).getAvailability(NativeEngineRole.EVALUATION, livePosition);
+        verify(service).getAvailability(NativeEngineRole.DEEP_ANALYSIS, analysisPosition);
     }
 }

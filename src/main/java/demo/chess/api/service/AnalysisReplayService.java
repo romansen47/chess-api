@@ -18,6 +18,7 @@ import demo.chess.api.dto.EngineLineDto;
 import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.api.mapper.MoveAnnotationDtoMapper;
+import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.DeepAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
@@ -39,7 +40,9 @@ import demo.chess.notation.UciMoveCodec;
  * replay to the core, and DTO conversion to the existing API mappers.</p>
  *
  * <p>Deep analysis is deliberately native-only. Browser Stockfish can be a
- * live-evaluation fallback, but it never creates an analysis replay session.</p>
+ * live-evaluation fallback, but it never creates an analysis replay session.
+ * Native profile resolution is variant-aware, so a responsive classical-only
+ * engine is skipped when the selected replay is Chess960.</p>
  */
 @Service
 public class AnalysisReplayService {
@@ -95,12 +98,13 @@ public class AnalysisReplayService {
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
             throws NoMoveFoundException, IOException {
         List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
+        ChessStartingPosition startingPosition = uciGameService.getAnalysisStartingPosition();
         String requestedProfileId = settings != null ? settings.getEngineProfileId() : null;
         int depth = settings != null ? Math.max(0, settings.getDepth()) : 0;
         int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
 
         String engineProfileId = engineAvailabilityService
-                .findAvailableDeepAnalysisProfileId(requestedProfileId)
+                .findAvailableDeepAnalysisProfileId(requestedProfileId, startingPosition)
                 .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.DEEP_ANALYSIS));
         UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
                 engineProfileId, depth, moveTimeSeconds);
@@ -109,7 +113,7 @@ public class AnalysisReplayService {
         String engineName = engineConfig.getEngineName();
         AnalysisReplaySession newSession = new AnalysisReplaySession(
                 moveListSnapshot,
-                Simulation.createSimulation(uciGameService.getAnalysisStartingPosition()),
+                Simulation.createSimulation(startingPosition),
                 deepAnalysisEngine,
                 engineConfig,
                 engineName);

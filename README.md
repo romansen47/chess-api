@@ -44,7 +44,7 @@ new game / PGN import
 
 `UciGameService` owns the distinction between the live game and an imported analysis game. Imported game, PGN tags, optional database id and annotations are grouped in `ImportedGameContext` so those values cannot drift independently. `UciGameMoveMapper` performs per-ply replay and is the single application component responsible for constructing the UCI/SAN move DTO sequence.
 
-The API never uses `Move.toString()` as a protocol contract. UCI-facing code goes through the core `UciMoveCodec`; this matters especially for Chess960 castling, where protocol coordinates can differ from the king's board destination.
+The API never uses `Move.toString()` as a protocol contract. UCI-facing code goes through the core `UciMoveCodec`; this matters especially for Chess960 castling, where protocol coordinates can differ from the king's board destination. Computer-engine move responses follow the same rule.
 
 ## Engine capabilities and fallback policy
 
@@ -52,14 +52,27 @@ The application supports multiple UCI engine definitions and reusable engine pro
 
 Native-engine handling is split into two layers:
 
-- `NativeEngineProbe` performs OS/file checks and a real UCI handshake for one executable;
+- `NativeEngineProbe` performs OS/file checks, a real UCI handshake, and variant-capability checks for one executable;
 - `EngineAvailabilityService` applies feature/role policy and exposes capability results.
 
-Deep-analysis profile selection is isolated in `DeepAnalysisProfileResolver`. Resolution order is deterministic: explicitly requested profile, configured deep-analysis default, then the remaining configured native profiles. The first working native engine is used.
+A responsive UCI executable is **not automatically Chess960-capable**. For a non-518 game, the native executable must advertise the standard `UCI_Chess960` check option. Otherwise its capability result is `CHESS960_UNSUPPORTED`: it may still be used for classical chess, but it is not a candidate for that Chess960 operation.
 
-**Browser Stockfish is a live-evaluation fallback only.** It is intentionally outside native deep-analysis resolution. If no configured native engine can be used, deep analysis is unavailable and the frontend must not enable "Analyse starten" merely because Browser Stockfish works.
+Capability checks are contextual:
 
-`AnalysisReplayService` creates a replay only after native profile resolution succeeds. Native process startup is delegated to `DeepAnalysisEngineFactory`. Move-quality classification receives canonical UCI produced by the core codec, so Chess960 castling is classified against the same move representation emitted by the engine.
+- White/Black player and live-evaluation roles are checked against the current live game's starting position;
+- Deep Analysis is checked against the currently selected analysis game, which may be an imported PGN with a different Chess960 starting position.
+
+Deep-analysis profile selection is isolated in `DeepAnalysisProfileResolver`. Resolution order is deterministic: explicitly requested profile, configured deep-analysis default, then the remaining configured native profiles. Each candidate is probed against the selected starting position, so a healthy classical-only engine is skipped in favor of a later Chess960-capable native engine when necessary.
+
+**Browser Stockfish is a live-evaluation fallback only.** It is intentionally outside native deep-analysis resolution. If no configured native engine can be used for the selected variant, deep analysis is unavailable and the frontend must not enable "Analyse starten" merely because Browser Stockfish works.
+
+`AnalysisReplayService` resolves native capability against `UciGameService.getAnalysisStartingPosition()` before creating a replay. Native process startup is delegated to `DeepAnalysisEngineFactory`. Move-quality classification receives canonical UCI produced by the core codec, so Chess960 castling is classified against the same move representation emitted by the engine.
+
+### System-managed UCI options
+
+`UCI_Chess960` is protocol/game state, not a reusable profile preference. The engine definition keeps it because its presence is a capability signal, but `EngineProfileDto` removes it from profile option values. This also cleans up values loaded from older persisted stores. The core engine adapter sets the option from the active `Game` immediately before a search.
+
+This boundary prevents a stored profile default such as `UCI_Chess960=false` from overwriting the runtime mode between two searches on the same persistent engine process.
 
 ## Engine discovery
 
@@ -102,11 +115,13 @@ When extending the application, keep these boundaries intact:
 3. DTO mapping belongs in mapper/serializer components, not controllers.
 4. Imported/replay state must carry its Chess960 starting position end-to-end.
 5. Browser evaluation capability and native deep-analysis capability are separate concepts.
-6. Engine executable health checks and engine/profile selection policy stay separate.
-7. Public API compatibility fields may remain temporarily, but new code should use the explicit canonical representation documented above.
+6. Engine executable health, advertised variant capability and engine/profile selection policy are separate concerns.
+7. System-managed UCI options are not profile preferences.
+8. A fallback candidate must satisfy the capability requirements of the selected game, not merely answer `uci`.
+9. Public API compatibility fields may remain temporarily, but new code should use the explicit canonical representation documented above.
 
 ## Build and tests
 
 The module uses Spring Boot 3.3.5 and Java 21. Its Maven build also runs `npm ci` and `npm run build` in the sibling `chess-frontend` project and packages the resulting frontend into the Spring Boot application. For a complete build, use the parent `chess-project` repository with its submodules initialized.
 
-Chess960-related changes should be verified at several boundaries: settings/start-game creation, rich legal-move DTOs, PGN import/snapshot replay, native-engine fallback, analysis replay, and the full parent Maven reactor. The parent CI additionally type-checks and tests the frontend, runs the browser Stockfish smoke test, and builds the production bundle.
+Chess960-related changes should be verified at several boundaries: settings/start-game creation, rich legal-move DTOs, PGN import/snapshot replay, native-engine capability/fallback, analysis replay, and the full parent Maven reactor. Capability tests deliberately distinguish a responsive classical-only fake UCI engine from one that advertises `UCI_Chess960`. The parent CI additionally type-checks and tests the frontend, runs the browser Stockfish smoke test, and builds the production bundle.

@@ -22,6 +22,7 @@ import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.engine.NativeEngineAvailability;
 import demo.chess.api.engine.NativeEngineAvailabilityReason;
 import demo.chess.api.engine.NativeEngineRole;
+import demo.chess.definitions.ChessStartingPosition;
 
 /**
  * Verifies the native-engine availability model independently of REST.
@@ -74,6 +75,45 @@ class EngineAvailabilityServiceTest {
                     true,
                     NativeEngineAvailabilityReason.AVAILABLE);
         }
+    }
+
+    @Test
+    void responsiveClassicalEngineIsUnavailableForChess960WhenCapabilityIsMissing() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        createUciEngine(games.resolve("stockfish"), "Classical UCI", false);
+        TestContext context = createContext(games);
+
+        assertAvailability(
+                context.availabilityService().getAvailability(
+                        NativeEngineRole.EVALUATION,
+                        ChessStartingPosition.of(0)),
+                NativeEngineRole.EVALUATION,
+                true,
+                false,
+                NativeEngineAvailabilityReason.CHESS960_UNSUPPORTED);
+
+        assertAvailability(
+                context.availabilityService().getAvailability(NativeEngineRole.EVALUATION),
+                NativeEngineRole.EVALUATION,
+                true,
+                true,
+                NativeEngineAvailabilityReason.AVAILABLE);
+    }
+
+    @Test
+    void engineAdvertisingChess960IsAvailableForNonStandardPosition() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        createUciEngine(games.resolve("stockfish"), "Chess960 UCI", true);
+        TestContext context = createContext(games);
+
+        assertAvailability(
+                context.availabilityService().getAvailability(
+                        NativeEngineRole.EVALUATION,
+                        ChessStartingPosition.of(0)),
+                NativeEngineRole.EVALUATION,
+                true,
+                true,
+                NativeEngineAvailabilityReason.AVAILABLE);
     }
 
     @Test
@@ -198,12 +238,20 @@ class EngineAvailabilityServiceTest {
     }
 
     private Path createUciEngine(Path path, String name) throws IOException {
+        return createUciEngine(path, name, false);
+    }
+
+    private Path createUciEngine(Path path, String name, boolean chess960) throws IOException {
+        String chess960Option = chess960
+                ? "      echo \"option name UCI_Chess960 type check default false\"\n"
+                : "";
         String script = "#!/bin/sh\n"
                 + "while IFS= read -r command; do\n"
                 + "  case \"$command\" in\n"
                 + "    uci)\n"
                 + "      echo \"id name " + name + "\"\n"
                 + "      echo \"id author Test\"\n"
+                + chess960Option
                 + "      echo \"uciok\"\n"
                 + "      ;;\n"
                 + "    quit) exit 0 ;;\n"
