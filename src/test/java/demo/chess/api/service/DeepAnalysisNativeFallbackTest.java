@@ -39,8 +39,8 @@ class DeepAnalysisNativeFallbackTest {
     @Test
     void fallsBackToAnotherWorkingNativeProfileBeforeReportingBrowserOnlyMode() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
-        createUciEngine(games.resolve("engine-a"), "Engine A");
-        createUciEngine(games.resolve("engine-b"), "Engine B");
+        createUciEngine(games.resolve("stockfish"), "Engine A");
+        createUciEngine(games.resolve("lc0"), "Engine B");
         configureProperties(games);
 
         EngineSettingsService settings = new EngineSettingsService(
