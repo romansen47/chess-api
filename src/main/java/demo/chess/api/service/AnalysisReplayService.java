@@ -7,6 +7,8 @@ import java.util.concurrent.ExecutionException;
 
 import org.springframework.stereotype.Service;
 
+import demo.chess.analysis.annotation.MoveAnnotation;
+import demo.chess.analysis.annotation.MoveAnnotationClassifier;
 import demo.chess.api.dto.AnalysisProfilePointDto;
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
@@ -14,8 +16,6 @@ import demo.chess.api.dto.BoardDto;
 import demo.chess.api.dto.EngineLineDto;
 import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
-import demo.chess.analysis.annotation.MoveAnnotation;
-import demo.chess.analysis.annotation.MoveAnnotationClassifier;
 import demo.chess.api.mapper.MoveAnnotationDtoMapper;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.DeepAnalysisResult;
@@ -34,72 +34,54 @@ public class AnalysisReplayService {
 
     private final GameService gameService;
     private final EngineSettingsService engineSettingsService;
+    private final EngineAvailabilityService engineAvailabilityService;
     private final EvaluationService evaluationService;
     private final UciGameService uciGameService;
     private final EngineLineDisplayService engineLineDisplayService;
     private final MoveAnnotationClassifier moveAnnotationClassifier = new MoveAnnotationClassifier();
     private AnalysisReplaySession session;
 
-    /**
-     * Creates a new AnalysisReplayService instance.
-     * @param gameService the game service
-     * @param engineSettingsService the engine settings service
-     * @param evaluationService the evaluation service
-     * @param uciGameService the uci game service
-     * @param engineLineDisplayService canonical engine-line display converter
-     */
     public AnalysisReplayService(
             GameService gameService,
             EngineSettingsService engineSettingsService,
+            EngineAvailabilityService engineAvailabilityService,
             EvaluationService evaluationService,
             UciGameService uciGameService,
             EngineLineDisplayService engineLineDisplayService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
+        this.engineAvailabilityService = engineAvailabilityService;
         this.evaluationService = evaluationService;
         this.uciGameService = uciGameService;
         this.engineLineDisplayService = engineLineDisplayService;
     }
 
-    /**
-     * Performs the start operation.
-     * @param settings the settings
-     * @return the result of the operation
-     */
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
             throws NoMoveFoundException, IOException {
         List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
         String requestedProfileId = settings != null ? settings.getEngineProfileId() : null;
         int depth = settings != null ? Math.max(0, settings.getDepth()) : 0;
         int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
-        String engineProfileId = engineSettingsService.normalizeDeepAnalysisProfileId(requestedProfileId);
-        if (engineProfileId == null) {
-            throw new NativeEngineUnavailableException(NativeEngineRole.DEEP_ANALYSIS);
-        }
+
+        String engineProfileId = engineAvailabilityService
+                .findAvailableDeepAnalysisProfileId(requestedProfileId)
+                .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.DEEP_ANALYSIS));
         UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
-                engineProfileId,
-                depth,
-                moveTimeSeconds);
+                engineProfileId, depth, moveTimeSeconds);
 
         DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine(engineConfig.getEngine());
         String engineName = engineConfig.getEngineName();
-
         AnalysisReplaySession newSession = new AnalysisReplaySession(
                 moveListSnapshot,
-                Simulation.createSimulation(),
+                Simulation.createSimulation(uciGameService.getAnalysisStartingPosition()),
                 deepAnalysisEngine,
                 engineConfig,
                 engineName);
 
         double initialEvaluation = 0.3;
         newSession.profile.add(new AnalysisProfilePointDto(
-                0,
-                null,
-                null,
-                "Start",
-                initialEvaluation,
-                EvaluationBarMapper.toBar(initialEvaluation),
-                0));
+                0, null, null, "Start", initialEvaluation,
+                EvaluationBarMapper.toBar(initialEvaluation), 0));
 
         closeSessionEngine();
         evaluationService.stopLiveEvaluation();
@@ -107,27 +89,13 @@ public class AnalysisReplayService {
         return toStepDto(newSession, false, null, null, null, 0.0, 0.5, 0, "Analysis replay started.");
     }
 
-    /**
-     * Performs the next operation.
-     * @return the result of the operation
-     */
     public synchronized AnalysisReplayStepDto next() throws NoMoveFoundException, IOException {
-        if (session == null || !session.active) {
-            return inactiveStep("No active analysis replay.");
-        }
-
+        if (session == null || !session.active) return inactiveStep("No active analysis replay.");
         if (session.currentPly >= session.originalMoves.size()) {
             session.active = false;
             closeSessionEngine();
-            return toStepDto(
-                    session,
-                    true,
-                    null,
-                    null,
-                    null,
-                    latestEvaluation(session),
-                    latestBar(session),
-                    latestDepth(session),
+            return toStepDto(session, true, null, null, null,
+                    latestEvaluation(session), latestBar(session), latestDepth(session),
                     "Analysis replay finished.");
         }
 
@@ -138,35 +106,23 @@ public class AnalysisReplayService {
                 : null;
 
         Move replayMove = session.replayGame.getPlayer().getMoveInSimulation(session.replayGame, originalMove);
-        if (replayMove == null) {
-            throw new NoMoveFoundException("Could not map analysis replay move: " + originalMove);
-        }
-
+        if (replayMove == null) throw new NoMoveFoundException("Could not map analysis replay move: " + originalMove);
         String from = replayMove.getSource() != null ? replayMove.getSource().getName() : null;
         String to = replayMove.getTarget() != null ? replayMove.getTarget().getName() : null;
         String san = PgnNotation.toDisplayNotationAndApply(session.replayGame, replayMove);
         session.currentPly++;
 
         AnalysisEvaluation evaluation = analyzeCurrentReplayPosition(session);
-
         MoveAnnotation annotation = null;
         if (analysisBeforeMove != null && positionBeforeMove != null) {
             annotation = moveAnnotationClassifier.classify(
-                    positionBeforeMove,
-                    originalMove.toString(),
-                    analysisBeforeMove,
-                    evaluation.evaluation);
+                    positionBeforeMove, originalMove.toString(), analysisBeforeMove, evaluation.evaluation);
         }
 
         AnalysisProfilePointDto profilePoint = new AnalysisProfilePointDto(
-                session.currentPly,
-                from,
-                to,
-                san,
+                session.currentPly, from, to, san,
                 Math.round(evaluation.evaluation * 100.0) / 100.0,
-                evaluation.bar,
-                evaluation.depth,
-                evaluation.lines);
+                evaluation.bar, evaluation.depth, evaluation.lines);
         profilePoint.setAnnotation(MoveAnnotationDtoMapper.toDto(annotation));
         session.profile.add(profilePoint);
         session.lastDeepAnalysisResult = evaluation.deepAnalysisResult;
@@ -176,68 +132,26 @@ public class AnalysisReplayService {
             session.active = false;
             closeSessionEngine();
         }
-
-        return toStepDto(
-                session,
-                done,
-                from,
-                to,
-                san,
-                evaluation.evaluation,
-                evaluation.bar,
-                evaluation.depth,
+        return toStepDto(session, done, from, to, san,
+                evaluation.evaluation, evaluation.bar, evaluation.depth,
                 done ? "Analysis replay finished." : null);
     }
 
-
-    /**
-     * Returns the current analysis replay state without advancing it.
-     *
-     * @return current replay state, or null when no replay session exists
-     */
     public synchronized AnalysisReplayStepDto state() {
-        if (session == null) {
-            return null;
-        }
-
-        return toStepDto(
-                session,
-                !session.active,
-                null,
-                null,
-                null,
-                latestEvaluation(session),
-                latestBar(session),
-                latestDepth(session),
-                null);
+        if (session == null) return null;
+        return toStepDto(session, !session.active, null, null, null,
+                latestEvaluation(session), latestBar(session), latestDepth(session), null);
     }
 
-    /**
-     * Cancels the current analysis replay.
-     * @return current replay state
-     */
     public synchronized AnalysisReplayStepDto cancel() {
-        if (session == null) {
-            return inactiveStep("No active analysis replay.");
-        }
-
+        if (session == null) return inactiveStep("No active analysis replay.");
         session.active = false;
         closeSessionEngine();
-        return toStepDto(
-                session,
-                true,
-                null,
-                null,
-                null,
-                latestEvaluation(session),
-                latestBar(session),
-                latestDepth(session),
+        return toStepDto(session, true, null, null, null,
+                latestEvaluation(session), latestBar(session), latestDepth(session),
                 "Analysis replay cancelled.");
     }
 
-    /**
-     * Discards the replay session because the underlying game is being replaced.
-     */
     public synchronized void clear() {
         closeSessionEngine();
         session = null;
@@ -247,60 +161,36 @@ public class AnalysisReplayService {
         if (enginePath == null || enginePath.isBlank()) {
             throw NativeEngineUnavailableException.startFailure(
                     NativeEngineRole.DEEP_ANALYSIS,
-                    new IllegalStateException(
-                            "Deep analysis engine profile has no executable path"));
+                    new IllegalStateException("Deep analysis engine profile has no executable path"));
         }
-        String effectivePath = enginePath.trim();
         try {
-            DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(effectivePath);
+            DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(enginePath.trim());
             engine.setManagementLabel("deep analysis");
             return engine;
         } catch (Exception ex) {
-            throw NativeEngineUnavailableException.startFailure(
-                    NativeEngineRole.DEEP_ANALYSIS,
-                    ex);
+            throw NativeEngineUnavailableException.startFailure(NativeEngineRole.DEEP_ANALYSIS, ex);
         }
     }
 
     private AnalysisEvaluation analyzeCurrentReplayPosition(AnalysisReplaySession source)
             throws NoMoveFoundException {
         AnalysisEvaluation terminalEvaluation = evaluateTerminalPosition(source);
-        if (terminalEvaluation != null) {
-            return terminalEvaluation;
-        }
-
+        if (terminalEvaluation != null) return terminalEvaluation;
         try {
             source.engine.clearChachedLines();
-            DeepAnalysisResult deepAnalysisResult = source.engine.analyze(
-                    source.replayGame,
-                    source.engineConfig);
+            DeepAnalysisResult deepAnalysisResult = source.engine.analyze(source.replayGame, source.engineConfig);
             List<EngineLine> bestLines = deepAnalysisResult.getFinalLines();
-
-            if (bestLines.isEmpty()) {
-                return new AnalysisEvaluation(
-                        0.0,
-                        0.5,
-                        0,
-                        List.of(),
-                        deepAnalysisResult);
-            }
+            if (bestLines.isEmpty()) return new AnalysisEvaluation(0.0, 0.5, 0, List.of(), deepAnalysisResult);
 
             double eval = bestLines.get(0).getEvaluation();
             double bar = EvaluationBarMapper.toBar(eval);
             int depth = bestLines.get(0).getDepth();
-
             List<EngineLineDto> lines = new ArrayList<>();
             for (EngineLine line : bestLines) {
                 Game displayGame = Simulation.forkDummyFrom(source.replayGame.getMoveList());
                 lines.add(engineLineDisplayService.toDto(displayGame, line));
             }
-
-            return new AnalysisEvaluation(
-                    eval,
-                    bar,
-                    depth,
-                    lines,
-                    deepAnalysisResult);
+            return new AnalysisEvaluation(eval, bar, depth, lines, deepAnalysisResult);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             safeStop(source.engine);
@@ -312,61 +202,33 @@ public class AnalysisReplayService {
     }
 
     private AnalysisEvaluation evaluateTerminalPosition(AnalysisReplaySession source) {
-        if (source == null || source.replayGame == null) {
-            return null;
-        }
-
+        if (source == null || source.replayGame == null) return null;
         Double evaluation = TerminalEvaluationMapper.toEvaluation(
                 TerminalPositionEvaluator.determineState(source.replayGame));
-        if (evaluation == null) {
-            return null;
-        }
-
+        if (evaluation == null) return null;
         return new AnalysisEvaluation(
-                evaluation,
-                EvaluationBarMapper.toBar(evaluation),
-                latestDepth(source),
-                List.of());
+                evaluation, EvaluationBarMapper.toBar(evaluation), latestDepth(source), List.of());
     }
 
-
     private double latestEvaluation(AnalysisReplaySession source) {
-        if (source == null || source.profile.isEmpty()) {
-            return 0.0;
-        }
-        return source.profile.get(source.profile.size() - 1).getEvaluation();
+        return source == null || source.profile.isEmpty() ? 0.0
+                : source.profile.get(source.profile.size() - 1).getEvaluation();
     }
 
     private double latestBar(AnalysisReplaySession source) {
-        if (source == null || source.profile.isEmpty()) {
-            return 0.5;
-        }
-        return source.profile.get(source.profile.size() - 1).getBar();
+        return source == null || source.profile.isEmpty() ? 0.5
+                : source.profile.get(source.profile.size() - 1).getBar();
     }
 
     private int latestDepth(AnalysisReplaySession source) {
-        if (source == null || source.profile.isEmpty()) {
-            return 0;
-        }
-        return source.profile.get(source.profile.size() - 1).getDepth();
+        return source == null || source.profile.isEmpty() ? 0
+                : source.profile.get(source.profile.size() - 1).getDepth();
     }
 
     private AnalysisReplayStepDto inactiveStep(String message) {
         return new AnalysisReplayStepDto(
-                false,
-                true,
-                0,
-                0,
-                null,
-                null,
-                null,
-                0.0,
-                0.5,
-                0,
-                null,
-                null,
-                List.of(),
-                message);
+                false, true, 0, 0, null, null, null,
+                0.0, 0.5, 0, null, null, List.of(), message);
     }
 
     private AnalysisReplayStepDto toStepDto(
@@ -381,39 +243,23 @@ public class AnalysisReplayService {
             String message) {
         BoardDto board = gameService.getBoardView(source.replayGame);
         return new AnalysisReplayStepDto(
-                source.active,
-                done,
-                source.originalMoves.size(),
-                source.currentPly,
-                from,
-                to,
-                san,
-                Math.round(evaluation * 100.0) / 100.0,
-                bar,
-                depth,
-                source.engineName,
-                board,
-                new ArrayList<>(source.profile),
-                message);
+                source.active, done, source.originalMoves.size(), source.currentPly,
+                from, to, san, Math.round(evaluation * 100.0) / 100.0,
+                bar, depth, source.engineName, board,
+                new ArrayList<>(source.profile), message);
     }
 
     private void closeSessionEngine() {
-        if (session == null || session.engine == null) {
-            return;
-        }
-        safeStop(session.engine);
+        if (session != null && session.engine != null) safeStop(session.engine);
     }
 
     private void safeStop(DeepAnalysisEngine engine) {
-        if (engine == null) {
-            return;
-        }
+        if (engine == null) return;
         try {
             engine.stopEvaluation();
         } catch (Exception ignored) {
         }
     }
-
 
     private static class AnalysisEvaluation {
         private final double evaluation;
@@ -422,11 +268,7 @@ public class AnalysisReplayService {
         private final List<EngineLineDto> lines;
         private final DeepAnalysisResult deepAnalysisResult;
 
-        private AnalysisEvaluation(
-                double evaluation,
-                double bar,
-                int depth,
-                List<EngineLineDto> lines) {
+        private AnalysisEvaluation(double evaluation, double bar, int depth, List<EngineLineDto> lines) {
             this(evaluation, bar, depth, lines, null);
         }
 
@@ -452,7 +294,7 @@ public class AnalysisReplayService {
         private final String engineName;
         private final List<AnalysisProfilePointDto> profile = new ArrayList<>();
         private DeepAnalysisResult lastDeepAnalysisResult;
-        private int currentPly = 0;
+        private int currentPly;
         private boolean active = true;
 
         private AnalysisReplaySession(

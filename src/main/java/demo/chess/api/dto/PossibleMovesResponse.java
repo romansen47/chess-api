@@ -4,32 +4,29 @@ import java.util.List;
 
 public class PossibleMovesResponse {
 
-    private String from;
-    private List<String> targets;
+    private final String from;
+    private final List<String> targets;
+    private final List<LegalMoveDto> moves;
 
-    /**
-     * Creates a new PossibleMovesResponse instance.
-     * @param from the from
-     * @param targets the targets
-     */
     public PossibleMovesResponse(String from, List<String> targets) {
-        this.from = from;
-        this.targets = targets;
+        this(from, targets, List.of());
     }
 
-    /**
-     * Returns the from.
-     * @return the from
-     */
+    public PossibleMovesResponse(String from, List<String> targets, List<LegalMoveDto> moves) {
+        this.from = from;
+        this.targets = targets != null ? List.copyOf(targets) : List.of();
+        this.moves = moves != null ? List.copyOf(moves) : List.of();
+    }
+
     public String getFrom() {
         return from;
     }
 
-    /**
-     * Returns the targets.
-     * @return the targets
-     */
     public List<String> getTargets() {
         return targets;
+    }
+
+    public List<LegalMoveDto> getMoves() {
+        return moves;
     }
 }

@@ -11,6 +11,7 @@ import demo.chess.admin.impl.ChessAdmin;
 import demo.chess.api.dto.BoardDto;
 import demo.chess.api.dto.GameSettingsDto;
 import demo.chess.api.dto.PieceDto;
+import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.Color;
 import demo.chess.definitions.PieceType;
 import demo.chess.definitions.board.Board;
@@ -24,85 +25,36 @@ import demo.chess.game.LegalMoveResolver;
 @Service
 public class GameService {
 
-    /**
-     * Standard-Bedenkzeit für eine neue Partie: 5 Minuten = 5 * 60 Sekunden.
-     */
     public static final int DEFAULT_TIME_SECONDS = 5 * 60;
-
-    /**
-     * Standard-Inkrement: 0 Sekunden, also 5+0.
-     */
     public static final int DEFAULT_INCREMENT_SECONDS = 0;
 
-    /**
-     * Aktuelles Spiel. Für den Moment arbeiten wir mit genau einer Partie,
-     * die beim Start der Anwendung erzeugt wird.
-     */
     private Game game;
-
-    /**
-     * Aktuelle Einstellungen, die für neue Partien verwendet werden.
-     */
     private GameSettingsDto gameSettings;
 
-    /**
-     * Creates a new GameService instance.
-     */
     public GameService() {
         this.gameSettings = createDefaultGameSettings();
-        this.game = createGame(
-                this.gameSettings.getTimeForEachPlayerSeconds(),
-                this.gameSettings.getIncrementForWhiteSeconds(),
-                this.gameSettings.getIncrementForBlackSeconds(),
-                this.gameSettings.getAdditionalTimeAfter40MovesSeconds());
+        this.game = createGame(this.gameSettings);
     }
 
-    /**
-     * Starts the new game.
-     * @return the result of the operation
-     */
     public synchronized GameSettingsDto startNewGame() {
         return startNewGame(this.gameSettings);
     }
 
-    /**
-     * Starts the new game.
-     * @param settings the settings
-     * @return the result of the operation
-     */
     public synchronized GameSettingsDto startNewGame(GameSettingsDto settings) {
         GameSettingsDto normalizedSettings = normalizeGameSettings(settings);
-
         this.gameSettings = normalizedSettings;
-        this.game = createGame(
-                normalizedSettings.getTimeForEachPlayerSeconds(),
-                normalizedSettings.getIncrementForWhiteSeconds(),
-                normalizedSettings.getIncrementForBlackSeconds(),
-                normalizedSettings.getAdditionalTimeAfter40MovesSeconds());
-
+        this.game = createGame(normalizedSettings);
         return copyGameSettings(this.gameSettings);
     }
 
-    /**
-     * Returns the game settings.
-     * @return the game settings
-     */
     public synchronized GameSettingsDto getGameSettings() {
         return copyGameSettings(this.gameSettings);
     }
 
-    /**
-     * Returns the current game.
-     * @return the current game
-     */
     public synchronized Game getCurrentGame() {
         return game;
     }
 
-    /**
-     * Creates the default game settings.
-     * @return the result of the operation
-     */
     private GameSettingsDto createDefaultGameSettings() {
         return new GameSettingsDto(
                 DEFAULT_TIME_SECONDS,
@@ -110,19 +62,13 @@ public class GameService {
                 DEFAULT_INCREMENT_SECONDS,
                 0,
                 "WHITE",
+                ChessStartingPosition.STANDARD_ID,
                 0);
     }
 
-    /**
-     * Performs the normalize game settings operation.
-     * @param settings the settings
-     * @return the result of the operation
-     */
     private GameSettingsDto normalizeGameSettings(GameSettingsDto settings) {
         GameSettingsDto source = settings != null ? settings : this.gameSettings;
-        if (source == null) {
-            source = createDefaultGameSettings();
-        }
+        if (source == null) source = createDefaultGameSettings();
 
         int timeForEachPlayerSeconds = source.getTimeForEachPlayerSeconds() > 0
                 ? source.getTimeForEachPlayerSeconds()
@@ -133,7 +79,10 @@ public class GameService {
         String startingColor = source.getStartingColor() != null && !source.getStartingColor().isBlank()
                 ? source.getStartingColor().trim().toUpperCase(Locale.ROOT)
                 : "WHITE";
-
+        int startingPositionId = source.getStartingPositionId();
+        if (startingPositionId < ChessStartingPosition.MIN_ID || startingPositionId > ChessStartingPosition.MAX_ID) {
+            throw new IllegalArgumentException("Chess960 startingPositionId must be between 0 and 959");
+        }
         long nextVersion = this.gameSettings != null ? this.gameSettings.getVersion() + 1 : 1;
 
         return new GameSettingsDto(
@@ -142,153 +91,81 @@ public class GameService {
                 incrementForBlackSeconds,
                 additionalTimeAfter40MovesSeconds,
                 startingColor,
+                startingPositionId,
                 nextVersion);
     }
 
-    /**
-     * Performs the copy game settings operation.
-     * @param settings the settings
-     * @return the result of the operation
-     */
     private GameSettingsDto copyGameSettings(GameSettingsDto settings) {
-        if (settings == null) {
-            return createDefaultGameSettings();
-        }
-
+        if (settings == null) return createDefaultGameSettings();
         return new GameSettingsDto(
                 settings.getTimeForEachPlayerSeconds(),
                 settings.getIncrementForWhiteSeconds(),
                 settings.getIncrementForBlackSeconds(),
                 settings.getAdditionalTimeAfter40MovesSeconds(),
                 settings.getStartingColor(),
+                settings.getStartingPositionId(),
                 settings.getVersion());
     }
 
-    /**
-     * Creates the game.
-     * @param timeSeconds the time seconds
-     * @param whiteIncrementSeconds the white increment seconds
-     * @param blackIncrementSeconds the black increment seconds
-     * @return the result of the operation
-     */
-    private Game createGame(
-            int timeSeconds,
-            int whiteIncrementSeconds,
-            int blackIncrementSeconds,
-            int additionalTimeAfter40MovesSeconds) {
-        Game createdGame = new ChessAdmin().chessGame(timeSeconds);
+    private Game createGame(GameSettingsDto settings) {
+        Game createdGame = new ChessAdmin().chessGame(
+                settings.getTimeForEachPlayerSeconds(),
+                ChessStartingPosition.of(settings.getStartingPositionId()));
         createdGame.configureTimeControl(
-                whiteIncrementSeconds,
-                blackIncrementSeconds,
-                additionalTimeAfter40MovesSeconds);
+                settings.getIncrementForWhiteSeconds(),
+                settings.getIncrementForBlackSeconds(),
+                settings.getAdditionalTimeAfter40MovesSeconds());
         return createdGame;
     }
 
-
-    /**
-     * Applies the move.
-     * @param move the move
-     * @return the result of the operation
-     */
     public synchronized Move applyMove(Move move) throws NoMoveFoundException, IOException {
-        if (move == null) {
-            throw new NoMoveFoundException("move must not be null");
-        }
+        if (move == null) throw new NoMoveFoundException("move must not be null");
         game.apply(move);
         return move;
     }
 
-
-    /**
-     * Applies the move if current.
-     * @param expectedGame the expected game
-     * @param move the move
-     * @return the result of the operation
-     */
-    public synchronized boolean applyMoveIfCurrent(Game expectedGame, Move move) throws NoMoveFoundException, IOException {
-        if (expectedGame == null || expectedGame != this.game) {
-            return false;
-        }
+    public synchronized boolean applyMoveIfCurrent(Game expectedGame, Move move)
+            throws NoMoveFoundException, IOException {
+        if (expectedGame == null || expectedGame != this.game) return false;
         applyMove(move);
         return true;
     }
 
-    /**
-     * Applies the move.
-     * @param from the from
-     * @param to the to
-     * @param promotion the promotion
-     * @return the result of the operation
-     */
     public synchronized Move applyMove(String from, String to, String promotion)
             throws NoMoveFoundException, IOException {
         Move selected = LegalMoveResolver.resolveCoordinates(game, from, to, promotion);
         return applyMove(selected);
     }
 
-
-    /**
-     * Returns the current position string.
-     * @return the current position string
-     */
     public synchronized String getCurrentPositionString() {
         return BoardPositionSerializer.toPositionString(game);
     }
 
-    /**
-     * Returns the move list snapshot.
-     * @return the move list snapshot
-     */
     public synchronized List<Move> getMoveListSnapshot() {
         return new ArrayList<>(game.getMoveList());
     }
 
-    /**
-     * Returns the board view.
-     * @return the board view
-     */
     public synchronized BoardDto getBoardView() {
         return getBoardView(game);
     }
 
-    /**
-     * Returns the board view.
-     * @param sourceGame the source game
-     * @return the board view
-     */
     public BoardDto getBoardView(Game sourceGame) {
         Board board = sourceGame.getChessBoard();
         List<PieceDto> pieces = new ArrayList<>();
-
         for (int file = 1; file <= 8; file++) {
             for (int rank = 1; rank <= 8; rank++) {
                 Field field = board.getField(file, rank);
-                if (field == null) {
-                    continue;
-                }
-
+                if (field == null || field.getPiece() == null) continue;
                 Piece piece = field.getPiece();
-                if (piece == null) {
-                    continue;
-                }
-
-                String square = field.getName();
-
-                Color color = piece.getColor();
-                PieceType type = piece.getType();
-
-                String colorStr = (color != null)
-                        ? color.name().toLowerCase(Locale.ROOT)
+                String colorStr = piece.getColor() != null
+                        ? piece.getColor().name().toLowerCase(Locale.ROOT)
                         : "unknown";
-
-                String typeStr = (type != null)
-                        ? type.name().toLowerCase(Locale.ROOT)
+                String typeStr = piece.getType() != null
+                        ? piece.getType().name().toLowerCase(Locale.ROOT)
                         : "piece";
-
-                pieces.add(new PieceDto(colorStr, typeStr, square));
+                pieces.add(new PieceDto(colorStr, typeStr, field.getName()));
             }
         }
-
         return new BoardDto(pieces);
     }
 }
