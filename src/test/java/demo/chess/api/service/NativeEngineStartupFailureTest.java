@@ -102,7 +102,7 @@ class NativeEngineStartupFailureTest {
     }
 
     @Test
-    void deepAnalysisReportsConfiguredEngineThatDisappearedWithoutStoppingLiveEvaluation()
+    void deepAnalysisReportsUnavailableAfterAllNativeProfilesAreExhaustedWithoutStoppingLiveEvaluation()
             throws Exception {
         TestContext context = createConfiguredContext();
         Files.delete(context.enginePath());
@@ -122,7 +122,7 @@ class NativeEngineStartupFailureTest {
                 NativeEngineUnavailableException.class,
                 () -> service.start(null));
 
-        assertStartFailure(exception, NativeEngineRole.DEEP_ANALYSIS);
+        assertEquals(NativeEngineRole.DEEP_ANALYSIS, exception.getRole());
         verifyNoInteractions(evaluationService);
     }
 

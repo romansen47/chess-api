@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import demo.chess.analysis.annotation.MoveAnnotation;
@@ -41,6 +42,7 @@ public class AnalysisReplayService {
     private final MoveAnnotationClassifier moveAnnotationClassifier = new MoveAnnotationClassifier();
     private AnalysisReplaySession session;
 
+    @Autowired
     public AnalysisReplayService(
             GameService gameService,
             EngineSettingsService engineSettingsService,
@@ -54,6 +56,27 @@ public class AnalysisReplayService {
         this.evaluationService = evaluationService;
         this.uciGameService = uciGameService;
         this.engineLineDisplayService = engineLineDisplayService;
+    }
+
+    /**
+     * Compatibility constructor retained for direct unit tests and embedders
+     * that used the pre-capabilities service signature.
+     */
+    public AnalysisReplayService(
+            GameService gameService,
+            EngineSettingsService engineSettingsService,
+            EvaluationService evaluationService,
+            UciGameService uciGameService,
+            EngineLineDisplayService engineLineDisplayService) {
+        this(
+                gameService,
+                engineSettingsService,
+                new EngineAvailabilityService(
+                        new EngineRuntimeSelectionService(engineSettingsService),
+                        engineSettingsService),
+                evaluationService,
+                uciGameService,
+                engineLineDisplayService);
     }
 
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
