@@ -21,6 +21,7 @@ import demo.chess.api.dto.PossibleMovesResponse;
 import demo.chess.api.mapper.BoardSquareResolver;
 import demo.chess.api.mapper.LegalMoveDtoMapper;
 import demo.chess.api.service.GameService;
+import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.fields.Field;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
