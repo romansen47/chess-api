@@ -22,14 +22,25 @@ import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.DeepAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
-import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
 import demo.chess.game.TerminalPositionEvaluator;
 import demo.chess.game.impl.Simulation;
 import demo.chess.notation.PgnNotation;
+import demo.chess.notation.UciMoveCodec;
 
+/**
+ * Coordinates stepwise deep analysis of the currently selected game.
+ *
+ * <p>The service owns replay-session state and orchestration only. Native
+ * profile selection is delegated to {@link EngineAvailabilityService}, engine
+ * process creation to {@link DeepAnalysisEngineFactory}, chess legality and
+ * replay to the core, and DTO conversion to the existing API mappers.</p>
+ *
+ * <p>Deep analysis is deliberately native-only. Browser Stockfish can be a
+ * live-evaluation fallback, but it never creates an analysis replay session.</p>
+ */
 @Service
 public class AnalysisReplayService {
 
@@ -40,6 +51,7 @@ public class AnalysisReplayService {
     private final UciGameService uciGameService;
     private final EngineLineDisplayService engineLineDisplayService;
     private final MoveAnnotationClassifier moveAnnotationClassifier = new MoveAnnotationClassifier();
+    private final DeepAnalysisEngineFactory deepAnalysisEngineFactory = new DeepAnalysisEngineFactory();
     private AnalysisReplaySession session;
 
     @Autowired
@@ -79,6 +91,7 @@ public class AnalysisReplayService {
                 engineLineDisplayService);
     }
 
+    /** Starts a new native deep-analysis replay from the selected game. */
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
             throws NoMoveFoundException, IOException {
         List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
@@ -92,7 +105,7 @@ public class AnalysisReplayService {
         UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
                 engineProfileId, depth, moveTimeSeconds);
 
-        DeepAnalysisEngine deepAnalysisEngine = createDeepAnalysisEngine(engineConfig.getEngine());
+        DeepAnalysisEngine deepAnalysisEngine = deepAnalysisEngineFactory.create(engineConfig.getEngine());
         String engineName = engineConfig.getEngineName();
         AnalysisReplaySession newSession = new AnalysisReplaySession(
                 moveListSnapshot,
@@ -112,6 +125,7 @@ public class AnalysisReplayService {
         return toStepDto(newSession, false, null, null, null, 0.0, 0.5, 0, "Analysis replay started.");
     }
 
+    /** Analyzes and applies the next move of the active replay session. */
     public synchronized AnalysisReplayStepDto next() throws NoMoveFoundException, IOException {
         if (session == null || !session.active) return inactiveStep("No active analysis replay.");
         if (session.currentPly >= session.originalMoves.size()) {
@@ -130,6 +144,7 @@ public class AnalysisReplayService {
 
         Move replayMove = session.replayGame.getPlayer().getMoveInSimulation(session.replayGame, originalMove);
         if (replayMove == null) throw new NoMoveFoundException("Could not map analysis replay move: " + originalMove);
+        String playedMoveUci = UciMoveCodec.encode(session.replayGame, replayMove);
         String from = replayMove.getSource() != null ? replayMove.getSource().getName() : null;
         String to = replayMove.getTarget() != null ? replayMove.getTarget().getName() : null;
         String san = PgnNotation.toDisplayNotationAndApply(session.replayGame, replayMove);
@@ -139,7 +154,7 @@ public class AnalysisReplayService {
         MoveAnnotation annotation = null;
         if (analysisBeforeMove != null && positionBeforeMove != null) {
             annotation = moveAnnotationClassifier.classify(
-                    positionBeforeMove, originalMove.toString(), analysisBeforeMove, evaluation.evaluation);
+                    positionBeforeMove, playedMoveUci, analysisBeforeMove, evaluation.evaluation);
         }
 
         AnalysisProfilePointDto profilePoint = new AnalysisProfilePointDto(
@@ -160,12 +175,14 @@ public class AnalysisReplayService {
                 done ? "Analysis replay finished." : null);
     }
 
+    /** Returns the active replay state without advancing it. */
     public synchronized AnalysisReplayStepDto state() {
         if (session == null) return null;
         return toStepDto(session, !session.active, null, null, null,
                 latestEvaluation(session), latestBar(session), latestDepth(session), null);
     }
 
+    /** Cancels the active replay and stops its native engine process. */
     public synchronized AnalysisReplayStepDto cancel() {
         if (session == null) return inactiveStep("No active analysis replay.");
         session.active = false;
@@ -175,24 +192,10 @@ public class AnalysisReplayService {
                 "Analysis replay cancelled.");
     }
 
+    /** Clears all replay state and stops a remaining engine process. */
     public synchronized void clear() {
         closeSessionEngine();
         session = null;
-    }
-
-    private DeepAnalysisEngine createDeepAnalysisEngine(String enginePath) {
-        if (enginePath == null || enginePath.isBlank()) {
-            throw NativeEngineUnavailableException.startFailure(
-                    NativeEngineRole.DEEP_ANALYSIS,
-                    new IllegalStateException("Deep analysis engine profile has no executable path"));
-        }
-        try {
-            DeepAnalysisUciEngine engine = new DeepAnalysisUciEngine(enginePath.trim());
-            engine.setManagementLabel("deep analysis");
-            return engine;
-        } catch (Exception ex) {
-            throw NativeEngineUnavailableException.startFailure(NativeEngineRole.DEEP_ANALYSIS, ex);
-        }
     }
 
     private AnalysisEvaluation analyzeCurrentReplayPosition(AnalysisReplaySession source)

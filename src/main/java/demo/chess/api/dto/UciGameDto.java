@@ -5,6 +5,15 @@ import java.util.List;
 
 import demo.chess.definitions.ChessStartingPosition;
 
+/**
+ * Transport representation of a complete replayable game snapshot.
+ *
+ * <p>The DTO contains both the current serialized position and the complete
+ * move history. {@code startingPositionId} and {@code initialFen} are part of
+ * that replay contract: move history alone is insufficient to reconstruct a
+ * Chess960 game. Classical chess is Scharnagl position
+ * {@value ChessStartingPosition#STANDARD_ID}.</p>
+ */
 public class UciGameDto {
 
     private int totalPlies;
@@ -21,6 +30,7 @@ public class UciGameDto {
     public UciGameDto() {
     }
 
+    /** Compatibility constructor for classical games without database metadata. */
     public UciGameDto(
             int totalPlies,
             String sideToMove,
@@ -33,6 +43,7 @@ public class UciGameDto {
                 ChessStartingPosition.STANDARD.initialFen());
     }
 
+    /** Compatibility constructor for classical games with metadata. */
     public UciGameDto(
             int totalPlies,
             String sideToMove,
@@ -47,6 +58,7 @@ public class UciGameDto {
                 ChessStartingPosition.STANDARD.initialFen());
     }
 
+    /** Creates a replayable snapshot with explicit start-position metadata. */
     public UciGameDto(
             int totalPlies,
             String sideToMove,
@@ -61,7 +73,7 @@ public class UciGameDto {
         this.totalPlies = totalPlies;
         this.sideToMove = sideToMove;
         this.position = position;
-        this.moves = moves != null ? moves : new ArrayList<>();
+        this.moves = moves != null ? new ArrayList<>(moves) : new ArrayList<>();
         this.whitePlayerName = whitePlayerName;
         this.blackPlayerName = blackPlayerName;
         this.databaseGameId = databaseGameId;
@@ -77,7 +89,9 @@ public class UciGameDto {
     public String getPosition() { return position; }
     public void setPosition(String position) { this.position = position; }
     public List<UciGameMoveDto> getMoves() { return moves; }
-    public void setMoves(List<UciGameMoveDto> moves) { this.moves = moves; }
+    public void setMoves(List<UciGameMoveDto> moves) {
+        this.moves = moves != null ? new ArrayList<>(moves) : new ArrayList<>();
+    }
     public String getWhitePlayerName() { return whitePlayerName; }
     public void setWhitePlayerName(String whitePlayerName) { this.whitePlayerName = whitePlayerName; }
     public String getBlackPlayerName() { return blackPlayerName; }

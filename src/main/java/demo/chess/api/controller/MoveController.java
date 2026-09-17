@@ -18,15 +18,15 @@ import demo.chess.api.dto.LegalMoveDto;
 import demo.chess.api.dto.MoveRequestDto;
 import demo.chess.api.dto.MoveResultDto;
 import demo.chess.api.dto.PossibleMovesResponse;
+import demo.chess.api.mapper.BoardSquareResolver;
+import demo.chess.api.mapper.LegalMoveDtoMapper;
 import demo.chess.api.service.GameService;
-import demo.chess.definitions.board.Board;
-import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.fields.Field;
-import demo.chess.definitions.moves.Castling;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
 import demo.chess.notation.UciMoveCodec;
 
+/** REST boundary for board display, legal-move queries and human moves. */
 @RestController
 @RequestMapping("/api")
 public class MoveController {
@@ -37,12 +37,18 @@ public class MoveController {
         this.gameService = gameService;
     }
 
+    /**
+     * Returns all legal moves starting on the requested square.
+     *
+     * <p>The legacy {@code targets} array is retained for frontend
+     * compatibility. New clients should prefer the richer {@code moves}
+     * descriptors, which expose Chess960 castling geometry explicitly.</p>
+     */
     @GetMapping("/possible-moves")
     public ResponseEntity<PossibleMovesResponse> getPossibleMoves(@RequestParam("from") String from)
             throws NoMoveFoundException, IOException {
         Game game = gameService.getCurrentGame();
-        Board board = game.getChessBoard();
-        Field fromField = mapSquareToField(board, from);
+        Field fromField = BoardSquareResolver.resolve(game.getChessBoard(), from);
         if (fromField == null || fromField.getPiece() == null) {
             return ResponseEntity.ok(new PossibleMovesResponse(from, List.of(), List.of()));
         }
@@ -50,28 +56,10 @@ public class MoveController {
         List<String> targets = new ArrayList<>();
         List<LegalMoveDto> moves = new ArrayList<>();
         for (Move move : game.getPlayer().getValidMoves(game)) {
-            if (!sameField(move.getSource(), fromField)) {
-                continue;
-            }
-            String target = move.getTarget().getName();
-            targets.add(target);
-            if (move instanceof Castling castling) {
-                moves.add(new LegalMoveDto(
-                        target,
-                        UciMoveCodec.encode(game, move),
-                        castling.getSide().name(),
-                        castling.getKingTarget().getName(),
-                        castling.getRook().getField().getName(),
-                        castling.getRookTarget().getName()));
-            } else {
-                moves.add(new LegalMoveDto(
-                        target,
-                        UciMoveCodec.encode(game, move),
-                        null,
-                        null,
-                        null,
-                        null));
-            }
+            if (!sameField(move.getSource(), fromField)) continue;
+            LegalMoveDto moveDto = LegalMoveDtoMapper.toDto(game, move);
+            targets.add(moveDto.target());
+            moves.add(moveDto);
         }
         return ResponseEntity.ok(new PossibleMovesResponse(from, targets, moves));
     }
@@ -125,20 +113,7 @@ public class MoveController {
         }
     }
 
-    private Field mapSquareToField(Board board, String square) {
-        if (square == null || square.length() != 2) {
-            return null;
-        }
-        square = square.toLowerCase(Locale.ROOT);
-        char fileChar = square.charAt(0);
-        char rankChar = square.charAt(1);
-        if (fileChar < 'a' || fileChar > 'h' || rankChar < '1' || rankChar > '8') {
-            return null;
-        }
-        return board.getField(fileChar - 'a' + 1, rankChar - '1' + 1);
-    }
-
     private boolean sameField(Field a, Field b) {
-        return a.getFile() == b.getFile() && a.getRank() == b.getRank();
+        return a != null && b != null && a.getFile() == b.getFile() && a.getRank() == b.getRank();
     }
 }

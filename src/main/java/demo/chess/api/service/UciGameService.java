@@ -3,7 +3,6 @@ package demo.chess.api.service;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -18,7 +17,6 @@ import demo.chess.api.dto.UciGameMoveDto;
 import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.Color;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
-import demo.chess.definitions.moves.Move;
 import demo.chess.definitions.moves.MoveList;
 import demo.chess.definitions.moves.impl.MoveListImpl;
 import demo.chess.definitions.states.State;
@@ -27,10 +25,17 @@ import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
 import demo.chess.notation.PgnAnnotationParser;
 import demo.chess.notation.PgnMoveAnnotation;
-import demo.chess.notation.PgnNotation;
-import demo.chess.notation.UciMoveCodec;
 import demo.chess.save.GameSaver;
 
+/**
+ * Owns import/export and snapshot state for the game selected for analysis.
+ *
+ * <p>The service deliberately distinguishes the live game from an imported
+ * analysis game. Imported PGN metadata is kept in one
+ * {@link ImportedGameContext}; per-ply UCI/SAN reconstruction is delegated to
+ * {@link UciGameMoveMapper}. Every replay snapshot carries the Chess960
+ * starting-position id and initial FEN.</p>
+ */
 @Service
 public class UciGameService {
 
@@ -42,20 +47,23 @@ public class UciGameService {
     private final GameSaver gameSaver = new GameSaver();
     private final PgnAnnotationParser annotationParser = new PgnAnnotationParser();
 
-    private Game importedAnalysisGame;
-    private Map<String, String> importedPgnTags = new LinkedHashMap<>();
-    private Long importedDatabaseGameId;
-    private Map<Integer, PgnMoveAnnotation> importedAnnotations = new LinkedHashMap<>();
+    private ImportedGameContext importedContext;
+    private Map<Integer, PgnMoveAnnotation> liveAnnotations = new LinkedHashMap<>();
 
     public UciGameService(GameService gameService, EngineRuntimeSelectionService engineRuntimeSelectionService) {
         this.gameService = gameService;
         this.engineRuntimeSelectionService = engineRuntimeSelectionService;
     }
 
+    /** Imports a PGN as the currently selected analysis game. */
     public synchronized UciGameDto importGame(String content) throws NoMoveFoundException, IOException {
         return importGame(content, null);
     }
 
+    /**
+     * Imports a PGN as the selected analysis game and optionally associates a
+     * database game id with it.
+     */
     public synchronized UciGameDto importGame(String content, Long databaseGameId)
             throws NoMoveFoundException, IOException {
         ChessStartingPosition startingPosition = gameLoader.parsePgnStartingPosition(content);
@@ -64,37 +72,32 @@ public class UciGameService {
         Simulation importedGame = Simulation.createSimulation(startingPosition);
         gameLoader.loadGame(uciMoves, importedGame);
 
-        List<UciGameMoveDto> moveDtos = createMoveDtos(importedGame.getMoveList(), startingPosition);
         Map<String, String> pgnTags = new LinkedHashMap<>(gameLoader.parsePgnTags(content));
-        this.importedAnalysisGame = importedGame;
-        this.importedPgnTags = pgnTags;
-        this.importedDatabaseGameId = databaseGameId;
-        this.importedAnnotations = new LinkedHashMap<>(annotationParser.parse(content));
-
-        String sideToMove = sideToMove(importedGame);
-        return new UciGameDto(
-                importedGame.getMoveList().size(),
-                sideToMove,
-                BoardPositionSerializer.toPositionString(importedGame),
-                moveDtos,
-                playerName(pgnTags.get("White"), "White"),
-                playerName(pgnTags.get("Black"), "Black"),
-                importedDatabaseGameId,
-                annotationDtos(importedAnnotations),
-                startingPosition.getId(),
-                startingPosition.initialFen());
+        Map<Integer, PgnMoveAnnotation> annotations = new LinkedHashMap<>(annotationParser.parse(content));
+        this.importedContext = new ImportedGameContext(
+                importedGame,
+                pgnTags,
+                databaseGameId,
+                annotations);
+        this.liveAnnotations = new LinkedHashMap<>();
+        return createGameDto(importedGame, pgnTags, databaseGameId, annotations, true);
     }
 
+    /** Exports the selected game as PGN, preserving imported tags and annotations. */
     public synchronized String exportGame(boolean whiteComputerControlled, boolean blackComputerControlled)
             throws NoMoveFoundException, IOException {
         return gameSaver.toPgn(
                 getAnalysisMoveListSnapshot(),
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
-                importedAnnotations);
+                currentAnnotations());
     }
 
-    public synchronized List<Move> getAnalysisMoveListSnapshot() {
-        Game source = importedAnalysisGame != null ? importedAnalysisGame : gameService.getCurrentGame();
+    /**
+     * Returns a replayable move-list snapshot including the original starting
+     * position. The start-position context is part of the history contract.
+     */
+    public synchronized MoveList getAnalysisMoveListSnapshot() {
+        Game source = selectedGame();
         MoveList snapshot = new MoveListImpl();
         if (source != null) {
             snapshot.setStartingPosition(source.getStartingPosition());
@@ -103,28 +106,37 @@ public class UciGameService {
         return snapshot;
     }
 
+    /** Returns the start position for the selected live/imported analysis game. */
     public synchronized ChessStartingPosition getAnalysisStartingPosition() {
-        Game source = importedAnalysisGame != null ? importedAnalysisGame : gameService.getCurrentGame();
+        Game source = selectedGame();
         return source != null && source.getStartingPosition() != null
                 ? source.getStartingPosition()
                 : ChessStartingPosition.STANDARD;
     }
 
     public synchronized boolean hasImportedGame() {
-        return importedAnalysisGame != null;
+        return importedContext != null;
     }
 
+    /** Clears the imported selection and returns analysis to the current live game. */
     public synchronized void clearImportedGame() {
-        importedAnalysisGame = null;
-        importedPgnTags = new LinkedHashMap<>();
-        importedDatabaseGameId = null;
-        importedAnnotations = new LinkedHashMap<>();
+        importedContext = null;
+        liveAnnotations = new LinkedHashMap<>();
     }
 
-    public synchronized Long getImportedDatabaseGameId() { return importedDatabaseGameId; }
-    public synchronized void setImportedDatabaseGameId(Long databaseGameId) { this.importedDatabaseGameId = databaseGameId; }
-    public synchronized List<GameAnnotationDto> getAnnotationDtos() { return annotationDtos(importedAnnotations); }
+    public synchronized Long getImportedDatabaseGameId() {
+        return importedContext != null ? importedContext.databaseGameId() : null;
+    }
 
+    public synchronized void setImportedDatabaseGameId(Long databaseGameId) {
+        if (importedContext != null) importedContext.setDatabaseGameId(databaseGameId);
+    }
+
+    public synchronized List<GameAnnotationDto> getAnnotationDtos() {
+        return annotationDtos(currentAnnotations());
+    }
+
+    /** Replaces annotations and returns the resulting PGN representation. */
     public synchronized String updateAnnotations(
             List<GameAnnotationDto> annotations,
             boolean whiteComputerControlled,
@@ -143,66 +155,75 @@ public class UciGameService {
                 getAnalysisMoveListSnapshot(),
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
                 updated);
-        importedAnnotations = updated;
+        if (importedContext != null) importedContext.setAnnotations(updated);
+        else liveAnnotations = new LinkedHashMap<>(updated);
         return pgn;
     }
 
+    /** Returns a complete frontend snapshot of the currently selected game. */
     public synchronized GameSnapshotDto getCurrentGameSnapshot() throws NoMoveFoundException, IOException {
-        boolean imported = importedAnalysisGame != null;
-        Game sourceGame = imported ? importedAnalysisGame : gameService.getCurrentGame();
+        boolean imported = importedContext != null;
+        Game sourceGame = selectedGame();
         if (sourceGame == null) {
             return new GameSnapshotDto(imported,
                     new UciGameDto(0, null, "", List.of(), "White", "Black"));
         }
 
-        MoveList originalMoves = new MoveListImpl();
-        originalMoves.setStartingPosition(sourceGame.getStartingPosition());
-        originalMoves.addAll(sourceGame.getMoveList());
-        List<UciGameMoveDto> moveDtos = createMoveDtos(originalMoves, sourceGame.getStartingPosition());
-
-        String whitePlayerName = imported
-                ? playerName(importedPgnTags.get("White"), "White")
-                : playerName(sourceGame.getWhitePlayer() != null ? sourceGame.getWhitePlayer().getName() : null, "White");
-        String blackPlayerName = imported
-                ? playerName(importedPgnTags.get("Black"), "Black")
-                : playerName(sourceGame.getBlackPlayer() != null ? sourceGame.getBlackPlayer().getName() : null, "Black");
-        ChessStartingPosition startingPosition = sourceGame.getStartingPosition();
-
+        Map<String, String> tags = imported ? importedContext.pgnTagsCopy() : Map.of();
+        Long databaseGameId = imported ? importedContext.databaseGameId() : null;
         return new GameSnapshotDto(
                 imported,
-                new UciGameDto(
-                        originalMoves.size(),
-                        sideToMove(sourceGame),
-                        BoardPositionSerializer.toPositionString(sourceGame),
-                        moveDtos,
-                        whitePlayerName,
-                        blackPlayerName,
-                        importedDatabaseGameId,
-                        annotationDtos(importedAnnotations),
-                        startingPosition.getId(),
-                        startingPosition.initialFen()));
+                createGameDto(sourceGame, tags, databaseGameId, currentAnnotations(), imported));
     }
 
-    private List<UciGameMoveDto> createMoveDtos(
-            List<Move> originalMoves,
-            ChessStartingPosition startingPosition)
+    private UciGameDto createGameDto(
+            Game sourceGame,
+            Map<String, String> pgnTags,
+            Long databaseGameId,
+            Map<Integer, PgnMoveAnnotation> annotations,
+            boolean imported)
             throws NoMoveFoundException, IOException {
-        List<UciGameMoveDto> result = new ArrayList<>();
-        Simulation replayGame = Simulation.createSimulation(startingPosition);
-        int ply = 0;
-        for (Move originalMove : originalMoves) {
-            ply++;
-            Move replayMove = replayGame.getPlayer().getMoveInSimulation(replayGame, originalMove);
-            if (replayMove == null) throw new NoMoveFoundException("Could not map replay move: " + originalMove);
-            String uci = UciMoveCodec.encode(replayGame, replayMove);
-            String san = PgnNotation.toDisplayNotationAndApply(replayGame, replayMove);
-            result.add(new UciGameMoveDto(
-                    ply,
-                    uci,
-                    san,
-                    BoardPositionSerializer.toPositionString(replayGame)));
-        }
-        return result;
+        MoveList moves = copyMoveList(sourceGame);
+        List<UciGameMoveDto> moveDtos = UciGameMoveMapper.toDtos(moves);
+        String whitePlayerName = imported
+                ? playerName(pgnTags.get("White"), "White")
+                : playerName(sourceGame.getWhitePlayer() != null ? sourceGame.getWhitePlayer().getName() : null, "White");
+        String blackPlayerName = imported
+                ? playerName(pgnTags.get("Black"), "Black")
+                : playerName(sourceGame.getBlackPlayer() != null ? sourceGame.getBlackPlayer().getName() : null, "Black");
+        ChessStartingPosition startingPosition = sourceGame.getStartingPosition() != null
+                ? sourceGame.getStartingPosition()
+                : ChessStartingPosition.STANDARD;
+
+        return new UciGameDto(
+                moves.size(),
+                sideToMove(sourceGame),
+                BoardPositionSerializer.toPositionString(sourceGame),
+                moveDtos,
+                whitePlayerName,
+                blackPlayerName,
+                databaseGameId,
+                annotationDtos(annotations),
+                startingPosition.getId(),
+                startingPosition.initialFen());
+    }
+
+    private MoveList copyMoveList(Game sourceGame) {
+        MoveList copy = new MoveListImpl();
+        if (sourceGame == null) return copy;
+        copy.setStartingPosition(sourceGame.getStartingPosition());
+        copy.addAll(sourceGame.getMoveList());
+        return copy;
+    }
+
+    private Game selectedGame() {
+        return importedContext != null ? importedContext.game() : gameService.getCurrentGame();
+    }
+
+    private Map<Integer, PgnMoveAnnotation> currentAnnotations() {
+        return importedContext != null
+                ? importedContext.annotationsCopy()
+                : new LinkedHashMap<>(liveAnnotations);
     }
 
     private String sideToMove(Game game) {
@@ -225,7 +246,7 @@ public class UciGameService {
     }
 
     private Map<String, String> getPgnTagsForExport(boolean whiteComputerControlled, boolean blackComputerControlled) {
-        if (importedAnalysisGame != null) return new LinkedHashMap<>(importedPgnTags);
+        if (importedContext != null) return importedContext.pgnTagsCopy();
         Game game = gameService.getCurrentGame();
         Map<String, String> tags = new LinkedHashMap<>();
         tags.put("Event", "Chess Frontend");

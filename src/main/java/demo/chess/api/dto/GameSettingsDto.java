@@ -4,6 +4,14 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import demo.chess.definitions.ChessStartingPosition;
 
+/**
+ * Mutable REST DTO describing the settings for a newly created game.
+ *
+ * <p>{@code startingPositionId} uses Scharnagl Chess960 numbering. Classical
+ * chess is position {@value ChessStartingPosition#STANDARD_ID}. Validation and
+ * normalization intentionally happen in the application service layer rather
+ * than in this Jackson transport object.</p>
+ */
 public class GameSettingsDto {
 
     private int timeForEachPlayerSeconds;
@@ -25,6 +33,7 @@ public class GameSettingsDto {
     public GameSettingsDto() {
     }
 
+    /** Compatibility constructor for callers that implicitly request classical chess. */
     public GameSettingsDto(
             int timeForEachPlayerSeconds,
             int incrementForWhiteSeconds,
@@ -42,6 +51,7 @@ public class GameSettingsDto {
                 version);
     }
 
+    /** Creates a settings DTO including an explicit Chess960 start position. */
     public GameSettingsDto(
             int timeForEachPlayerSeconds,
             int incrementForWhiteSeconds,

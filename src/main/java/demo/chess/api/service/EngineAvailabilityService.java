@@ -1,47 +1,56 @@
 package demo.chess.api.service;
 
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
-import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.engine.NativeEngineAvailability;
 import demo.chess.api.engine.NativeEngineAvailabilityReason;
 import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.definitions.engines.UciEngineConfig;
-import demo.chess.definitions.engines.UciEngineInspector;
 
-/** Determines whether native engines are currently usable. */
+/**
+ * Resolves native-engine capability for API features.
+ *
+ * <p>The service owns role and fallback policy, while {@link NativeEngineProbe}
+ * owns executable/OS/UCI health checks. Deep analysis is intentionally native
+ * only: browser Stockfish may keep live evaluation available, but it never
+ * satisfies the deep-analysis capability.</p>
+ */
 @Service
 public class EngineAvailabilityService {
 
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
-    private final EngineSettingsService engineSettingsService;
+    private final NativeEngineProbe engineProbe;
+    private final DeepAnalysisProfileResolver deepAnalysisProfileResolver;
 
     public EngineAvailabilityService(
             EngineRuntimeSelectionService engineRuntimeSelectionService,
             EngineSettingsService engineSettingsService) {
         this.engineRuntimeSelectionService = engineRuntimeSelectionService;
-        this.engineSettingsService = engineSettingsService;
+        this.engineProbe = new NativeEngineProbe();
+        this.deepAnalysisProfileResolver = new DeepAnalysisProfileResolver(
+                engineSettingsService,
+                engineProbe);
     }
 
+    /** Returns the current availability of one native-engine role. */
     public NativeEngineAvailability getAvailability(NativeEngineRole role) {
         if (role == null) throw new IllegalArgumentException("Native engine role must not be null");
         if (role == NativeEngineRole.DEEP_ANALYSIS) return getDeepAnalysisAvailability();
         Optional<UciEngineConfig> config = findConfig(role);
         if (config.isEmpty()) return NativeEngineAvailability.notConfigured(role);
-        return availability(role, probe(config.get()));
+        return availability(role, engineProbe.probe(config.get()));
     }
 
+    /**
+     * Returns all role capabilities, reusing probe results when multiple roles
+     * point at the same executable.
+     */
     public Map<NativeEngineRole, NativeEngineAvailability> getAvailabilities() {
         EnumMap<NativeEngineRole, NativeEngineAvailability> result = new EnumMap<>(NativeEngineRole.class);
         Map<String, NativeEngineAvailabilityReason> probeResults = new HashMap<>();
@@ -56,56 +65,42 @@ public class EngineAvailabilityService {
                 continue;
             }
             UciEngineConfig resolvedConfig = config.get();
-            String probeKey = probeKey(resolvedConfig.getEngine());
+            String probeKey = engineProbe.key(resolvedConfig.getEngine());
             NativeEngineAvailabilityReason reason = probeResults.computeIfAbsent(
-                    probeKey, ignored -> probe(resolvedConfig));
+                    probeKey, ignored -> engineProbe.probe(resolvedConfig));
             result.put(role, availability(role, reason));
         }
         return Collections.unmodifiableMap(result);
     }
 
     /**
-     * Resolves a usable native deep-analysis profile. Requested/default profile
-     * wins; other configured native profiles are tried as fallbacks. Browser
-     * engines are intentionally outside this service.
+     * Resolves a usable native deep-analysis profile.
+     *
+     * <p>The requested profile has priority, followed by the configured default
+     * and then every other configured native profile. Browser engines are not
+     * candidates for deep analysis.</p>
+     *
+     * @param requestedProfileId explicitly requested profile, or {@code null}
+     * @return usable native profile id, when one exists
      */
     public Optional<String> findAvailableDeepAnalysisProfileId(String requestedProfileId) {
-        Set<String> candidates = new LinkedHashSet<>();
-        if (requestedProfileId != null && !requestedProfileId.isBlank()) candidates.add(requestedProfileId.trim());
-        String defaultId = engineSettingsService.getDefaultDeepAnalysisProfileId();
-        if (defaultId != null && !defaultId.isBlank()) candidates.add(defaultId);
-        for (EngineProfileDto profile : engineSettingsService.getOverview().getProfiles()) {
-            if (profile != null && profile.getId() != null && !profile.getId().isBlank()) candidates.add(profile.getId());
-        }
-
-        for (String profileId : candidates) {
-            try {
-                UciEngineConfig config = engineSettingsService.getConfig(profileId);
-                if (probe(config) == NativeEngineAvailabilityReason.AVAILABLE) return Optional.of(profileId);
-            } catch (RuntimeException ignored) {
-                // Stale/missing profile; continue with another native profile.
-            }
-        }
-        return Optional.empty();
+        DeepAnalysisProfileResolver.Resolution resolution =
+                deepAnalysisProfileResolver.resolve(requestedProfileId);
+        return Optional.ofNullable(resolution.availableProfileId());
     }
 
+    /** Returns whether any configured native profile can currently run deep analysis. */
     public NativeEngineAvailability getDeepAnalysisAvailability() {
-        boolean configured = !engineSettingsService.getOverview().getProfiles().isEmpty();
-        Optional<String> availableProfile = findAvailableDeepAnalysisProfileId(
-                engineSettingsService.getDefaultDeepAnalysisProfileId());
-        if (availableProfile.isPresent()) return NativeEngineAvailability.available(NativeEngineRole.DEEP_ANALYSIS);
-        if (!configured) return NativeEngineAvailability.notConfigured(NativeEngineRole.DEEP_ANALYSIS);
-
-        String defaultId = engineSettingsService.getDefaultDeepAnalysisProfileId();
-        if (defaultId != null && !defaultId.isBlank()) {
-            try {
-                return availability(NativeEngineRole.DEEP_ANALYSIS, probe(engineSettingsService.getConfig(defaultId)));
-            } catch (RuntimeException ignored) {
-            }
+        DeepAnalysisProfileResolver.Resolution resolution = deepAnalysisProfileResolver.resolve(null);
+        if (resolution.available()) {
+            return NativeEngineAvailability.available(NativeEngineRole.DEEP_ANALYSIS);
+        }
+        if (!resolution.configured()) {
+            return NativeEngineAvailability.notConfigured(NativeEngineRole.DEEP_ANALYSIS);
         }
         return NativeEngineAvailability.unavailable(
                 NativeEngineRole.DEEP_ANALYSIS,
-                NativeEngineAvailabilityReason.UCI_UNRESPONSIVE);
+                resolution.reason());
     }
 
     private Optional<UciEngineConfig> findConfig(NativeEngineRole role) {
@@ -117,33 +112,12 @@ public class EngineAvailabilityService {
         };
     }
 
-    private String probeKey(String enginePath) {
-        try {
-            return Path.of(enginePath).toAbsolutePath().normalize().toString();
-        } catch (InvalidPathException e) {
-            return enginePath;
+    private NativeEngineAvailability availability(
+            NativeEngineRole role,
+            NativeEngineAvailabilityReason reason) {
+        if (reason == NativeEngineAvailabilityReason.AVAILABLE) {
+            return NativeEngineAvailability.available(role);
         }
-    }
-
-    private NativeEngineAvailabilityReason probe(UciEngineConfig config) {
-        Path executable;
-        try {
-            executable = Path.of(config.getEngine()).toAbsolutePath().normalize();
-        } catch (InvalidPathException e) {
-            return NativeEngineAvailabilityReason.EXECUTABLE_NOT_FOUND;
-        }
-        if (!Files.isRegularFile(executable)) return NativeEngineAvailabilityReason.EXECUTABLE_NOT_FOUND;
-        if (!Files.isExecutable(executable)) return NativeEngineAvailabilityReason.NOT_EXECUTABLE;
-        try {
-            UciEngineInspector.inspect(executable.toString());
-            return NativeEngineAvailabilityReason.AVAILABLE;
-        } catch (Exception e) {
-            return NativeEngineAvailabilityReason.UCI_UNRESPONSIVE;
-        }
-    }
-
-    private NativeEngineAvailability availability(NativeEngineRole role, NativeEngineAvailabilityReason reason) {
-        if (reason == NativeEngineAvailabilityReason.AVAILABLE) return NativeEngineAvailability.available(role);
         return NativeEngineAvailability.unavailable(role, reason);
     }
 }
