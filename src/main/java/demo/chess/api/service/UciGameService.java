@@ -3,6 +3,7 @@ package demo.chess.api.service;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -17,6 +18,7 @@ import demo.chess.api.dto.UciGameMoveDto;
 import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.Color;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
+import demo.chess.definitions.moves.Move;
 import demo.chess.definitions.moves.MoveList;
 import demo.chess.definitions.moves.impl.MoveListImpl;
 import demo.chess.definitions.states.State;
@@ -87,23 +89,21 @@ public class UciGameService {
     public synchronized String exportGame(boolean whiteComputerControlled, boolean blackComputerControlled)
             throws NoMoveFoundException, IOException {
         return gameSaver.toPgn(
-                getAnalysisMoveListSnapshot(),
+                getAnalysisMoveHistorySnapshot(),
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
                 currentAnnotations());
     }
 
     /**
-     * Returns a replayable move-list snapshot including the original starting
-     * position. The start-position context is part of the history contract.
+     * Returns a defensive snapshot of the selected game's moves.
+     *
+     * <p>The public return type intentionally remains {@link List} for
+     * compatibility with existing consumers. Internal replay/export paths use
+     * {@link #getAnalysisMoveHistorySnapshot()} so the Chess960 starting
+     * position remains attached to the history.</p>
      */
-    public synchronized MoveList getAnalysisMoveListSnapshot() {
-        Game source = selectedGame();
-        MoveList snapshot = new MoveListImpl();
-        if (source != null) {
-            snapshot.setStartingPosition(source.getStartingPosition());
-            snapshot.addAll(source.getMoveList());
-        }
-        return snapshot;
+    public synchronized List<Move> getAnalysisMoveListSnapshot() {
+        return new ArrayList<>(getAnalysisMoveHistorySnapshot());
     }
 
     /** Returns the start position for the selected live/imported analysis game. */
@@ -152,7 +152,7 @@ public class UciGameService {
             }
         }
         String pgn = gameSaver.toPgn(
-                getAnalysisMoveListSnapshot(),
+                getAnalysisMoveHistorySnapshot(),
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
                 updated);
         if (importedContext != null) importedContext.setAnnotations(updated);
@@ -206,6 +206,10 @@ public class UciGameService {
                 annotationDtos(annotations),
                 startingPosition.getId(),
                 startingPosition.initialFen());
+    }
+
+    private MoveList getAnalysisMoveHistorySnapshot() {
+        return copyMoveList(selectedGame());
     }
 
     private MoveList copyMoveList(Game sourceGame) {
