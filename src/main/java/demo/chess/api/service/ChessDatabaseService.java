@@ -30,6 +30,7 @@ import demo.chess.database.ImportResult;
 import demo.chess.database.PositionMoveStatistics;
 import demo.chess.database.PositionStatistics;
 import demo.chess.database.SqliteChessDatabase;
+import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.DummyGame;
@@ -38,11 +39,10 @@ import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
 import demo.chess.notation.PgnAnnotationParser;
 import demo.chess.notation.PgnNotation;
+import demo.chess.notation.UciMoveCodec;
 import jakarta.annotation.PreDestroy;
 
-/**
- * Application-level bridge between the REST API and the embedded chess database.
- */
+/** Application-level bridge between the REST API and the embedded chess database. */
 @Service
 public class ChessDatabaseService {
 
@@ -62,21 +62,11 @@ public class ChessDatabaseService {
 
     private volatile SqliteChessDatabase database;
 
-    /**
-     * Creates a new database service.
-     *
-     * @param uciGameService game import and analysis service
-     */
     public ChessDatabaseService(UciGameService uciGameService) {
         this.uciGameService = uciGameService;
         this.databasePath = SqliteChessDatabase.defaultPath();
     }
 
-    /**
-     * Returns the database status without making database availability a startup requirement.
-     *
-     * @return status payload
-     */
     public ChessDatabaseDtos.Status getStatus() {
         try {
             ChessDatabaseStatus status = database().getStatus();
@@ -100,43 +90,22 @@ public class ChessDatabaseService {
         }
     }
 
-    /**
-     * Imports one PGN supplied by the normal single-game loader into the local database.
-     *
-     * <p>The synchronous import uses the same database import lock as bulk imports so
-     * the two write paths cannot race each other. Duplicate filtering is handled by
-     * the database module itself.</p>
-     *
-     * @param content complete PGN text
-     * @return database import result
-     */
     public ImportResult importSingleGame(String content) throws SQLException, IOException {
         if (content == null || content.isBlank()) {
             throw new IllegalArgumentException("PGN content must not be blank.");
         }
-
         String importId = UUID.randomUUID().toString();
         if (!activeImportId.compareAndSet(null, importId)) {
             throw new IllegalStateException("Another chess database import is already running.");
         }
-
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
         try (InputStream inputStream = new ByteArrayInputStream(bytes)) {
-            return database().importPgn(
-                    importId,
-                    inputStream,
-                    bytes.length,
-                    null,
-                    () -> false);
+            return database().importPgn(importId, inputStream, bytes.length, null, () -> false);
         } finally {
             activeImportId.compareAndSet(importId, null);
         }
     }
 
-    /**
-     * Imports one game, resolves its database id and preserves any annotations from
-     * the uploaded PGN.
-     */
     public long importSingleGameAndResolveId(String content)
             throws SQLException, IOException, NoMoveFoundException {
         importSingleGame(content);
@@ -152,23 +121,14 @@ public class ChessDatabaseService {
         database().saveAnnotatedPgn(gameId, pgn);
     }
 
-    /**
-     * Copies an uploaded PGN to a temporary source and starts an asynchronous import job.
-     *
-     * @param fileName original file name
-     * @param inputStream uploaded PGN stream
-     * @return initial job status
-     */
     public ChessDatabaseDtos.ImportJob startImport(String fileName, InputStream inputStream) throws IOException {
         if (inputStream == null) {
             throw new IllegalArgumentException("inputStream must not be null");
         }
-
         String importId = UUID.randomUUID().toString();
         if (!activeImportId.compareAndSet(null, importId)) {
             throw new IllegalStateException("Another chess database import is already running.");
         }
-
         Path temporaryFile = Files.createTempFile("chess-database-import-", ".pgn");
         try {
             Files.copy(inputStream, temporaryFile, StandardCopyOption.REPLACE_EXISTING);
@@ -187,41 +147,21 @@ public class ChessDatabaseService {
         }
     }
 
-    /**
-     * Returns the current state of an import job.
-     *
-     * @param importId job identifier
-     * @return current job status
-     */
     public ChessDatabaseDtos.ImportJob getImportJob(String importId) {
         return requireImportJob(importId).snapshot();
     }
 
-    /**
-     * Requests cancellation of a running import job.
-     *
-     * @param importId job identifier
-     * @return current job status
-     */
     public ChessDatabaseDtos.ImportJob cancelImport(String importId) {
         ImportJobState job = requireImportJob(importId);
         job.requestCancellation();
         return job.snapshot();
     }
 
-    /**
-     * Searches stored games.
-     *
-     * @param request search request
-     * @return matching game rows
-     */
     public List<ChessDatabaseDtos.GameSummary> search(ChessDatabaseDtos.SearchRequest request)
             throws SQLException, IOException {
         ChessDatabaseDtos.SearchRequest safeRequest = request == null
-                ? new ChessDatabaseDtos.SearchRequest(
-                        null, null, null, null, null, null, null, 200)
+                ? new ChessDatabaseDtos.SearchRequest(null, null, null, null, null, null, null, 200)
                 : request;
-
         GameSearch search = new GameSearch(
                 safeRequest.white(),
                 safeRequest.black(),
@@ -231,7 +171,6 @@ public class ChessDatabaseService {
                 safeRequest.result(),
                 safeRequest.minElo(),
                 safeRequest.limit() == null ? 200 : safeRequest.limit());
-
         return database().findGames(search).stream()
                 .map(game -> new ChessDatabaseDtos.GameSummary(
                         game.id(),
@@ -247,12 +186,6 @@ public class ChessDatabaseService {
                 .toList();
     }
 
-    /**
-     * Loads a stored game through the existing PGN analysis import path.
-     *
-     * @param gameId database game identifier
-     * @return imported game payload
-     */
     public UciGameDto loadGame(long gameId)
             throws SQLException, IOException, NoMoveFoundException {
         String pgn = database().getGameAsPgn(gameId);
@@ -263,23 +196,23 @@ public class ChessDatabaseService {
         return uciGameService.importGame(sanitizedPgn, gameId);
     }
 
-    /**
-     * Returns database continuations for the current analysis position.
-     *
-     * @param ply selected ply
-     * @return position statistics
-     */
+    /** Returns Chess960-aware continuations for the selected analysis position. */
     public ChessDatabaseDtos.PositionResult getPositionStatistics(int ply)
             throws SQLException, IOException, NoMoveFoundException {
         List<Move> analysisMoves = uciGameService.getAnalysisMoveListSnapshot();
+        ChessStartingPosition startingPosition = uciGameService.getAnalysisStartingPosition();
+        DummyGame codecGame = Simulation.createDummySimulation(startingPosition);
         List<String> uciMoves = analysisMoves.stream()
-                .map(Move::toString)
+                .map(move -> UciMoveCodec.encode(codecGame, move))
                 .toList();
 
         int safePly = Math.max(0, Math.min(ply, uciMoves.size()));
-        PositionStatistics statistics = database().findPosition(uciMoves, safePly);
+        PositionStatistics statistics = database().findPosition(
+                startingPosition.getId(),
+                uciMoves,
+                safePly);
 
-        DummyGame notationGame = Simulation.createDummySimulation();
+        DummyGame notationGame = Simulation.createDummySimulation(startingPosition);
         if (safePly > 0) {
             gameLoader.loadGame(uciMoves.subList(0, safePly), notationGame);
         }
@@ -295,35 +228,20 @@ public class ChessDatabaseService {
                     moveStatistics.draws(),
                     moveStatistics.blackWins()));
         }
-
-        long games = moves.stream()
-                .mapToLong(ChessDatabaseDtos.PositionMove::games)
-                .sum();
-
+        long games = moves.stream().mapToLong(ChessDatabaseDtos.PositionMove::games).sum();
         return new ChessDatabaseDtos.PositionResult(safePly, games, moves);
     }
 
-    /**
-     * Stops the worker during normal application shutdown.
-     */
     @PreDestroy
     public void shutdown() {
         String activeId = activeImportId.get();
         if (activeId != null) {
             ImportJobState job = importJobs.get(activeId);
-            if (job != null) {
-                job.requestCancellation();
-            }
+            if (job != null) job.requestCancellation();
         }
         importExecutor.shutdownNow();
     }
 
-    /**
-     * Executes one import job and keeps its state observable by the REST API.
-     *
-     * @param job job state
-     * @param temporaryFile temporary PGN source
-     */
     private void runImport(ImportJobState job, Path temporaryFile) {
         try (InputStream inputStream = Files.newInputStream(temporaryFile)) {
             ImportResult result = database().importPgn(
@@ -347,12 +265,6 @@ public class ChessDatabaseService {
         }
     }
 
-    /**
-     * Resolves an import job or reports an unknown identifier.
-     *
-     * @param importId job identifier
-     * @return job state
-     */
     private ImportJobState requireImportJob(String importId) {
         ImportJobState job = importJobs.get(importId);
         if (job == null) {
@@ -361,13 +273,6 @@ public class ChessDatabaseService {
         return job;
     }
 
-    /**
-     * Converts an indexed UCI continuation to SAN in the selected position.
-     *
-     * @param game selected analysis position
-     * @param uciMove UCI continuation
-     * @return SAN notation or the original UCI move when no legal match is found
-     */
     private String toSan(DummyGame game, String uciMove) throws IOException {
         try {
             Move move = LegalMoveResolver.resolveUci(game, uciMove);
@@ -377,28 +282,15 @@ public class ChessDatabaseService {
         }
     }
 
-    /**
-     * Lazily creates the embedded database so database file failures do not prevent app startup.
-     *
-     * @return initialized database
-     */
     private SqliteChessDatabase database() throws SQLException, IOException {
         SqliteChessDatabase current = database;
-        if (current != null) {
-            return current;
-        }
-
+        if (current != null) return current;
         synchronized (this) {
-            if (database == null) {
-                database = new SqliteChessDatabase(databasePath);
-            }
+            if (database == null) database = new SqliteChessDatabase(databasePath);
             return database;
         }
     }
 
-    /**
-     * Coarse-grained import phases exposed to the UI.
-     */
     private enum ImportPhase {
         READING_PGN,
         FINALIZING_DATABASE,
@@ -407,16 +299,11 @@ public class ChessDatabaseService {
         FAILED
     }
 
-    /**
-     * Mutable thread-safe-enough state for one single-worker import job.
-     */
     private static final class ImportJobState {
-
         private final String id;
         private final String fileName;
         private final long totalBytes;
         private final long startedNanos = System.nanoTime();
-
         private volatile String status = "RUNNING";
         private volatile ImportPhase phase = ImportPhase.READING_PGN;
         private volatile long bytesRead;
@@ -428,22 +315,12 @@ public class ChessDatabaseService {
         private volatile String message;
         private volatile boolean cancellationRequested;
 
-        /**
-         * Creates one running import job.
-         */
         private ImportJobState(String id, String fileName, long totalBytes) {
             this.id = id;
             this.fileName = fileName;
             this.totalBytes = totalBytes;
         }
 
-        /**
-         * Applies a running database progress snapshot.
-         *
-         * <p>The database module reports progress while consuming the PGN stream. Once
-         * the complete source has been consumed but the job is still running, the
-         * importer is in its atomic database finalization step.</p>
-         */
         private void updateProgress(ImportProgress progress) {
             bytesRead = progress.bytesRead();
             processedGames = progress.processedGames();
@@ -451,7 +328,6 @@ public class ChessDatabaseService {
             skippedGames = progress.skippedGames();
             totalPlies = progress.totalPlies();
             elapsedMillis = progress.elapsedMillis();
-
             if ("RUNNING".equals(status)) {
                 phase = totalBytes > 0L && bytesRead >= totalBytes
                         ? ImportPhase.FINALIZING_DATABASE
@@ -459,9 +335,6 @@ public class ChessDatabaseService {
             }
         }
 
-        /**
-         * Requests cancellation when the job is still running.
-         */
         private void requestCancellation() {
             if ("RUNNING".equals(status)) {
                 cancellationRequested = true;
@@ -469,9 +342,6 @@ public class ChessDatabaseService {
             }
         }
 
-        /**
-         * Marks the job complete after the staged data was atomically published.
-         */
         private void complete(ImportResult result) {
             importedGames = result.importedGames();
             skippedGames = result.skippedGames();
@@ -483,9 +353,6 @@ public class ChessDatabaseService {
             status = "COMPLETE";
         }
 
-        /**
-         * Marks the job cancelled after staged data was removed.
-         */
         private void cancelled() {
             elapsedMillis = elapsedSinceStartMillis();
             phase = ImportPhase.CANCELLED;
@@ -493,9 +360,6 @@ public class ChessDatabaseService {
             status = "CANCELLED";
         }
 
-        /**
-         * Marks the job failed after staged data was removed.
-         */
         private void failed(String failureMessage) {
             elapsedMillis = elapsedSinceStartMillis();
             phase = ImportPhase.FAILED;
@@ -503,23 +367,14 @@ public class ChessDatabaseService {
             status = "FAILED";
         }
 
-        /**
-         * Returns live elapsed time even while the database finalization callback is quiet.
-         */
         private long currentElapsedMillis() {
             return "RUNNING".equals(status) ? elapsedSinceStartMillis() : elapsedMillis;
         }
 
-        /**
-         * Returns elapsed time from the monotonic job start clock.
-         */
         private long elapsedSinceStartMillis() {
             return Math.max(0L, (System.nanoTime() - startedNanos) / 1_000_000L);
         }
 
-        /**
-         * Creates an immutable REST snapshot.
-         */
         private ChessDatabaseDtos.ImportJob snapshot() {
             return new ChessDatabaseDtos.ImportJob(
                     id,
