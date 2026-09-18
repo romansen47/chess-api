@@ -32,7 +32,17 @@ public class AnalysisGameReplayService {
 
     /** Returns one atomic snapshot of the currently selected analysis game. */
     AnalysisGameContext currentContext() {
-        return uciGameService.getAnalysisGameContext();
+        AnalysisGameContext context = uciGameService.getAnalysisGameContext();
+        if (context != null) {
+            return context;
+        }
+
+        // Compatibility for direct tests/embedders that mock the historical
+        // public getters instead of the package-private atomic snapshot method.
+        // Production UciGameService always returns the atomic context above.
+        return new AnalysisGameContext(
+                uciGameService.getAnalysisStartingPosition(),
+                uciGameService.getAnalysisMoveListSnapshot());
     }
 
     /**
