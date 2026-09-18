@@ -37,12 +37,13 @@ Start-position context must survive every replay boundary:
 ```text
 new game / PGN import
         -> core Game
-        -> MoveList + ChessStartingPosition
-        -> snapshot / replay / analysis / database lookup
+        -> AnalysisGameContext (ChessStartingPosition + moves)
+        -> AnalysisGameReplayService
+        -> snapshot / replay / assessment / variation / database lookup
         -> frontend DTO (startingPositionId + initialFen)
 ```
 
-`UciGameService` owns the distinction between the live game and an imported analysis game. Imported game, PGN tags, optional database id and annotations are grouped in `ImportedGameContext` so those values cannot drift independently. `UciGameMoveMapper` performs per-ply replay and is the single application component responsible for constructing the UCI/SAN move DTO sequence.
+`UciGameService` owns the distinction between the live game and an imported analysis game. It exposes the selected history to analysis code as one atomic `AnalysisGameContext`; consumers must not read a move list and recreate a bare `Simulation.createSimulation()`, because that factory intentionally means classical position 518. `AnalysisGameReplayService` is the canonical reconstruction boundary for historical positions and temporary variations and always starts from the context's real Chess960 position. Imported game, PGN tags, optional database id and annotations remain grouped in `ImportedGameContext` so those values cannot drift independently. `UciGameMoveMapper` performs per-ply DTO reconstruction for snapshots.
 
 The API never uses `Move.toString()` as a protocol contract. UCI-facing code goes through the core `UciMoveCodec`; this matters especially for Chess960 castling, where protocol coordinates can differ from the king's board destination. Computer-engine move responses follow the same rule.
 
@@ -70,7 +71,7 @@ Deep-analysis profile selection is isolated in `DeepAnalysisProfileResolver`. Re
 
 ### System-managed UCI options
 
-`UCI_Chess960` is protocol/game state, not a reusable profile preference. The engine definition keeps it because its presence is a capability signal, but `EngineProfileDto` removes it from profile option values. This also cleans up values loaded from older persisted stores. The core engine adapter sets the option from the active `Game` immediately before a search.
+`UCI_Chess960` is protocol/game state, not a reusable profile preference. The engine definition keeps it because its presence is a capability signal, but `EngineProfileDto` excludes it from profile option values and ignores it when received from older clients or persisted stores. Default profiles omit it as well. The core engine adapter sets the option from the active `Game` immediately before a search.
 
 This boundary prevents a stored profile default such as `UCI_Chess960=false` from overwriting the runtime mode between two searches on the same persistent engine process.
 

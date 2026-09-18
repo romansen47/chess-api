@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.AnalysisVariationMoveResultDto;
@@ -15,60 +16,36 @@ import demo.chess.definitions.states.State;
 import demo.chess.game.LegalMoveResolver;
 import demo.chess.game.TerminalPositionEvaluator;
 import demo.chess.game.impl.Simulation;
+import demo.chess.notation.UciMoveCodec;
 
 /**
  * Reconstructs temporary analysis variations from an original anchor ply and
  * an ordered list of UCI moves. No variation state is kept on the server.
+ *
+ * <p>Historical reconstruction is delegated to
+ * {@link AnalysisGameReplayService}; this service never assumes classical
+ * position 518 on its own.</p>
  */
 @Service
 public class AnalysisVariationService {
 
-    private final UciGameService uciGameService;
+    private final AnalysisGameReplayService analysisGameReplayService;
 
-    /**
-     * Creates a new AnalysisVariationService instance.
-     * @param uciGameService the source of the original analysis game
-     */
-    public AnalysisVariationService(UciGameService uciGameService) {
-        this.uciGameService = uciGameService;
+    @Autowired
+    public AnalysisVariationService(AnalysisGameReplayService analysisGameReplayService) {
+        this.analysisGameReplayService = analysisGameReplayService;
     }
 
-    /**
-     * Reconstructs the complete variation position.
-     * @param anchorPly original-game ply from which the variation starts
-     * @param variationMoves UCI moves after the anchor
-     * @return reconstructed simulation
-     */
+    /** Compatibility constructor retained for direct unit tests and embedders. */
+    public AnalysisVariationService(UciGameService uciGameService) {
+        this(new AnalysisGameReplayService(uciGameService));
+    }
+
     public Simulation createVariationGame(int anchorPly, List<String> variationMoves)
             throws NoMoveFoundException, IOException {
-        List<Move> originalMoves = uciGameService.getAnalysisMoveListSnapshot();
-        if (anchorPly < 0 || anchorPly > originalMoves.size()) {
-            throw new IllegalArgumentException(
-                    "Analysis anchor ply must be between 0 and " + originalMoves.size()
-                            + ", got " + anchorPly);
-        }
-
-        Simulation simulation = Simulation.createSimulation();
-        for (int index = 0; index < anchorPly; index++) {
-            Move originalMove = originalMoves.get(index);
-            Move replayMove = simulation.getPlayer().getMoveInSimulation(simulation, originalMove);
-            simulation.apply(replayMove);
-        }
-
-        for (String uci : safeMoves(variationMoves)) {
-            Move variationMove = LegalMoveResolver.resolveUci(simulation, uci);
-            simulation.apply(variationMove);
-        }
-
-        return simulation;
+        return analysisGameReplayService.createVariationAtPly(anchorPly, variationMoves);
     }
 
-    /**
-     * Returns legal target squares for a source square in the reconstructed
-     * variation position.
-     * @param request variation request
-     * @return legal target squares
-     */
     public List<String> getPossibleTargets(AnalysisVariationRequestDto request)
             throws NoMoveFoundException, IOException {
         if (request == null || request.getFrom() == null || request.getFrom().isBlank()) {
@@ -86,15 +63,9 @@ public class AnalysisVariationService {
                 targets.add(move.getTarget().getName());
             }
         }
-
         return targets;
     }
 
-    /**
-     * Applies one legal move to a reconstructed variation.
-     * @param request variation plus requested move
-     * @return resulting variation position
-     */
     public AnalysisVariationMoveResultDto applyMove(AnalysisVariationRequestDto request)
             throws NoMoveFoundException, IOException {
         if (request == null || request.getFrom() == null || request.getTo() == null) {
@@ -107,7 +78,7 @@ public class AnalysisVariationService {
                 request.getFrom(),
                 request.getTo(),
                 request.getPromotion());
-        String uci = selected.toString();
+        String uci = UciMoveCodec.encode(simulation, selected);
         simulation.apply(selected);
 
         String sideToMove = simulation.getPlayer() != null && simulation.getPlayer().getColor() != null
@@ -117,27 +88,10 @@ public class AnalysisVariationService {
         String gameState = terminalState != null ? terminalState.name() : null;
 
         return new AnalysisVariationMoveResultDto(
-                true,
-                null,
-                request.getFrom(),
-                request.getTo(),
-                uci,
-                sideToMove,
-                toPositionString(simulation),
-                gameState);
+                true, null, request.getFrom(), request.getTo(), uci,
+                sideToMove, toPositionString(simulation), gameState);
     }
 
-
-    private List<String> safeMoves(List<String> moves) {
-        return moves != null ? moves : List.of();
-    }
-
-    /**
-     * Converts a reconstructed game into the frontend's compact 64-character
-     * board representation.
-     * @param simulation source game
-     * @return board representation
-     */
     public String toPositionString(Simulation simulation) {
         return BoardPositionSerializer.toPositionString(simulation);
     }

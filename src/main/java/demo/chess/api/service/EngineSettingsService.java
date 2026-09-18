@@ -31,6 +31,7 @@ import demo.chess.definitions.engines.UciEngineDefinition;
 import demo.chess.definitions.engines.UciEngineInspector;
 import demo.chess.definitions.engines.UciOption;
 import demo.chess.definitions.engines.UciOptionType;
+import demo.chess.definitions.engines.UciSystemOptions;
 
 /**
  * Registry for UCI engines, reusable profiles and their use-case assignments.
@@ -655,6 +656,9 @@ public class EngineSettingsService {
         ManagedEngineDefinition engine = requireEngine(dto.getEngineId().trim());
 
         for (String incomingName : dto.getOptionValues().keySet()) {
+            if (UciSystemOptions.isSystemManaged(incomingName)) {
+                continue;
+            }
             UciOption option = engine.definition.getOption(incomingName);
             if (option == null) {
                 throw new IllegalArgumentException(
@@ -670,7 +674,8 @@ public class EngineSettingsService {
         LinkedHashMap<String, String> normalizedValues = new LinkedHashMap<>();
         for (Map.Entry<String, UciOption> entry : engine.definition.getOptions().entrySet()) {
             UciOption definitionOption = entry.getValue();
-            if (!definitionOption.isConfigurable()) {
+            if (!definitionOption.isConfigurable()
+                    || UciSystemOptions.isSystemManaged(entry.getKey())) {
                 continue;
             }
             String value = dto.getOptionValues().containsKey(entry.getKey())
@@ -859,7 +864,8 @@ public class EngineSettingsService {
     private LinkedHashMap<String, String> defaultOptionValues(UciEngineDefinition definition) {
         LinkedHashMap<String, String> result = new LinkedHashMap<>();
         for (Map.Entry<String, UciOption> entry : definition.getOptions().entrySet()) {
-            if (entry.getValue().isConfigurable()) {
+            if (entry.getValue().isConfigurable()
+                    && !UciSystemOptions.isSystemManaged(entry.getKey())) {
                 result.put(entry.getKey(), entry.getValue().getDefaultValue());
             }
         }

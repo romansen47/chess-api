@@ -1,6 +1,7 @@
 package demo.chess.api.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -21,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.analysis.annotation.MoveAnnotationKind;
+import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
@@ -181,6 +184,47 @@ class AnalysisMoveAssessmentServiceTest {
                 result.annotation().getKind());
     }
 
+    @Test
+    void chess960HistoricalAssessmentPreservesStartingPosition() throws Exception {
+        UciGameService uciGameService = mock(UciGameService.class);
+        EngineRuntimeSelectionService runtime = mock(EngineRuntimeSelectionService.class);
+        AnalysisEvaluationEngineFactory factory = mock(AnalysisEvaluationEngineFactory.class);
+        EvaluationUciEngine engine = mock(EvaluationUciEngine.class);
+
+        ChessStartingPosition startingPosition = ChessStartingPosition.of(0);
+        Simulation original = Simulation.createSimulation(startingPosition);
+        List<Move> originalMoves = new ArrayList<>();
+        for (String uci : List.of("b2b3", "c7c5", "a1b2")) {
+            Move move = LegalMoveResolver.resolveUci(original, uci);
+            original.apply(move);
+            originalMoves.add(move);
+        }
+        when(uciGameService.getAnalysisGameContext()).thenReturn(
+                new AnalysisGameContext(startingPosition, originalMoves));
+
+        UciEngineConfig config = new UciEngineConfig(
+                "fake-engine", "Fake Engine", "", Map.of());
+        when(runtime.requireEvaluationConfig()).thenReturn(config);
+        when(runtime.getEvaluationVersion()).thenReturn(1L);
+        when(factory.create("fake-engine", "analysis move assessment")).thenReturn(engine);
+
+        AtomicReference<Game> evaluatedGame = new AtomicReference<>();
+        when(engine.getBestLines(any(Game.class), any())).thenAnswer(invocation -> {
+            evaluatedGame.set(invocation.getArgument(0));
+            return List.of();
+        });
+
+        AnalysisMoveAssessmentService service = new AnalysisMoveAssessmentService(
+                uciGameService, runtime, factory);
+
+        AnalysisMoveAssessmentService.Result result = service.assess(3, 0.0);
+
+        assertFalse(result.ready());
+        assertNotNull(evaluatedGame.get());
+        assertEquals(0, evaluatedGame.get().getStartingPosition().getId());
+        assertEquals(2, evaluatedGame.get().getMoveList().size());
+    }
+
     private TestContext contextWithSingleMove() throws Exception {
         UciGameService uciGameService = mock(UciGameService.class);
         EngineRuntimeSelectionService runtime =
@@ -192,8 +236,10 @@ class AnalysisMoveAssessmentServiceTest {
         Simulation original = Simulation.createSimulation();
         Move e4 = LegalMoveResolver.resolveUci(original, "e2e4");
         original.apply(e4);
-        when(uciGameService.getAnalysisMoveListSnapshot())
-                .thenReturn(List.of(e4));
+        when(uciGameService.getAnalysisGameContext())
+                .thenReturn(new AnalysisGameContext(
+                        ChessStartingPosition.STANDARD,
+                        List.of(e4)));
 
         UciEngineConfig config = new UciEngineConfig(
                 "fake-engine",

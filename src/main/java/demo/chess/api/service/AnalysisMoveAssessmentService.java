@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutionException;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import demo.chess.analysis.annotation.MoveAnnotation;
@@ -22,7 +23,7 @@ import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
 import demo.chess.game.LegalMoveResolver;
-import demo.chess.game.impl.Simulation;
+import demo.chess.notation.UciMoveCodec;
 
 /**
  * Independently re-classifies one historical move with the currently selected
@@ -41,7 +42,7 @@ public class AnalysisMoveAssessmentService {
     private static final Log logger =
             LogFactory.getLog(AnalysisMoveAssessmentService.class);
 
-    private final UciGameService uciGameService;
+    private final AnalysisGameReplayService analysisGameReplayService;
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
     private final AnalysisEvaluationEngineFactory engineFactory;
     private final MoveAnnotationClassifier classifier =
@@ -56,13 +57,23 @@ public class AnalysisMoveAssessmentService {
     private String currentEnginePositionKey;
     private long lastSeenSettingsVersion = -1L;
 
+    @Autowired
+    public AnalysisMoveAssessmentService(
+            AnalysisGameReplayService analysisGameReplayService,
+            EngineRuntimeSelectionService engineRuntimeSelectionService,
+            AnalysisEvaluationEngineFactory engineFactory) {
+        this.analysisGameReplayService = analysisGameReplayService;
+        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
+        this.engineFactory = engineFactory;
+    }
+
+    /** Compatibility constructor retained for direct unit tests and embedders. */
     public AnalysisMoveAssessmentService(
             UciGameService uciGameService,
             EngineRuntimeSelectionService engineRuntimeSelectionService,
             AnalysisEvaluationEngineFactory engineFactory) {
-        this.uciGameService = uciGameService;
-        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
-        this.engineFactory = engineFactory;
+        this(new AnalysisGameReplayService(uciGameService),
+                engineRuntimeSelectionService, engineFactory);
     }
 
     /**
@@ -74,7 +85,8 @@ public class AnalysisMoveAssessmentService {
      * @return live assessment state
      */
     public synchronized Result assess(int ply, double resultingEvaluation) {
-        List<Move> originalMoves = uciGameService.getAnalysisMoveListSnapshot();
+        AnalysisGameContext context = analysisGameReplayService.currentContext();
+        List<Move> originalMoves = context.moves();
         if (ply < 1 || ply > originalMoves.size()) {
             throw new IllegalArgumentException(
                     "Analysis ply must be between 1 and "
@@ -82,18 +94,16 @@ public class AnalysisMoveAssessmentService {
         }
 
         try {
-            Game positionBeforeMove = createReplayGame(originalMoves, ply - 1);
+            Game positionBeforeMove = analysisGameReplayService.createPositionAtPly(
+                    context, ply - 1);
             Move originalMove = originalMoves.get(ply - 1);
-            Move replayMove = positionBeforeMove.getPlayer()
-                    .getMoveInSimulation(positionBeforeMove, originalMove);
-            if (replayMove == null) {
-                throw new NoMoveFoundException(
-                        "Could not map live assessment move: " + originalMove);
-            }
+            Move replayMove = analysisGameReplayService.mapOriginalMove(
+                    positionBeforeMove, originalMove);
+            String playedMoveUci = UciMoveCodec.encode(positionBeforeMove, replayMove);
 
             return assessPosition(
                     positionBeforeMove,
-                    replayMove.toString(),
+                    playedMoveUci,
                     "ply:" + ply,
                     resultingEvaluation);
         } catch (NoMoveFoundException | IOException e) {
@@ -160,9 +170,11 @@ public class AnalysisMoveAssessmentService {
 
             DeepAnalysisResult liveResult =
                     new DeepAnalysisResult(finalLines, history);
+            String canonicalPlayedMoveUci = UciMoveCodec.encode(
+                    positionBeforeMove, replayMove);
             MoveAnnotation annotation = classifier.classify(
                     positionBeforeMove,
-                    replayMove.toString(),
+                    canonicalPlayedMoveUci,
                     liveResult,
                     resultingEvaluation);
 
@@ -264,23 +276,6 @@ public class AnalysisMoveAssessmentService {
             copy.put(entry.getKey(), List.copyOf(entry.getValue()));
         }
         return copy;
-    }
-
-    private Game createReplayGame(List<Move> originalMoves, int ply)
-            throws NoMoveFoundException, IOException {
-        Simulation replayGame = Simulation.createSimulation();
-        for (int index = 0; index < ply; index++) {
-            Move originalMove = originalMoves.get(index);
-            Move replayMove = replayGame.getPlayer()
-                    .getMoveInSimulation(replayGame, originalMove);
-            if (replayMove == null) {
-                throw new NoMoveFoundException(
-                        "Could not map live assessment replay move: "
-                        + originalMove);
-            }
-            replayGame.apply(replayMove);
-        }
-        return replayGame;
     }
 
     private void closeAssessmentEngine() {

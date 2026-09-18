@@ -52,6 +52,7 @@ public class AnalysisReplayService {
     private final EngineAvailabilityService engineAvailabilityService;
     private final EvaluationService evaluationService;
     private final UciGameService uciGameService;
+    private final AnalysisGameReplayService analysisGameReplayService;
     private final EngineLineDisplayService engineLineDisplayService;
     private final MoveAnnotationClassifier moveAnnotationClassifier = new MoveAnnotationClassifier();
     private final DeepAnalysisEngineFactory deepAnalysisEngineFactory = new DeepAnalysisEngineFactory();
@@ -64,12 +65,14 @@ public class AnalysisReplayService {
             EngineAvailabilityService engineAvailabilityService,
             EvaluationService evaluationService,
             UciGameService uciGameService,
+            AnalysisGameReplayService analysisGameReplayService,
             EngineLineDisplayService engineLineDisplayService) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
         this.engineAvailabilityService = engineAvailabilityService;
         this.evaluationService = evaluationService;
         this.uciGameService = uciGameService;
+        this.analysisGameReplayService = analysisGameReplayService;
         this.engineLineDisplayService = engineLineDisplayService;
     }
 
@@ -91,14 +94,16 @@ public class AnalysisReplayService {
                         engineSettingsService),
                 evaluationService,
                 uciGameService,
+                new AnalysisGameReplayService(uciGameService),
                 engineLineDisplayService);
     }
 
     /** Starts a new native deep-analysis replay from the selected game. */
     public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
             throws NoMoveFoundException, IOException {
-        List<Move> moveListSnapshot = uciGameService.getAnalysisMoveListSnapshot();
-        ChessStartingPosition startingPosition = uciGameService.getAnalysisStartingPosition();
+        AnalysisGameContext gameContext = analysisGameReplayService.currentContext();
+        List<Move> moveListSnapshot = gameContext.moves();
+        ChessStartingPosition startingPosition = gameContext.startingPosition();
         String requestedProfileId = settings != null ? settings.getEngineProfileId() : null;
         int depth = settings != null ? Math.max(0, settings.getDepth()) : 0;
         int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
@@ -113,7 +118,7 @@ public class AnalysisReplayService {
         String engineName = engineConfig.getEngineName();
         AnalysisReplaySession newSession = new AnalysisReplaySession(
                 moveListSnapshot,
-                Simulation.createSimulation(startingPosition),
+                analysisGameReplayService.createPositionAtPly(gameContext, 0),
                 deepAnalysisEngine,
                 engineConfig,
                 engineName);

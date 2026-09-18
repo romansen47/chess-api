@@ -106,6 +106,30 @@ class EngineSettingsProfileTest {
     }
 
     /**
+     * Verifies that Chess960 stays an engine capability/runtime concern and
+     * never becomes a reusable profile preference.
+     */
+    @Test
+    void systemManagedChess960OptionNeverEntersProfiles() throws Exception {
+        EngineSettingsService service = createService();
+        EngineConfigOverviewDto overview = service.getOverview();
+        EngineDefinitionDto engine = overview.getEngines().get(0);
+
+        assertTrue(engine.getOptions().containsKey("UCI_Chess960"));
+        assertFalse(overview.getProfiles().get(0).getOptionValues().containsKey("UCI_Chess960"));
+
+        EngineProfileDto created = service.createProfile(profile(
+                engine.getId(),
+                "Chess960 input is ignored",
+                Map.of("Hash", "64", "UCI_Chess960", "true")));
+
+        assertFalse(created.getOptionValues().containsKey("UCI_Chess960"));
+        UciEngineConfig runtime = service.getConfig(created.getId());
+        assertTrue(runtime.supportsChess960());
+        assertFalse(runtime.toUciSetOptionCommands().contains("UCI_Chess960"));
+    }
+
+    /**
      * Verifies that changing an assigned profile invalidates only the runtime consumers using it.
      */
     @Test
@@ -229,6 +253,7 @@ class EngineSettingsProfileTest {
                 + "      echo \"id author Tests\"\n"
                 + "      echo \"option name Hash type spin default 16 min 1 max 1024\"\n"
                 + "      echo \"option name Ponder type check default true\"\n"
+                + "      echo \"option name UCI_Chess960 type check default false\"\n"
                 + "      echo \"option name Style type combo default Normal var Normal var Aggressive\"\n"
                 + "      echo \"option name Clear Hash type button\"\n"
                 + "      echo \"option name SyzygyPath type string default <empty>\"\n"

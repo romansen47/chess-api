@@ -103,15 +103,33 @@ public class UciGameService {
      * position remains attached to the history.</p>
      */
     public synchronized List<Move> getAnalysisMoveListSnapshot() {
-        return new ArrayList<>(getAnalysisMoveHistorySnapshot());
+        return new ArrayList<>(getAnalysisGameContext().moves());
     }
 
     /** Returns the start position for the selected live/imported analysis game. */
     public synchronized ChessStartingPosition getAnalysisStartingPosition() {
+        return getAnalysisGameContext().startingPosition();
+    }
+
+    /**
+     * Returns start position and move history as one atomic analysis snapshot.
+     *
+     * <p>Consumers that reconstruct historical positions must use this context
+     * instead of reading the move list and silently assuming classical position
+     * 518. Keeping both values under the same synchronized snapshot also
+     * prevents a selected-game change from mixing two different contexts.</p>
+     */
+    synchronized AnalysisGameContext getAnalysisGameContext() {
         Game source = selectedGame();
-        return source != null && source.getStartingPosition() != null
+        if (source == null) {
+            return new AnalysisGameContext(ChessStartingPosition.STANDARD, List.of());
+        }
+        ChessStartingPosition startingPosition = source.getStartingPosition() != null
                 ? source.getStartingPosition()
                 : ChessStartingPosition.STANDARD;
+        return new AnalysisGameContext(
+                startingPosition,
+                new ArrayList<>(source.getMoveList()));
     }
 
     public synchronized boolean hasImportedGame() {
