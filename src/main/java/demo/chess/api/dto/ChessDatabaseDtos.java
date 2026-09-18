@@ -85,7 +85,8 @@ public final class ChessDatabaseDtos {
      *
      * @param white white player fragment
      * @param black black player fragment
-     * @param player either player fragment
+     * @param player first color-independent player fragment
+     * @param player2 second color-independent player fragment
      * @param fromYear minimum year
      * @param toYear maximum year
      * @param result PGN result
@@ -96,11 +97,27 @@ public final class ChessDatabaseDtos {
             String white,
             String black,
             String player,
+            String player2,
             Integer fromYear,
             Integer toYear,
             String result,
             Integer minElo,
             Integer limit) {
+
+        /**
+         * Backward-compatible constructor without a second color-independent player.
+         */
+        public SearchRequest(
+                String white,
+                String black,
+                String player,
+                Integer fromYear,
+                Integer toYear,
+                String result,
+                Integer minElo,
+                Integer limit) {
+            this(white, black, player, null, fromYear, toYear, result, minElo, limit);
+        }
     }
 
     /**

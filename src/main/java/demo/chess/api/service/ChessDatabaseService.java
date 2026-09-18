@@ -160,12 +160,13 @@ public class ChessDatabaseService {
     public List<ChessDatabaseDtos.GameSummary> search(ChessDatabaseDtos.SearchRequest request)
             throws SQLException, IOException {
         ChessDatabaseDtos.SearchRequest safeRequest = request == null
-                ? new ChessDatabaseDtos.SearchRequest(null, null, null, null, null, null, null, 200)
+                ? new ChessDatabaseDtos.SearchRequest(null, null, null, null, null, null, null, null, 200)
                 : request;
         GameSearch search = new GameSearch(
                 safeRequest.white(),
                 safeRequest.black(),
                 safeRequest.player(),
+                safeRequest.player2(),
                 safeRequest.fromYear(),
                 safeRequest.toYear(),
                 safeRequest.result(),
