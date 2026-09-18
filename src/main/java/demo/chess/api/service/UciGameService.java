@@ -75,7 +75,8 @@ public class UciGameService {
         gameLoader.loadGame(uciMoves, importedGame);
 
         Map<String, String> pgnTags = new LinkedHashMap<>(gameLoader.parsePgnTags(content));
-        Map<Integer, PgnMoveAnnotation> annotations = new LinkedHashMap<>(annotationParser.parse(content));
+        Map<Integer, PgnMoveAnnotation> annotations = new LinkedHashMap<>(
+                annotationParser.parse(content, startingPosition));
         this.importedContext = new ImportedGameContext(
                 importedGame,
                 pgnTags,

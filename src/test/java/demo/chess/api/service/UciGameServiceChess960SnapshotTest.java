@@ -34,4 +34,29 @@ class UciGameServiceChess960SnapshotTest {
         assertEquals("Alice", snapshot.getGame().getWhitePlayerName());
         assertEquals("Bob", snapshot.getGame().getBlackPlayerName());
     }
+    @Test
+    void importsChess960MovetextAndAnnotationsWithoutFallingBackToPosition518()
+            throws Exception {
+        GameService gameService = new GameService();
+        UciGameService service = new UciGameService(gameService, null);
+        String fen = "rqnbknbr/pppppppp/8/8/8/8/PPPPPPPP/RQNBKNBR w HAha - 0 1";
+        ChessStartingPosition position = ChessStartingPosition.fromInitialFen(fen);
+        String pgn = """
+                [Event "Chess960 import regression"]
+                [Variant "Chess960"]
+                [SetUp "1"]
+                [FEN "rqnbknbr/pppppppp/8/8/8/8/PPPPPPPP/RQNBKNBR w HAha - 0 1"]
+                [Result "*"]
+
+                1. h3 c6 2. Bh2 {[%eval 0.20]} Bc7 *
+                """;
+
+        UciGameDto imported = service.importGame(pgn, 43L);
+
+        assertEquals(position.getId(), imported.getStartingPositionId());
+        assertEquals(4, imported.getTotalPlies());
+        assertEquals("g1h2", imported.getMoves().get(2).getUci());
+        assertEquals("0.20", imported.getAnnotations().get(0).evaluation());
+    }
+
 }

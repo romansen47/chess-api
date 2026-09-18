@@ -87,7 +87,7 @@ Keep engine-specific companion files with the executable when required. Lc0 dist
 
 ## PGN import, export and snapshots
 
-PGN import resolves the starting position before replaying moves. Chess960 imports therefore remain tied to their initial FEN throughout analysis. Export delegates notation and setup-tag generation to the core `GameSaver`, rather than reconstructing Chess960 PGN rules in the API.
+PGN import resolves the starting position before replaying moves. Chess960 imports therefore remain tied to their initial FEN throughout analysis. The same resolved position is passed to annotation parsing and diagnostic-PGN sanitization; auxiliary PGN processing must never recreate a standard-518 board while walking Chess960 SAN. Export delegates notation and setup-tag generation to the core `GameSaver`, rather than reconstructing Chess960 PGN rules in the API.
 
 A snapshot contains:
 

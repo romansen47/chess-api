@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
@@ -45,11 +46,13 @@ final class ChessAnalysisDiagnosticPgnSanitizer {
             return content;
         }
 
+        ChessStartingPosition startingPosition =
+                gameLoader.parsePgnStartingPosition(content);
         String parserInput = keepOnlyPersistableCommentTags(content);
         Map<Integer, PgnMoveAnnotation> annotations =
-                annotationParser.parse(parserInput);
+                annotationParser.parse(parserInput, startingPosition);
 
-        Simulation simulation = Simulation.createSimulation();
+        Simulation simulation = Simulation.createSimulation(startingPosition);
         gameLoader.loadGame(gameLoader.parsePgnMoveList(content), simulation);
 
         tags.remove("AnalysisFormat");

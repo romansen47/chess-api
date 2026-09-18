@@ -60,4 +60,29 @@ class ChessAnalysisDiagnosticPgnSanitizerTest {
         assertNull(annotations.get(2).comment());
         assertTrue(annotations.get(1).variations().isEmpty());
     }
+    @Test
+    void sanitizesChess960DiagnosticPgnWithItsDeclaredStartPosition() throws Exception {
+        String pgn = """
+                [Event "Chess960 diagnostic"]
+                [Variant "Chess960"]
+                [SetUp "1"]
+                [FEN "rqnbknbr/pppppppp/8/8/8/8/PPPPPPPP/RQNBKNBR w HAha - 0 1"]
+                [Result "*"]
+                [AnalysisFormat "ChessAnalysisTool-Diagnostic-v2"]
+
+                1. h3 c6 2. Bh2 { [%eval 0.20] [%depth 12] class=GOOD } Bc7 *
+                """;
+
+        String sanitized = sanitizer.sanitize(pgn);
+
+        assertTrue(sanitized.contains("[Variant \"Chess960\"]"));
+        assertTrue(sanitized.contains("[FEN \"rqnbknbr/pppppppp/8/8/8/8/PPPPPPPP/RQNBKNBR w HAha - 0 1\"]"));
+        assertFalse(sanitized.contains("AnalysisFormat"));
+        assertFalse(sanitized.contains("%depth"));
+        assertFalse(sanitized.contains("class=GOOD"));
+
+        Map<Integer, PgnMoveAnnotation> annotations = annotationParser.parse(sanitized);
+        assertEquals("0.20", annotations.get(3).evaluation());
+    }
+
 }
