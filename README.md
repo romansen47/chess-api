@@ -75,13 +75,21 @@ Deep-analysis profile selection is isolated in `DeepAnalysisProfileResolver`. Re
 
 This boundary prevents a stored profile default such as `UCI_Chess960=false` from overwriting the runtime mode between two searches on the same persistent engine process.
 
+## Game-scoped engine lifecycle
+
+Native engine processes are owned by backend application services, never by the browser. `EngineLifecycleCoordinator` is the single new-game shutdown boundary. Before `GameService` creates a replacement game it stops/releases White and Black player engines, live evaluation, historical/variation evaluation and move assessment, and any finite deep-analysis replay engine.
+
+This backend guarantee is independent of frontend request ordering. Frontend cleanup can still stop browser-local workers, but a successful `POST /new-game` never relies on that cleanup to terminate native processes.
+
+Normal shutdown goes through the owning core UCI adapter, which sends `quit` and then applies timed OS-level escalation. The Engine Manager exposes that graceful path and a separate force-termination action for emergency recovery.
+
 ## Engine discovery
 
 Automatic discovery scans the configured engine directory, `/usr/games` by default. On a normal Windows installation this project convention corresponds to `C:\usr\games`. The directory can be overridden with the `chess.engine.discovery.directory` system property.
 
 For safety, automatic discovery does **not** execute every file in that directory. It only considers regular executable files whose filename contains `stockfish` or `lc0`, case-insensitively. A candidate is accepted only after it successfully responds to a UCI handshake. Duplicate paths resolving to the same executable are ignored.
 
-Other UCI engines, or engines stored elsewhere, can be added explicitly. The application includes a native engine-file selection workflow for local graphical environments, including Windows/WSL handling. Explicitly selected engines are validated as executable files and inspected through UCI before being registered.
+Other UCI engines, or engines stored elsewhere, can be added explicitly by a **server path**. Engine executables belong to the backend host: the browser never opens a native file chooser on that machine. The frontend can request inspected discovery candidates from the configured server directory and explicitly register one of them, or an advanced user can enter a server-side executable path directly. In both cases the backend validates the executable and performs the UCI handshake before registration.
 
 Keep engine-specific companion files with the executable when required. Lc0 distributions commonly depend on a neural-network weights file and may also need platform-specific runtime libraries such as DLL files. Moving only the executable can therefore leave an otherwise valid engine unable to start.
 

@@ -209,6 +209,38 @@ class EngineSettingsDiscoveryTest {
     }
 
     /**
+     * Verifies that server discovery and registration are separate operations.
+     */
+    @Test
+    void discoversServerCandidatesWithoutRegisteringThem() throws Exception {
+        Path games = Files.createDirectories(tempDir.resolve("games"));
+        configureProperties(games);
+
+        EngineSettingsService service = new EngineSettingsService(
+                new ObjectMapper(),
+                new EngineDiscoveryService());
+        assertEmptyConfiguration(service.getOverview());
+
+        Path stockfish = createUciEngine(
+                games.resolve("stockfish"),
+                "Stockfish Candidate",
+                32);
+
+        var candidates = service.discoverEngineCandidates();
+
+        assertEquals(1, candidates.size());
+        assertNull(candidates.get(0).getId());
+        assertEquals(
+                stockfish.toAbsolutePath().normalize().toString(),
+                candidates.get(0).getEngine());
+        assertEmptyConfiguration(service.getOverview());
+
+        EngineDefinitionDto registered = service.createEngine(candidates.get(0));
+        assertNotNull(registered.getId());
+        assertEquals(1, service.getOverview().getEngines().size());
+    }
+
+    /**
      * Performs the manual scan adds only new allowed engines and does not change assignments operation.
      */
     @Test
