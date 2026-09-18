@@ -21,8 +21,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import demo.chess.api.dto.ChessDatabaseDtos;
 import demo.chess.api.dto.UciGameDto;
-import demo.chess.api.service.AnalysisReplayService;
 import demo.chess.api.service.ChessDatabaseService;
+import demo.chess.api.service.GameLifecycleService;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 
 /**
@@ -33,19 +33,19 @@ import demo.chess.definitions.engines.impl.NoMoveFoundException;
 public class ChessDatabaseController {
 
     private final ChessDatabaseService chessDatabaseService;
-    private final AnalysisReplayService analysisReplayService;
+    private final GameLifecycleService gameLifecycleService;
 
     /**
      * Creates a new database controller.
      *
      * @param chessDatabaseService database service
-     * @param analysisReplayService analysis replay service
+     * @param gameLifecycleService game replacement lifecycle
      */
     public ChessDatabaseController(
             ChessDatabaseService chessDatabaseService,
-            AnalysisReplayService analysisReplayService) {
+            GameLifecycleService gameLifecycleService) {
         this.chessDatabaseService = chessDatabaseService;
-        this.analysisReplayService = analysisReplayService;
+        this.gameLifecycleService = gameLifecycleService;
     }
 
     /**
@@ -148,7 +148,7 @@ public class ChessDatabaseController {
             value = "/games/{gameId}/load",
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> loadGame(@PathVariable long gameId) {
-        analysisReplayService.clear();
+        gameLifecycleService.prepareForGameReplacement();
 
         try {
             UciGameDto game = chessDatabaseService.loadGame(gameId);

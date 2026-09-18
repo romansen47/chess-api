@@ -17,7 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import demo.chess.api.dto.UciGameDto;
-import demo.chess.api.service.AnalysisReplayService;
 import demo.chess.api.service.ChessDatabaseService;
 import demo.chess.api.service.GameLifecycleService;
 import demo.chess.api.service.GameService;
@@ -34,13 +33,11 @@ class GameControllerTest {
         GameService gameService = mock(GameService.class);
         GameLifecycleService gameLifecycleService = mock(GameLifecycleService.class);
         UciGameService uciGameService = mock(UciGameService.class);
-        AnalysisReplayService analysisReplayService = mock(AnalysisReplayService.class);
         ChessDatabaseService chessDatabaseService = mock(ChessDatabaseService.class);
         GameController controller = new GameController(
                 gameService,
                 gameLifecycleService,
                 uciGameService,
-                analysisReplayService,
                 chessDatabaseService);
 
         String pgn = """
@@ -59,7 +56,7 @@ class GameControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertSame(importedGame, response.getBody());
-        verify(analysisReplayService).clear();
+        verify(gameLifecycleService).prepareForGameReplacement();
 
         InOrder importOrder = inOrder(chessDatabaseService, uciGameService);
         importOrder.verify(chessDatabaseService).importSingleGameAndResolveId(pgn);
@@ -76,13 +73,11 @@ class GameControllerTest {
         GameService gameService = mock(GameService.class);
         GameLifecycleService gameLifecycleService = mock(GameLifecycleService.class);
         UciGameService uciGameService = mock(UciGameService.class);
-        AnalysisReplayService analysisReplayService = mock(AnalysisReplayService.class);
         ChessDatabaseService chessDatabaseService = mock(ChessDatabaseService.class);
         GameController controller = new GameController(
                 gameService,
                 gameLifecycleService,
                 uciGameService,
-                analysisReplayService,
                 chessDatabaseService);
 
         String pgn = """
@@ -104,7 +99,7 @@ class GameControllerTest {
                 "code", "PGN_MULTIPLE_GAMES",
                 "gameCount", 2,
                 "earlyAbort", true), response.getBody());
-        verify(analysisReplayService, never()).clear();
+        verify(gameLifecycleService, never()).prepareForGameReplacement();
         verifyNoInteractions(chessDatabaseService, uciGameService);
     }
 
@@ -116,20 +111,18 @@ class GameControllerTest {
         GameService gameService = mock(GameService.class);
         GameLifecycleService gameLifecycleService = mock(GameLifecycleService.class);
         UciGameService uciGameService = mock(UciGameService.class);
-        AnalysisReplayService analysisReplayService = mock(AnalysisReplayService.class);
         ChessDatabaseService chessDatabaseService = mock(ChessDatabaseService.class);
         GameController controller = new GameController(
                 gameService,
                 gameLifecycleService,
                 uciGameService,
-                analysisReplayService,
                 chessDatabaseService);
 
         ResponseEntity<?> response = controller.importPgnGame("   \n\t");
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         assertEquals(Map.of("code", "PGN_NO_GAME", "gameCount", 0), response.getBody());
-        verify(analysisReplayService, never()).cancel();
+        verify(gameLifecycleService, never()).prepareForGameReplacement();
         verifyNoInteractions(chessDatabaseService, uciGameService);
     }
 }

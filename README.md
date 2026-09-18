@@ -77,7 +77,7 @@ This boundary prevents a stored profile default such as `UCI_Chess960=false` fro
 
 ## Game-scoped engine lifecycle
 
-Native engine processes are owned by backend application services, never by the browser. `EngineLifecycleCoordinator` is the single new-game shutdown boundary. Before `GameService` creates a replacement game it stops/releases White and Black player engines, live evaluation, historical/variation evaluation and move assessment, and any finite deep-analysis replay engine.
+Native engine processes are owned by backend application services, never by the browser. `EngineLifecycleCoordinator` is the single game-replacement shutdown boundary. Before a new live game, imported PGN, or stored database game replaces the current selection it stops/releases White and Black player engines, live evaluation, historical/variation evaluation and move assessment, and any finite deep-analysis replay engine.
 
 This backend guarantee is independent of frontend request ordering. Frontend cleanup can still stop browser-local workers, but a successful `POST /new-game` never relies on that cleanup to terminate native processes.
 

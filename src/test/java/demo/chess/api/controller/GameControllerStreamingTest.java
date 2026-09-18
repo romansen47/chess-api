@@ -15,7 +15,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 
-import demo.chess.api.service.AnalysisReplayService;
 import demo.chess.api.service.ChessDatabaseService;
 import demo.chess.api.service.GameLifecycleService;
 import demo.chess.api.service.GameService;
@@ -28,13 +27,11 @@ class GameControllerStreamingTest {
         GameService gameService = mock(GameService.class);
         GameLifecycleService gameLifecycleService = mock(GameLifecycleService.class);
         UciGameService uciGameService = mock(UciGameService.class);
-        AnalysisReplayService analysisReplayService = mock(AnalysisReplayService.class);
         ChessDatabaseService chessDatabaseService = mock(ChessDatabaseService.class);
         GameController controller = new GameController(
                 gameService,
                 gameLifecycleService,
                 uciGameService,
-                analysisReplayService,
                 chessDatabaseService);
 
         String pgn = """
@@ -60,7 +57,7 @@ class GameControllerStreamingTest {
                 "code", "PGN_MULTIPLE_GAMES",
                 "gameCount", 2,
                 "earlyAbort", true), response.getBody());
-        verify(analysisReplayService, never()).cancel();
+        verify(gameLifecycleService, never()).prepareForGameReplacement();
         verifyNoInteractions(chessDatabaseService, uciGameService);
     }
 }

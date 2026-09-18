@@ -204,7 +204,7 @@ public class GameController {
         }
 
         String content = probe.content();
-        analysisReplayService.clear();
+        gameLifecycleService.prepareForGameReplacement();
 
         try {
             long gameId = chessDatabaseService.importSingleGameAndResolveId(content);

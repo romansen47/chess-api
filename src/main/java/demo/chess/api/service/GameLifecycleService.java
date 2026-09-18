@@ -23,7 +23,15 @@ public class GameLifecycleService {
      * game has been stopped and released.
      */
     public synchronized GameSettingsDto startNewGame(GameSettingsDto settings) {
-        engineLifecycleCoordinator.stopGameScopedEngines();
+        prepareForGameReplacement();
         return gameService.startNewGame(settings);
+    }
+
+    /**
+     * Ends native work owned by the currently displayed game before another
+     * game is selected or imported.
+     */
+    public void prepareForGameReplacement() {
+        engineLifecycleCoordinator.stopGameScopedEngines();
     }
 }

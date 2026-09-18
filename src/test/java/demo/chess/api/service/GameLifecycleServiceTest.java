@@ -28,4 +28,16 @@ class GameLifecycleServiceTest {
         order.verify(coordinator).stopGameScopedEngines();
         order.verify(gameService).startNewGame(requested);
     }
+
+    @Test
+    void preparesImportedGameReplacementWithoutCreatingNewLiveGame() {
+        GameService gameService = mock(GameService.class);
+        EngineLifecycleCoordinator coordinator = mock(EngineLifecycleCoordinator.class);
+        GameLifecycleService service = new GameLifecycleService(gameService, coordinator);
+
+        service.prepareForGameReplacement();
+
+        org.mockito.Mockito.verify(coordinator).stopGameScopedEngines();
+        org.mockito.Mockito.verifyNoInteractions(gameService);
+    }
 }
