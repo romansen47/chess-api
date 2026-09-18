@@ -16,6 +16,7 @@ import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.definitions.moves.Move;
+import demo.chess.game.DummyGame;
 import demo.chess.game.Game;
 import demo.chess.game.impl.Simulation;
 import demo.chess.notation.PgnNotation;
@@ -26,7 +27,7 @@ class AnalysisEvaluationServiceChess960Test {
     void evaluatesHistoricalPositionAfterChess960CastlingWithoutFallingBackTo518()
             throws Exception {
         ChessStartingPosition startingPosition = ChessStartingPosition.of(3);
-        Simulation original = Simulation.createSimulation(startingPosition);
+        DummyGame original = Simulation.createDummySimulation(startingPosition);
         Move castling = PgnNotation.resolveSan(original, "O-O");
 
         UciGameService uciGameService = mock(UciGameService.class);
