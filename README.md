@@ -43,7 +43,7 @@ new game / PGN import
         -> frontend DTO (startingPositionId + initialFen)
 ```
 
-`UciGameService` owns the distinction between the live game and an imported analysis game. It exposes the selected history to analysis code as one atomic `AnalysisGameContext`; consumers must not read a move list and recreate a bare `Simulation.createSimulation()`, because that factory intentionally means classical position 518. `AnalysisGameReplayService` is the canonical reconstruction boundary for historical positions and temporary variations and always starts from the context's real Chess960 position. Imported game, PGN tags, optional database id and annotations remain grouped in `ImportedGameContext` so those values cannot drift independently. `UciGameMoveMapper` performs per-ply DTO reconstruction for snapshots.
+`UciGameService` owns the distinction between the live game and an imported analysis game. It exposes the selected history to analysis code as one atomic `AnalysisGameContext`; consumers must not read a move list and recreate a bare `Simulation.createSimulation()`, because that factory intentionally means classical position 518. `AnalysisGameReplayService` is the canonical reconstruction boundary for historical positions, live historical evaluation and temporary variations and always starts from the context's real Chess960 position. Imported game, PGN tags, optional database id and annotations remain grouped in `ImportedGameContext` so those values cannot drift independently. `UciGameMoveMapper` performs per-ply DTO reconstruction for snapshots.
 
 The API never uses `Move.toString()` as a protocol contract. UCI-facing code goes through the core `UciMoveCodec`; this matters especially for Chess960 castling, where protocol coordinates can differ from the king's board destination. Computer-engine move responses follow the same rule.
 
@@ -56,7 +56,7 @@ Native-engine handling is split into two layers:
 - `NativeEngineProbe` performs OS/file checks, a real UCI handshake, and variant-capability checks for one executable;
 - `EngineAvailabilityService` applies feature/role policy and exposes capability results.
 
-A responsive UCI executable is **not automatically Chess960-capable**. For a non-518 game, the native executable must advertise the standard `UCI_Chess960` check option. Otherwise its capability result is `CHESS960_UNSUPPORTED`: it may still be used for classical chess, but it is not a candidate for that Chess960 operation.
+A responsive UCI executable is **not automatically usable by this application**. The runtime speaks Chess960 UCI for every Scharnagl position, including 518, so a native executable must advertise the standard `UCI_Chess960` check option. Otherwise its capability result is `CHESS960_UNSUPPORTED` for every game.
 
 Capability checks are contextual:
 
@@ -87,7 +87,7 @@ Keep engine-specific companion files with the executable when required. Lc0 dist
 
 ## PGN import, export and snapshots
 
-PGN import resolves the starting position before replaying moves. Chess960 imports therefore remain tied to their initial FEN throughout analysis. The same resolved position is passed to annotation parsing and diagnostic-PGN sanitization; auxiliary PGN processing must never recreate a standard-518 board while walking Chess960 SAN. Export delegates notation and setup-tag generation to the core `GameSaver`, rather than reconstructing Chess960 PGN rules in the API.
+PGN import resolves the starting position before replaying moves. Every exported game carries explicit Chess960 setup tags and FEN, including position 518. The same resolved position is passed to annotation parsing and diagnostic-PGN sanitization; auxiliary PGN processing must never recreate an implicit 518 board while walking SAN. Export delegates notation and setup-tag generation to the core `GameSaver`, rather than reconstructing Chess960 PGN rules in the API.
 
 A snapshot contains:
 
@@ -118,8 +118,9 @@ When extending the application, keep these boundaries intact:
 5. Browser evaluation capability and native deep-analysis capability are separate concepts.
 6. Engine executable health, advertised variant capability and engine/profile selection policy are separate concerns.
 7. System-managed UCI options are not profile preferences.
-8. A fallback candidate must satisfy the capability requirements of the selected game, not merely answer `uci`.
-9. Public API compatibility fields may remain temporarily, but new code should use the explicit canonical representation documented above.
+8. All native engine roles require `UCI_Chess960`, including games that use Scharnagl position 518.
+9. A fallback candidate must satisfy the capability requirements of the selected game, not merely answer `uci`.
+10. Public API compatibility fields may remain temporarily, but new code should use the explicit canonical representation documented above.
 
 ## Build and tests
 

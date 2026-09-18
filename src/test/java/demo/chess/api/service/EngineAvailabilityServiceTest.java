@@ -78,7 +78,7 @@ class EngineAvailabilityServiceTest {
     }
 
     @Test
-    void responsiveClassicalEngineIsUnavailableForChess960WhenCapabilityIsMissing() throws Exception {
+    void responsiveEngineWithoutChess960IsUnavailableForEveryPosition() throws Exception {
         Path games = Files.createDirectories(tempDir.resolve("games"));
         createUciEngine(games.resolve("stockfish"), "Classical UCI", false);
         TestContext context = createContext(games);
@@ -96,8 +96,8 @@ class EngineAvailabilityServiceTest {
                 context.availabilityService().getAvailability(NativeEngineRole.EVALUATION),
                 NativeEngineRole.EVALUATION,
                 true,
-                true,
-                NativeEngineAvailabilityReason.AVAILABLE);
+                false,
+                NativeEngineAvailabilityReason.CHESS960_UNSUPPORTED);
     }
 
     @Test
@@ -238,7 +238,7 @@ class EngineAvailabilityServiceTest {
     }
 
     private Path createUciEngine(Path path, String name) throws IOException {
-        return createUciEngine(path, name, false);
+        return createUciEngine(path, name, true);
     }
 
     private Path createUciEngine(Path path, String name, boolean chess960) throws IOException {

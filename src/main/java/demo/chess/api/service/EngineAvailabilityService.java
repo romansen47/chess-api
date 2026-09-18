@@ -39,7 +39,7 @@ public class EngineAvailabilityService {
                 engineProbe);
     }
 
-    /** Returns one native-engine role capability for classical chess. */
+    /** Returns one native-engine role capability for the default starting position. */
     public NativeEngineAvailability getAvailability(NativeEngineRole role) {
         return getAvailability(role, ChessStartingPosition.STANDARD);
     }
@@ -65,7 +65,7 @@ public class EngineAvailabilityService {
         return availability(role, engineProbe.probe(config.get(), resolvedPosition));
     }
 
-    /** Returns all role capabilities for classical chess. */
+    /** Returns all role capabilities for the default starting position. */
     public Map<NativeEngineRole, NativeEngineAvailability> getAvailabilities() {
         return getAvailabilities(ChessStartingPosition.STANDARD);
     }
@@ -99,7 +99,7 @@ public class EngineAvailabilityService {
         return Collections.unmodifiableMap(result);
     }
 
-    /** Resolves a usable native deep-analysis profile for classical chess. */
+    /** Resolves a usable native deep-analysis profile for the default starting position. */
     public Optional<String> findAvailableDeepAnalysisProfileId(String requestedProfileId) {
         return findAvailableDeepAnalysisProfileId(
                 requestedProfileId,
@@ -111,8 +111,8 @@ public class EngineAvailabilityService {
      *
      * <p>The requested profile has priority, followed by the configured default
      * and then every other configured native profile. A profile that speaks UCI
-     * but lacks {@code UCI_Chess960} is skipped for a non-standard starting
-     * position. Browser engines are not candidates for deep analysis.</p>
+     * but lacks {@code UCI_Chess960} is skipped for every starting position,
+     * including 518. Browser engines are not candidates for deep analysis.</p>
      *
      * @param requestedProfileId explicitly requested profile, or {@code null}
      * @param startingPosition selected analysis starting position
@@ -128,7 +128,7 @@ public class EngineAvailabilityService {
         return Optional.ofNullable(resolution.availableProfileId());
     }
 
-    /** Returns whether any configured native profile can run classical deep analysis. */
+    /** Returns whether any configured native profile can run deep analysis for the default starting position. */
     public NativeEngineAvailability getDeepAnalysisAvailability() {
         return getDeepAnalysisAvailability(ChessStartingPosition.STANDARD);
     }

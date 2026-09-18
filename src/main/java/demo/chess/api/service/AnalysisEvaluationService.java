@@ -6,6 +6,7 @@ import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.AnalysisVariationRequestDto;
@@ -35,7 +36,7 @@ public class AnalysisEvaluationService {
 
     private static final Log logger = LogFactory.getLog(AnalysisEvaluationService.class);
 
-    private final UciGameService uciGameService;
+    private final AnalysisGameReplayService analysisGameReplayService;
     private final AnalysisVariationService analysisVariationService;
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
     private final EngineLineDisplayService engineLineDisplayService;
@@ -57,6 +58,23 @@ public class AnalysisEvaluationService {
      * @param engineFactory analysis evaluation engine factory
      * @param moveAssessmentService live historical move assessment
      */
+    @Autowired
+    public AnalysisEvaluationService(
+            AnalysisGameReplayService analysisGameReplayService,
+            AnalysisVariationService analysisVariationService,
+            EngineRuntimeSelectionService engineRuntimeSelectionService,
+            EngineLineDisplayService engineLineDisplayService,
+            AnalysisEvaluationEngineFactory engineFactory,
+            AnalysisMoveAssessmentService moveAssessmentService) {
+        this.analysisGameReplayService = analysisGameReplayService;
+        this.analysisVariationService = analysisVariationService;
+        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
+        this.engineLineDisplayService = engineLineDisplayService;
+        this.engineFactory = engineFactory;
+        this.moveAssessmentService = moveAssessmentService;
+    }
+
+    /** Compatibility constructor retained for direct tests and embedders. */
     public AnalysisEvaluationService(
             UciGameService uciGameService,
             AnalysisVariationService analysisVariationService,
@@ -64,12 +82,13 @@ public class AnalysisEvaluationService {
             EngineLineDisplayService engineLineDisplayService,
             AnalysisEvaluationEngineFactory engineFactory,
             AnalysisMoveAssessmentService moveAssessmentService) {
-        this.uciGameService = uciGameService;
-        this.analysisVariationService = analysisVariationService;
-        this.engineRuntimeSelectionService = engineRuntimeSelectionService;
-        this.engineLineDisplayService = engineLineDisplayService;
-        this.engineFactory = engineFactory;
-        this.moveAssessmentService = moveAssessmentService;
+        this(
+                new AnalysisGameReplayService(uciGameService),
+                analysisVariationService,
+                engineRuntimeSelectionService,
+                engineLineDisplayService,
+                engineFactory,
+                moveAssessmentService);
     }
 
     /**
@@ -78,14 +97,14 @@ public class AnalysisEvaluationService {
      * @return the evaluation
      */
     public synchronized EngineEvaluationDto getEvaluation(int ply) {
-        List<Move> originalMoves = uciGameService.getAnalysisMoveListSnapshot();
-        if (ply < 1 || ply > originalMoves.size()) {
+        AnalysisGameContext context = analysisGameReplayService.currentContext();
+        if (ply < 1 || ply > context.moves().size()) {
             throw new IllegalArgumentException(
-                    "Analysis ply must be between 1 and " + originalMoves.size() + ", got " + ply);
+                    "Analysis ply must be between 1 and " + context.moves().size() + ", got " + ply);
         }
 
         try {
-            Game game = createReplayGame(originalMoves, ply);
+            Game game = analysisGameReplayService.createPositionAtPly(context, ply);
             EngineEvaluationDto result = evaluateGame(game, "ply:" + ply);
             boolean usableResult =
                     (result.getLines() != null && !result.getLines().isEmpty())
@@ -244,25 +263,6 @@ public class AnalysisEvaluationService {
         currentPositionKey = null;
         lastSeenSettingsVersion = -1L;
         lastValidEvaluation = null;
-    }
-
-    /**
-     * Creates the replay game.
-     * @param originalMoves the original moves
-     * @param ply the ply
-     * @return the result of the operation
-     */
-    private Game createReplayGame(List<Move> originalMoves, int ply)
-            throws NoMoveFoundException, IOException {
-        Simulation replayGame = Simulation.createSimulation();
-
-        for (int index = 0; index < ply; index++) {
-            Move originalMove = originalMoves.get(index);
-            Move replayMove = replayGame.getPlayer().getMoveInSimulation(replayGame, originalMove);
-            replayGame.apply(replayMove);
-        }
-
-        return replayGame;
     }
 
     /**

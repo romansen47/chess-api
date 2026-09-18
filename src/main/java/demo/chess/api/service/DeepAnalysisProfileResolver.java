@@ -29,7 +29,7 @@ final class DeepAnalysisProfileResolver {
         this.engineProbe = engineProbe;
     }
 
-    /** Resolves a native profile for classical chess. */
+    /** Resolves a native profile for the default starting position. */
     Resolution resolve(String requestedProfileId) {
         return resolve(requestedProfileId, ChessStartingPosition.STANDARD);
     }

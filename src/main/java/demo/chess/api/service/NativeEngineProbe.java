@@ -15,9 +15,10 @@ import demo.chess.definitions.engines.UciEngineInspector;
  * native engine executable.
  *
  * <p>This component intentionally knows nothing about engine roles, profile
- * priorities, browser fallbacks or deep-analysis policy. A successful UCI
- * handshake proves general UCI availability; a Chess960 request additionally
- * requires the executable to advertise {@code UCI_Chess960}.</p>
+ * priorities, browser fallbacks or deep-analysis policy. The application uses
+ * Chess960 UCI semantics for every Scharnagl position, including 518, so a
+ * usable executable must advertise {@code UCI_Chess960} in addition to
+ * completing the UCI handshake.</p>
  */
 final class NativeEngineProbe {
 
@@ -30,14 +31,14 @@ final class NativeEngineProbe {
         }
     }
 
-    /** Checks one engine for classical-chess availability. */
+    /** Checks one engine for availability under the unified Chess960 protocol. */
     NativeEngineAvailabilityReason probe(UciEngineConfig config) {
         return probe(config, ChessStartingPosition.STANDARD);
     }
 
     /**
-     * Checks file existence, executability, a real UCI handshake and, when
-     * required by the selected game, advertised Chess960 support.
+     * Checks file existence, executability, a real UCI handshake and
+     * advertised Chess960 support.
      *
      * @param config native UCI configuration
      * @param startingPosition selected game starting position
@@ -60,16 +61,12 @@ final class NativeEngineProbe {
         if (!Files.isExecutable(executable)) return NativeEngineAvailabilityReason.NOT_EXECUTABLE;
         try {
             UciEngineDefinition definition = UciEngineInspector.inspect(executable.toString());
-            if (requiresChess960(startingPosition) && !definition.supportsChess960()) {
+            if (!definition.supportsChess960()) {
                 return NativeEngineAvailabilityReason.CHESS960_UNSUPPORTED;
             }
             return NativeEngineAvailabilityReason.AVAILABLE;
         } catch (Exception e) {
             return NativeEngineAvailabilityReason.UCI_UNRESPONSIVE;
         }
-    }
-
-    private boolean requiresChess960(ChessStartingPosition startingPosition) {
-        return startingPosition != null && !startingPosition.isStandard();
     }
 }
