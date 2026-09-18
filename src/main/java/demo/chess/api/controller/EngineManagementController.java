@@ -37,17 +37,25 @@ public class EngineManagementController {
         return UciEngineProcessManager.log(id);
     }
 
-    /**
-     * Performs the terminate operation.
-     * @param id the id
-     * @return the result of the operation
-     */
+    /** Stops an engine through its owning UCI adapter. */
+    @PostMapping("/{id}/stop")
+    public ResponseEntity<Map<String, Object>> stop(@PathVariable String id) {
+        boolean found = UciEngineProcessManager.stop(id);
+        if (!found) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(Map.of("stopped", true, "id", id));
+    }
+
+    /** Emergency process kill that bypasses the owning UCI adapter. */
+    @PostMapping("/{id}/force-terminate")
+    public ResponseEntity<Map<String, Object>> forceTerminate(@PathVariable String id) {
+        boolean found = UciEngineProcessManager.forceTerminate(id);
+        if (!found) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(Map.of("terminated", true, "forced", true, "id", id));
+    }
+
+    /** Backward-compatible alias for the graceful stop path. */
     @PostMapping("/{id}/terminate")
     public ResponseEntity<Map<String, Object>> terminate(@PathVariable String id) {
-        boolean found = UciEngineProcessManager.terminate(id);
-        if (!found) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(Map.of("terminated", true, "id", id));
+        return stop(id);
     }
 }

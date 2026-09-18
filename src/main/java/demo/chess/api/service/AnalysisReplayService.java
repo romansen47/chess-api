@@ -56,7 +56,7 @@ public class AnalysisReplayService {
     private final EngineLineDisplayService engineLineDisplayService;
     private final MoveAnnotationClassifier moveAnnotationClassifier = new MoveAnnotationClassifier();
     private final DeepAnalysisEngineFactory deepAnalysisEngineFactory = new DeepAnalysisEngineFactory();
-    private AnalysisReplaySession session;
+    private volatile AnalysisReplaySession session;
 
     @Autowired
     public AnalysisReplayService(
@@ -201,10 +201,23 @@ public class AnalysisReplayService {
                 "Analysis replay cancelled.");
     }
 
-    /** Clears all replay state and stops a remaining engine process. */
-    public synchronized void clear() {
-        closeSessionEngine();
-        session = null;
+    /**
+     * Clears all replay state and stops a remaining engine process.
+     *
+     * <p>The engine stop deliberately happens before acquiring the replay
+     * monitor. A running {@link #next()} call can be blocked in a finite UCI
+     * search while holding that monitor; stopping the engine first unblocks it.</p>
+     */
+    public void clear() {
+        AnalysisReplaySession observed = session;
+        if (observed == null) return;
+
+        observed.active = false;
+        safeStop(observed.engine);
+
+        synchronized (this) {
+            if (session == observed) session = null;
+        }
     }
 
     private AnalysisEvaluation analyzeCurrentReplayPosition(AnalysisReplaySession source)
@@ -330,7 +343,7 @@ public class AnalysisReplayService {
         private final List<AnalysisProfilePointDto> profile = new ArrayList<>();
         private DeepAnalysisResult lastDeepAnalysisResult;
         private int currentPly;
-        private boolean active = true;
+        private volatile boolean active = true;
 
         private AnalysisReplaySession(
                 List<Move> originalMoves,

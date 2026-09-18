@@ -23,7 +23,6 @@ import demo.chess.api.dto.GameAnnotationsRequestDto;
 import demo.chess.api.dto.GameSettingsDto;
 import demo.chess.api.dto.GameSnapshotDto;
 import demo.chess.api.dto.UciGameDto;
-import demo.chess.api.service.AnalysisReplayService;
 import demo.chess.api.service.ChessDatabaseService;
 import demo.chess.api.service.GameLifecycleService;
 import demo.chess.api.service.GameService;
@@ -39,7 +38,6 @@ public class GameController {
     private final GameService gameService;
     private final GameLifecycleService gameLifecycleService;
     private final UciGameService uciGameService;
-    private final AnalysisReplayService analysisReplayService;
     private final ChessDatabaseService chessDatabaseService;
     private final SinglePgnGameReader singlePgnGameReader = new SinglePgnGameReader();
 
@@ -48,19 +46,16 @@ public class GameController {
      * @param gameService the game service
      * @param gameLifecycleService the game lifecycle service
      * @param uciGameService the uci game service
-     * @param analysisReplayService the analysis replay service
      * @param chessDatabaseService the local chess database service
      */
     public GameController(
             GameService gameService,
             GameLifecycleService gameLifecycleService,
             UciGameService uciGameService,
-            AnalysisReplayService analysisReplayService,
             ChessDatabaseService chessDatabaseService) {
         this.gameService = gameService;
         this.gameLifecycleService = gameLifecycleService;
         this.uciGameService = uciGameService;
-        this.analysisReplayService = analysisReplayService;
         this.chessDatabaseService = chessDatabaseService;
     }
 
@@ -95,7 +90,6 @@ public class GameController {
      */
     @PostMapping("/new-game")
     public ResponseEntity<GameSettingsDto> startNewGame(@RequestBody(required = false) GameSettingsDto settings) {
-        analysisReplayService.clear();
         GameSettingsDto appliedSettings = gameLifecycleService.startNewGame(settings);
         uciGameService.clearImportedGame();
         return ResponseEntity.ok(appliedSettings);

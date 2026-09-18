@@ -1,5 +1,7 @@
 package demo.chess.api.controller;
 
+import java.util.List;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,25 +18,19 @@ import demo.chess.api.dto.EngineDefinitionInspectRequestDto;
 import demo.chess.api.dto.EngineProfileAssignmentsDto;
 import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.service.EngineSettingsService;
-import demo.chess.api.service.NativeEngineFilePickerService;
 
 @RestController
 @RequestMapping("/api/engine-configs")
 public class EngineSettingsController {
 
     private final EngineSettingsService engineSettingsService;
-    private final NativeEngineFilePickerService nativeEngineFilePickerService;
 
     /**
      * Creates a new EngineSettingsController instance.
      * @param engineSettingsService the engine settings service
-     * @param nativeEngineFilePickerService the native engine file picker service
      */
-    public EngineSettingsController(
-            EngineSettingsService engineSettingsService,
-            NativeEngineFilePickerService nativeEngineFilePickerService) {
+    public EngineSettingsController(EngineSettingsService engineSettingsService) {
         this.engineSettingsService = engineSettingsService;
-        this.nativeEngineFilePickerService = nativeEngineFilePickerService;
     }
 
     /**
@@ -77,16 +73,13 @@ public class EngineSettingsController {
     }
 
     /**
-     * Performs the select engine operation.
-     * @return the result of the operation
+     * Returns inspected UCI engines discovered in the configured server directory.
+     * Discovery does not mutate the persisted engine registry.
+     * @return unregistered server-owned engine candidates
      */
-    @PostMapping("/engines/select")
-    public ResponseEntity<EngineDefinitionDto> selectEngine() {
-        String enginePath = nativeEngineFilePickerService.selectExecutable();
-        if (enginePath == null) {
-            return ResponseEntity.noContent().build();
-        }
-        return ResponseEntity.ok(engineSettingsService.inspectEngineDefinition(enginePath, null));
+    @PostMapping("/engines/discover")
+    public ResponseEntity<List<EngineDefinitionDto>> discoverEngineCandidates() {
+        return ResponseEntity.ok(engineSettingsService.discoverEngineCandidates());
     }
 
     /**

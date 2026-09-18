@@ -4,36 +4,26 @@ import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.GameSettingsDto;
 
+/** Coordinates replacement of the active game as one backend-owned transition. */
 @Service
 public class GameLifecycleService {
 
     private final GameService gameService;
-    private final ComputerMoveService computerMoveService;
-    private final EvaluationService evaluationService;
+    private final EngineLifecycleCoordinator engineLifecycleCoordinator;
 
-    /**
-     * Creates a new GameLifecycleService instance.
-     * @param gameService the game service
-     * @param computerMoveService the computer move service
-     * @param evaluationService the evaluation service
-     */
     public GameLifecycleService(
             GameService gameService,
-            ComputerMoveService computerMoveService,
-            EvaluationService evaluationService) {
+            EngineLifecycleCoordinator engineLifecycleCoordinator) {
         this.gameService = gameService;
-        this.computerMoveService = computerMoveService;
-        this.evaluationService = evaluationService;
+        this.engineLifecycleCoordinator = engineLifecycleCoordinator;
     }
 
     /**
-     * Starts the new game.
-     * @param settings the settings
-     * @return the result of the operation
+     * Starts a new game only after every native engine belonging to the previous
+     * game has been stopped and released.
      */
     public synchronized GameSettingsDto startNewGame(GameSettingsDto settings) {
-        computerMoveService.resetForNewGame();
-        evaluationService.resetForNewGame();
+        engineLifecycleCoordinator.stopGameScopedEngines();
         return gameService.startNewGame(settings);
     }
 }

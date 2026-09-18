@@ -150,6 +150,30 @@ public class EngineSettingsService {
     }
 
     /**
+     * Discovers server-owned UCI executables without registering them.
+     *
+     * <p>The browser never opens a file chooser on the backend host. Discovery
+     * returns inspected candidates from the configured server directory and the
+     * client explicitly chooses which candidate to register.</p>
+     *
+     * @return unregistered engine definitions with {@code id == null}
+     */
+    public synchronized List<EngineDefinitionDto> discoverEngineCandidates() {
+        return engineDiscoveryService.discover().stream()
+                .filter(definition -> findEngineByPath(definition.getEngine()) == null)
+                .map(definition -> {
+                    EngineDefinitionDto dto = toDto(new ManagedEngineDefinition(
+                            null,
+                            definition.getEngineName(),
+                            definition));
+                    dto.setId(null);
+                    return dto;
+                })
+                .sorted(Comparator.comparing(EngineDefinitionDto::getName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    /**
      * Returns the overview.
      * @return the overview
      */
