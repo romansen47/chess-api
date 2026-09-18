@@ -137,18 +137,12 @@ class EngineRuntimeWithoutNativeEngineTest {
     }
 
     @Test
-    void newHumanGameStartsWithoutNativeEngine() throws Exception {
-        EngineRuntimeSelectionService runtimeSelection = createRuntimeSelectionWithoutEngine();
+    void newHumanGameStartsWithoutNativeEngine() {
         GameService gameService = new GameService();
-        EvaluationService evaluationService = new EvaluationService(
-                gameService,
-                runtimeSelection,
-                new LiveEvaluationStreamService(),
-                new EngineLineDisplayService());
-        ComputerMoveService computerMoveService =
-                new ComputerMoveService(gameService, runtimeSelection);
+        EngineLifecycleCoordinator lifecycleCoordinator =
+                mock(EngineLifecycleCoordinator.class);
         GameLifecycleService lifecycleService =
-                new GameLifecycleService(gameService, computerMoveService, evaluationService);
+                new GameLifecycleService(gameService, lifecycleCoordinator);
 
         GameSettingsDto settings = assertDoesNotThrow(() ->
                 lifecycleService.startNewGame(new GameSettingsDto(
@@ -160,6 +154,7 @@ class EngineRuntimeWithoutNativeEngineTest {
                         0)));
 
         assertTrue(settings.getVersion() > 0);
+        org.mockito.Mockito.verify(lifecycleCoordinator).stopGameScopedEngines();
     }
 
     private void assertUnavailable(
