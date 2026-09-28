@@ -37,7 +37,6 @@ import demo.chess.game.DummyGame;
 import demo.chess.game.LegalMoveResolver;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
-import demo.chess.notation.PgnAnnotationParser;
 import demo.chess.notation.PgnNotation;
 import demo.chess.notation.UciMoveCodec;
 import jakarta.annotation.PreDestroy;
@@ -49,7 +48,6 @@ public class ChessDatabaseService {
     private final UciGameService uciGameService;
     private final Path databasePath;
     private final GameLoader gameLoader = new GameLoader();
-    private final PgnAnnotationParser annotationParser = new PgnAnnotationParser();
     private final ChessAnalysisDiagnosticPgnSanitizer diagnosticPgnSanitizer =
             new ChessAnalysisDiagnosticPgnSanitizer();
     private final ExecutorService importExecutor = Executors.newSingleThreadExecutor(runnable -> {
@@ -108,13 +106,9 @@ public class ChessDatabaseService {
 
     public long importSingleGameAndResolveId(String content)
             throws SQLException, IOException, NoMoveFoundException {
-        importSingleGame(content);
-        long gameId = database().findGameId(content);
         String storedPgn = diagnosticPgnSanitizer.sanitize(content);
-        if (!annotationParser.parse(storedPgn).isEmpty()) {
-            database().saveAnnotatedPgn(gameId, storedPgn);
-        }
-        return gameId;
+        importSingleGame(storedPgn);
+        return database().findGameId(storedPgn);
     }
 
     public void saveAnnotatedPgn(long gameId, String pgn) throws SQLException, IOException {

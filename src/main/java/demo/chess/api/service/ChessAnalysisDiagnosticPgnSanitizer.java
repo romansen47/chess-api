@@ -19,7 +19,7 @@ import demo.chess.save.GameSaver;
  *
  * <p>The generic chess PGN parser deliberately remains unaware of application-
  * specific diagnostic metadata. This sanitizer keeps only standard persistable
- * annotations, most importantly [%eval ...], and drops diagnostic fields such
+ * annotations, including [%eval ...], [%clk ...] and [%emt ...], and drops diagnostic fields such
  * as depth, classifier data and principal variations.</p>
  */
 final class ChessAnalysisDiagnosticPgnSanitizer {
@@ -31,8 +31,8 @@ final class ChessAnalysisDiagnosticPgnSanitizer {
             Pattern.DOTALL);
     private static final Pattern SEMICOLON_COMMENT = Pattern.compile(
             "(?m);([^\\r\\n]*)");
-    private static final Pattern EVAL_TAG = Pattern.compile(
-            "(?i)\\[%eval\\s+[^\\]]+]");
+    private static final Pattern PERSISTABLE_TAG = Pattern.compile(
+            "(?i)\\[%(?:eval|clk|emt)\\s+[^\\]]+]");
 
     private final GameLoader gameLoader = new GameLoader();
     private final PgnAnnotationParser annotationParser = new PgnAnnotationParser();
@@ -71,7 +71,7 @@ final class ChessAnalysisDiagnosticPgnSanitizer {
         StringBuffer result = new StringBuffer();
 
         while (matcher.find()) {
-            String evaluations = evaluationTags(matcher.group(1));
+            String evaluations = persistableTags(matcher.group(1));
             String replacement = evaluations.isEmpty()
                     ? ""
                     : "{ " + evaluations + " }";
@@ -84,8 +84,8 @@ final class ChessAnalysisDiagnosticPgnSanitizer {
         return result.toString();
     }
 
-    private String evaluationTags(String comment) {
-        Matcher matcher = EVAL_TAG.matcher(comment == null ? "" : comment);
+    private String persistableTags(String comment) {
+        Matcher matcher = PERSISTABLE_TAG.matcher(comment == null ? "" : comment);
         StringBuilder result = new StringBuilder();
 
         while (matcher.find()) {

@@ -47,6 +47,7 @@ public class UciGameService {
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
     private final GameLoader gameLoader = new GameLoader();
     private final GameSaver gameSaver = new GameSaver();
+    private final ChessAnalysisDiagnosticPgnSanitizer diagnosticPgnSanitizer = new ChessAnalysisDiagnosticPgnSanitizer();
     private final PgnAnnotationParser annotationParser = new PgnAnnotationParser();
 
     private ImportedGameContext importedContext;
@@ -68,6 +69,7 @@ public class UciGameService {
      */
     public synchronized UciGameDto importGame(String content, Long databaseGameId)
             throws NoMoveFoundException, IOException {
+        content = diagnosticPgnSanitizer.sanitize(content);
         ChessStartingPosition startingPosition = gameLoader.parsePgnStartingPosition(content);
         List<String> uciMoves = gameLoader.parsePgnMoveList(content);
 
@@ -164,9 +166,10 @@ public class UciGameService {
         Map<Integer, PgnMoveAnnotation> updated = new LinkedHashMap<>();
         if (annotations != null) {
             for (GameAnnotationDto annotation : annotations) {
-                if (annotation == null || annotation.ply() <= 0) continue;
+                if (annotation == null || annotation.ply() < 0) continue;
                 PgnMoveAnnotation value = new PgnMoveAnnotation(
-                        annotation.nag(), annotation.comment(), annotation.evaluation(), annotation.variations());
+                        annotation.nag(), annotation.comment(), annotation.evaluation(), annotation.variations(),
+                        annotation.clockMillis(), annotation.elapsedMoveMillis());
                 if (!value.isEmpty()) updated.put(annotation.ply(), value);
             }
         }
@@ -264,7 +267,9 @@ public class UciGameService {
                         entry.getValue().nag(),
                         entry.getValue().comment(),
                         entry.getValue().evaluation(),
-                        entry.getValue().variations()))
+                        entry.getValue().variations(),
+                        entry.getValue().clockMillis(),
+                        entry.getValue().elapsedMoveMillis()))
                 .toList();
     }
 
