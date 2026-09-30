@@ -160,6 +160,8 @@ public class AnalysisReplayService {
         session.currentPly++;
 
         AnalysisEvaluation evaluation = analyzeCurrentReplayPosition(session);
+        refinePendingForcedReplyAnnotation(session, evaluation);
+
         MoveAnnotation annotation = null;
         if (analysisBeforeMove != null && positionBeforeMove != null) {
             annotation = moveAnnotationClassifier.classify(
@@ -172,6 +174,20 @@ public class AnalysisReplayService {
                 evaluation.bar, evaluation.depth, evaluation.lines);
         profilePoint.setAnnotation(MoveAnnotationDtoMapper.toDto(annotation));
         session.profile.add(profilePoint);
+
+        if (analysisBeforeMove != null
+                && positionBeforeMove != null
+                && session.currentPly < session.originalMoves.size()
+                && hasExactlyOneLegalReply(session.replayGame)) {
+            session.pendingForcedReplyAnnotation =
+                    new PendingForcedReplyAnnotation(
+                            positionBeforeMove,
+                            playedMoveUci,
+                            analysisBeforeMove,
+                            evaluation.evaluation,
+                            profilePoint);
+        }
+
         session.lastDeepAnalysisResult = evaluation.deepAnalysisResult;
 
         boolean done = session.currentPly >= session.originalMoves.size();
@@ -218,6 +234,38 @@ public class AnalysisReplayService {
         synchronized (this) {
             if (session == observed) session = null;
         }
+    }
+
+    private void refinePendingForcedReplyAnnotation(
+            AnalysisReplaySession source,
+            AnalysisEvaluation evaluation) {
+        PendingForcedReplyAnnotation pending =
+                source.pendingForcedReplyAnnotation;
+        source.pendingForcedReplyAnnotation = null;
+        if (pending == null || !hasUsableEvaluation(evaluation)) return;
+
+        MoveAnnotation refined = moveAnnotationClassifier.classify(
+                pending.positionBeforeMove,
+                pending.playedMoveUci,
+                pending.analysisBeforeMove,
+                pending.resultingEvaluation,
+                evaluation.evaluation);
+        pending.profilePoint.setAnnotation(
+                MoveAnnotationDtoMapper.toDto(refined));
+    }
+
+    private boolean hasUsableEvaluation(AnalysisEvaluation evaluation) {
+        if (evaluation == null) return false;
+        if (Math.abs(evaluation.evaluation) >= 99.0) return true;
+        return evaluation.deepAnalysisResult != null
+                && !evaluation.deepAnalysisResult.getFinalLines().isEmpty();
+    }
+
+    private boolean hasExactlyOneLegalReply(Game position)
+            throws NoMoveFoundException, IOException {
+        return position != null
+                && position.getPlayer() != null
+                && position.getPlayer().getValidMoves(position).size() == 1;
     }
 
     private AnalysisEvaluation analyzeCurrentReplayPosition(AnalysisReplaySession source)
@@ -334,6 +382,27 @@ public class AnalysisReplayService {
         }
     }
 
+    private static class PendingForcedReplyAnnotation {
+        private final Game positionBeforeMove;
+        private final String playedMoveUci;
+        private final DeepAnalysisResult analysisBeforeMove;
+        private final double resultingEvaluation;
+        private final AnalysisProfilePointDto profilePoint;
+
+        private PendingForcedReplyAnnotation(
+                Game positionBeforeMove,
+                String playedMoveUci,
+                DeepAnalysisResult analysisBeforeMove,
+                double resultingEvaluation,
+                AnalysisProfilePointDto profilePoint) {
+            this.positionBeforeMove = positionBeforeMove;
+            this.playedMoveUci = playedMoveUci;
+            this.analysisBeforeMove = analysisBeforeMove;
+            this.resultingEvaluation = resultingEvaluation;
+            this.profilePoint = profilePoint;
+        }
+    }
+
     private static class AnalysisReplaySession {
         private final List<Move> originalMoves;
         private final Game replayGame;
@@ -342,6 +411,7 @@ public class AnalysisReplayService {
         private final String engineName;
         private final List<AnalysisProfilePointDto> profile = new ArrayList<>();
         private DeepAnalysisResult lastDeepAnalysisResult;
+        private PendingForcedReplyAnnotation pendingForcedReplyAnnotation;
         private int currentPly;
         private volatile boolean active = true;
 
