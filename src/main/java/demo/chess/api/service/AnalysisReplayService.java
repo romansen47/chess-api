@@ -168,17 +168,23 @@ public class AnalysisReplayService {
                     positionBeforeMove, playedMoveUci, analysisBeforeMove, evaluation.evaluation);
         }
 
+        boolean deferAnnotation =
+                analysisBeforeMove != null
+                && positionBeforeMove != null
+                && session.currentPly < session.originalMoves.size()
+                && hasExactlyOneLegalReply(session.replayGame);
+
         AnalysisProfilePointDto profilePoint = new AnalysisProfilePointDto(
                 session.currentPly, from, to, san,
                 Math.round(evaluation.evaluation * 100.0) / 100.0,
                 evaluation.bar, evaluation.depth, evaluation.lines);
-        profilePoint.setAnnotation(MoveAnnotationDtoMapper.toDto(annotation));
+        if (!deferAnnotation) {
+            profilePoint.setAnnotation(
+                    MoveAnnotationDtoMapper.toDto(annotation));
+        }
         session.profile.add(profilePoint);
 
-        if (analysisBeforeMove != null
-                && positionBeforeMove != null
-                && session.currentPly < session.originalMoves.size()
-                && hasExactlyOneLegalReply(session.replayGame)) {
+        if (deferAnnotation) {
             session.pendingForcedReplyAnnotation =
                     new PendingForcedReplyAnnotation(
                             positionBeforeMove,
