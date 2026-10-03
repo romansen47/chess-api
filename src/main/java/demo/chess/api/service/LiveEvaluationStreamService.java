@@ -7,6 +7,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -54,6 +56,39 @@ public class LiveEvaluationStreamService {
      */
     public boolean hasSubscribers() {
         return !emitters.isEmpty();
+    }
+
+    /**
+     * Completes every open browser SSE request.
+     *
+     * <p>Long-lived SSE requests otherwise remain active while Tomcat starts
+     * graceful shutdown and can keep the web-server lifecycle phase alive
+     * until its timeout expires.</p>
+     */
+    public void closeAllSubscribers() {
+        List<SseEmitter> subscribers = List.copyOf(emitters);
+        emitters.clear();
+
+        for (SseEmitter emitter : subscribers) {
+            try {
+                emitter.complete();
+            } catch (RuntimeException e) {
+                logger.debug(
+                        "Could not complete live-evaluation SSE client during shutdown: "
+                                + e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Ensures non-UI shutdown paths such as SIGTERM also release SSE requests
+     * before the web server enters its graceful-shutdown lifecycle phase.
+     *
+     * @param event context-close event
+     */
+    @EventListener
+    public void onContextClosed(ContextClosedEvent event) {
+        closeAllSubscribers();
     }
 
     /**
