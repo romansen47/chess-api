@@ -142,7 +142,7 @@ public class EvaluationService {
         return depth == 5 || depth == 10 || depth >= 15;
     }
 
-    private void publishBarSnapshot(String positionKey, double evaluation, int depth) {
+    private void publishBarSnapshot(UciPositionKey positionKey, double evaluation, int depth) {
         try {
             Game currentGame = gameService.getCurrentGame();
             if (!positionKey.equals(UciPositionKey.from(currentGame))) {

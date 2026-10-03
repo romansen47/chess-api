@@ -18,6 +18,7 @@ import demo.chess.analysis.annotation.MoveAnnotationClassifier;
 import demo.chess.definitions.engines.DeepAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
+import demo.chess.definitions.engines.UciPositionKey;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
@@ -54,7 +55,7 @@ public class AnalysisMoveAssessmentService {
     private EvaluationUciEngine assessmentEngine;
     private String currentAssessmentEnginePath;
     private String currentSelectionKey;
-    private String currentEnginePositionKey;
+    private UciPositionKey currentEnginePositionKey;
     private long lastSeenSettingsVersion = -1L;
 
     @Autowired
@@ -140,8 +141,8 @@ public class AnalysisMoveAssessmentService {
             EvaluationUciEngine engine = getAssessmentEngine(config.getEngine());
             long settingsVersion =
                     engineRuntimeSelectionService.getEvaluationVersion();
-            String enginePositionKey =
-                    positionBeforeMove.getMoveList().toString();
+            UciPositionKey enginePositionKey =
+                    UciPositionKey.from(positionBeforeMove);
 
             if (!Objects.equals(selectionKey, currentSelectionKey)
                     || !Objects.equals(
@@ -241,7 +242,7 @@ public class AnalysisMoveAssessmentService {
     private void resetSearchState(
             EvaluationUciEngine engine,
             String selectionKey,
-            String enginePositionKey,
+            UciPositionKey enginePositionKey,
             long settingsVersion) {
         try {
             engine.stopEvaluation();
@@ -255,7 +256,7 @@ public class AnalysisMoveAssessmentService {
     }
 
     private synchronized void recordDepthSnapshot(
-            String positionKey,
+            UciPositionKey positionKey,
             List<EngineLine> lines) {
         if (!Objects.equals(positionKey, currentEnginePositionKey)
                 || lines == null
