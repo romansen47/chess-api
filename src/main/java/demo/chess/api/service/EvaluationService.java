@@ -15,6 +15,7 @@ import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
+import demo.chess.definitions.engines.UciPositionKey;
 import demo.chess.definitions.engines.EvaluationEngine;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.game.Game;
@@ -73,7 +74,7 @@ public class EvaluationService {
         logger.debug("Requesting best lines from engine (single snapshot)...");
 
         if (settingsVersion != lastSeenSettingsVersion) {
-            engine.clearChachedLines();
+            engine.clearCachedLines();
             lastSeenSettingsVersion = settingsVersion;
         }
 
@@ -121,7 +122,7 @@ public class EvaluationService {
         lastSeenSettingsVersion = -1L;
     }
 
-    private void handleEvaluationUpdate(String positionKey, List<EngineLine> lines) {
+    private void handleEvaluationUpdate(UciPositionKey positionKey, List<EngineLine> lines) {
         if (lines == null || lines.isEmpty() || !liveEvaluationStreamService.hasSubscribers()) {
             return;
         }
@@ -144,7 +145,7 @@ public class EvaluationService {
     private void publishBarSnapshot(String positionKey, double evaluation, int depth) {
         try {
             Game currentGame = gameService.getCurrentGame();
-            if (!positionKey.equals(currentGame.getMoveList().toString())) {
+            if (!positionKey.equals(UciPositionKey.from(currentGame))) {
                 return;
             }
 

@@ -15,6 +15,7 @@ import demo.chess.api.dto.EngineLineDto;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.EvaluationEngine;
 import demo.chess.definitions.engines.UciEngineConfig;
+import demo.chess.definitions.engines.UciPositionKey;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
@@ -205,7 +206,7 @@ public class AnalysisEvaluationService {
                 engine.stopEvaluation();
             } catch (Exception ignored) {
             }
-            engine.clearChachedLines();
+            engine.clearCachedLines();
             currentPositionKey = positionKey;
             lastSeenSettingsVersion = settingsVersion;
             lastValidEvaluation = null;

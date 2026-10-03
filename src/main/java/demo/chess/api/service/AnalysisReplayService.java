@@ -123,7 +123,7 @@ public class AnalysisReplayService {
                 engineConfig,
                 engineName);
 
-        double initialEvaluation = 0.3;
+        double initialEvaluation = 0.0;
         newSession.profile.add(new AnalysisProfilePointDto(
                 0, null, null, "Start", initialEvaluation,
                 EvaluationBarMapper.toBar(initialEvaluation), 0));
@@ -279,7 +279,7 @@ public class AnalysisReplayService {
         AnalysisEvaluation terminalEvaluation = evaluateTerminalPosition(source);
         if (terminalEvaluation != null) return terminalEvaluation;
         try {
-            source.engine.clearChachedLines();
+            source.engine.clearCachedLines();
             DeepAnalysisResult deepAnalysisResult = source.engine.analyze(source.replayGame, source.engineConfig);
             List<EngineLine> bestLines = deepAnalysisResult.getFinalLines();
             if (bestLines.isEmpty()) return new AnalysisEvaluation(0.0, 0.5, 0, List.of(), deepAnalysisResult);

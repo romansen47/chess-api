@@ -247,7 +247,7 @@ public class AnalysisMoveAssessmentService {
             engine.stopEvaluation();
         } catch (Exception ignored) {
         }
-        engine.clearChachedLines();
+        engine.clearCachedLines();
         currentSelectionKey = selectionKey;
         currentEnginePositionKey = enginePositionKey;
         lastSeenSettingsVersion = settingsVersion;
