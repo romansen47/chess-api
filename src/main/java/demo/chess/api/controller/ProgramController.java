@@ -3,7 +3,6 @@ package demo.chess.api.controller;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.ProgramFeaturesDto;
+import demo.chess.api.service.LiveEvaluationStreamService;
 import demo.chess.api.service.ProgramFeatureService;
 import demo.chess.definitions.engines.management.UciEngineProcessInfo;
 import demo.chess.definitions.engines.management.UciEngineProcessManager;
@@ -25,22 +25,22 @@ public class ProgramController {
     private static final String TERMINATE_HEADER_VALUE = "terminate";
     private static final long SHUTDOWN_DELAY_MILLIS = 500L;
 
-    private final ConfigurableApplicationContext applicationContext;
     private final ProgramFeatureService programFeatureService;
+    private final LiveEvaluationStreamService liveEvaluationStreamService;
     private final AtomicBoolean terminationScheduled =
             new AtomicBoolean(false);
 
     /**
      * Creates a new ProgramController instance.
      *
-     * @param applicationContext the application context
      * @param programFeatureService runtime feature switches
+     * @param liveEvaluationStreamService browser live-evaluation SSE lifecycle
      */
     public ProgramController(
-            ConfigurableApplicationContext applicationContext,
-            ProgramFeatureService programFeatureService) {
-        this.applicationContext = applicationContext;
+            ProgramFeatureService programFeatureService,
+            LiveEvaluationStreamService liveEvaluationStreamService) {
         this.programFeatureService = programFeatureService;
+        this.liveEvaluationStreamService = liveEvaluationStreamService;
     }
 
     /**
@@ -101,6 +101,8 @@ public class ProgramController {
             Thread.currentThread().interrupt();
         }
 
+        liveEvaluationStreamService.closeAllSubscribers();
+
         for (UciEngineProcessInfo processInfo
                 : UciEngineProcessManager.list()) {
             if (!processInfo.processAlive()) {
@@ -115,7 +117,12 @@ public class ProgramController {
             }
         }
 
-        applicationContext.close();
+        /*
+         * SpringApplication already registered the JVM shutdown hook that
+         * closes the ApplicationContext. Trigger that single canonical path
+         * instead of closing the context manually and then starting JVM
+         * shutdown a second time.
+         */
         System.exit(0);
     }
 }
