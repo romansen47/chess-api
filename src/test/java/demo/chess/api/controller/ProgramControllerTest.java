@@ -6,9 +6,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.context.ConfigurableApplicationContext;
 
 import demo.chess.api.dto.ProgramFeaturesDto;
+import demo.chess.api.service.LiveEvaluationStreamService;
 import demo.chess.api.service.ProgramFeatureService;
 
 class ProgramControllerTest {
@@ -21,8 +21,8 @@ class ProgramControllerTest {
                 .thenReturn(false);
 
         ProgramController controller = new ProgramController(
-                mock(ConfigurableApplicationContext.class),
-                featureService);
+                featureService,
+                mock(LiveEvaluationStreamService.class));
 
         ProgramFeaturesDto features =
                 controller.getProgramFeatures();
@@ -38,8 +38,8 @@ class ProgramControllerTest {
                 .thenReturn(true);
 
         ProgramController controller = new ProgramController(
-                mock(ConfigurableApplicationContext.class),
-                featureService);
+                featureService,
+                mock(LiveEvaluationStreamService.class));
 
         ProgramFeaturesDto features =
                 controller.getProgramFeatures();
