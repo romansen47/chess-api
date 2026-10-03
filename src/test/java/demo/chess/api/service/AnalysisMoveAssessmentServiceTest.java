@@ -26,6 +26,7 @@ import demo.chess.analysis.annotation.MoveAnnotationKind;
 import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
+import demo.chess.definitions.engines.UciPositionKey;
 import demo.chess.definitions.engines.impl.EvaluationUciEngine;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
@@ -140,39 +141,41 @@ class AnalysisMoveAssessmentServiceTest {
                 context.service.assess(1, 1.5);
         assertTrue(initial.ready());
 
-        BiConsumer<String, List<EngineLine>> listener =
+        BiConsumer<UciPositionKey, List<EngineLine>> listener =
                 context.listener.get();
         assertNotNull(listener);
+        UciPositionKey rootKey =
+                UciPositionKey.from(Simulation.createSimulation());
 
-        listener.accept("[]", List.of(
+        listener.accept(rootKey, List.of(
                 line(0.5, 5, "d2d4"),
                 line(0.3, 5, "g1f3"),
                 line(-1.0, 5, "e2e4")));
-        listener.accept("[]", List.of(
+        listener.accept(rootKey, List.of(
                 line(0.5, 6, "d2d4"),
                 line(0.3, 6, "g1f3"),
                 line(-1.0, 6, "e2e4")));
-        listener.accept("[]", List.of(
+        listener.accept(rootKey, List.of(
                 line(0.6, 8, "d2d4"),
                 line(0.4, 8, "g1f3"),
                 line(-0.9, 8, "e2e4")));
-        listener.accept("[]", List.of(
+        listener.accept(rootKey, List.of(
                 line(0.7, 10, "d2d4"),
                 line(-0.1, 10, "e2e4"),
                 line(-0.2, 10, "g1f3")));
-        listener.accept("[]", List.of(
+        listener.accept(rootKey, List.of(
                 line(0.8, 12, "d2d4"),
                 line(0.0, 12, "e2e4"),
                 line(-0.2, 12, "g1f3")));
-        listener.accept("[]", List.of(
+        listener.accept(rootKey, List.of(
                 line(1.2, 15, "e2e4"),
                 line(1.0, 15, "d2d4"),
                 line(0.8, 15, "g1f3")));
-        listener.accept("[]", List.of(
+        listener.accept(rootKey, List.of(
                 line(1.4, 18, "e2e4"),
                 line(1.0, 18, "d2d4"),
                 line(0.8, 18, "g1f3")));
-        listener.accept("[]", finalLines);
+        listener.accept(rootKey, finalLines);
 
         AnalysisMoveAssessmentService.Result result =
                 context.service.assess(1, 1.5);
@@ -253,7 +256,7 @@ class AnalysisMoveAssessmentServiceTest {
                 "analysis move assessment"))
                 .thenReturn(engine);
 
-        AtomicReference<BiConsumer<String, List<EngineLine>>> listener =
+        AtomicReference<BiConsumer<UciPositionKey, List<EngineLine>>> listener =
                 new AtomicReference<>();
         doAnswer(invocation -> {
             listener.set(invocation.getArgument(0));
@@ -276,7 +279,7 @@ class AnalysisMoveAssessmentServiceTest {
     private record TestContext(
             AnalysisMoveAssessmentService service,
             EvaluationUciEngine engine,
-            AtomicReference<BiConsumer<String, List<EngineLine>>> listener,
+            AtomicReference<BiConsumer<UciPositionKey, List<EngineLine>>> listener,
             EngineRuntimeSelectionService runtime,
             AnalysisEvaluationEngineFactory factory) {
     }
