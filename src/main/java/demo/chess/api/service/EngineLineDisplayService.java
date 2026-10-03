@@ -6,7 +6,9 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.EngineLineDto;
+import demo.chess.api.dto.MoveArrowDto;
 import demo.chess.definitions.engines.EngineLine;
+import demo.chess.definitions.moves.Castling;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
 import demo.chess.game.LegalMoveResolver;
@@ -35,28 +37,32 @@ public class EngineLineDisplayService {
         EngineLineDisplayData displayData = convertEngineLine(currentGame, line.getMoves());
         double roundedEvaluation = Math.round(line.getEvaluation() * 100.0) / 100.0;
 
-        return new EngineLineDto(
+        EngineLineDto result = new EngineLineDto(
                 roundedEvaluation,
                 line.getDepth(),
                 line.getMateDistance(),
                 displayData.moves,
                 displayData.positions);
+        result.setMoveArrows(displayData.moveArrows);
+        return result;
     }
 
     private EngineLineDisplayData convertEngineLine(Game currentGame, String uciMoves) {
         if (uciMoves == null || uciMoves.isBlank()) {
             return new EngineLineDisplayData(
                     "",
-                    currentGame != null ? List.of(BoardPositionSerializer.toPositionString(currentGame)) : List.of());
+                    currentGame != null ? List.of(BoardPositionSerializer.toPositionString(currentGame)) : List.of(),
+                    List.of());
         }
 
         if (currentGame == null) {
-            return new EngineLineDisplayData(uciMoves, List.of());
+            return new EngineLineDisplayData(uciMoves, List.of(), List.of());
         }
 
         try {
             StringBuilder result = new StringBuilder();
             List<String> positions = new ArrayList<>();
+            List<MoveArrowDto> moveArrows = new ArrayList<>();
             positions.add(BoardPositionSerializer.toPositionString(currentGame));
 
             for (String token : uciMoves.split("\\s+")) {
@@ -69,6 +75,7 @@ public class EngineLineDisplayService {
                     break;
                 }
 
+                moveArrows.add(toMoveArrow(move));
                 String displayMove = PgnNotation.toDisplayNotationAndApply(currentGame, move);
                 if (!displayMove.isBlank()) {
                     if (result.length() > 0) {
@@ -81,12 +88,28 @@ public class EngineLineDisplayService {
 
             return new EngineLineDisplayData(
                     result.length() > 0 ? result.toString() : uciMoves,
-                    positions);
+                    positions,
+                    moveArrows);
         } catch (Exception ignored) {
             return new EngineLineDisplayData(
                     uciMoves,
-                    List.of(BoardPositionSerializer.toPositionString(currentGame)));
+                    List.of(BoardPositionSerializer.toPositionString(currentGame)),
+                    List.of());
         }
+    }
+
+    private MoveArrowDto toMoveArrow(Move move) {
+        if (move == null || move.getSource() == null) {
+            return null;
+        }
+        String from = move.getSource().getName();
+        String to;
+        if (move instanceof Castling castling && castling.getKingTarget() != null) {
+            to = castling.getKingTarget().getName();
+        } else {
+            to = move.getTarget() != null ? move.getTarget().getName() : null;
+        }
+        return to != null ? new MoveArrowDto(from, to) : null;
     }
 
     private Move findMoveByUci(Game game, String uci) {
@@ -105,10 +128,17 @@ public class EngineLineDisplayService {
     private static final class EngineLineDisplayData {
         private final String moves;
         private final List<String> positions;
+        private final List<MoveArrowDto> moveArrows;
 
-        private EngineLineDisplayData(String moves, List<String> positions) {
+        private EngineLineDisplayData(
+                String moves,
+                List<String> positions,
+                List<MoveArrowDto> moveArrows) {
             this.moves = moves;
             this.positions = positions;
+            this.moveArrows = moveArrows == null
+                    ? List.of()
+                    : moveArrows.stream().filter(java.util.Objects::nonNull).toList();
         }
     }
 }

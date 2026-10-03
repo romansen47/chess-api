@@ -36,6 +36,14 @@ public class EngineLineDto {
     private List<String> positions = List.of();
 
     /**
+     * Canonical board-arrow geometry for every move in this variation.
+     *
+     * <p>The list follows the same move order as {@link #positions}: arrow 0
+     * describes the transition from positions[0] to positions[1].</p>
+     */
+    private List<MoveArrowDto> moveArrows = List.of();
+
+    /**
      * Creates a new EngineLineDto instance.
      */
     public EngineLineDto() {
@@ -167,5 +175,21 @@ public class EngineLineDto {
      */
     public void setPositions(List<String> positions) {
         this.positions = positions != null ? positions : List.of();
+    }
+
+    /**
+     * Returns canonical move-arrow geometry.
+     * @return ordered move arrows
+     */
+    public List<MoveArrowDto> getMoveArrows() {
+        return moveArrows;
+    }
+
+    /**
+     * Sets canonical move-arrow geometry.
+     * @param moveArrows ordered move arrows
+     */
+    public void setMoveArrows(List<MoveArrowDto> moveArrows) {
+        this.moveArrows = moveArrows != null ? List.copyOf(moveArrows) : List.of();
     }
 }

@@ -24,6 +24,7 @@ import demo.chess.definitions.engines.DeepAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
+import demo.chess.definitions.moves.Castling;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
 import demo.chess.game.TerminalPositionEvaluator;
@@ -155,7 +156,7 @@ public class AnalysisReplayService {
         if (replayMove == null) throw new NoMoveFoundException("Could not map analysis replay move: " + originalMove);
         String playedMoveUci = UciMoveCodec.encode(session.replayGame, replayMove);
         String from = replayMove.getSource() != null ? replayMove.getSource().getName() : null;
-        String to = replayMove.getTarget() != null ? replayMove.getTarget().getName() : null;
+        String to = moveArrowTarget(replayMove);
         String san = PgnNotation.toDisplayNotationAndApply(session.replayGame, replayMove);
         session.currentPly++;
 
@@ -349,6 +350,15 @@ public class AnalysisReplayService {
                 from, to, san, Math.round(evaluation * 100.0) / 100.0,
                 bar, depth, source.engineName, board,
                 new ArrayList<>(source.profile), message);
+    }
+
+    private String moveArrowTarget(Move move) {
+        if (move instanceof Castling castling && castling.getKingTarget() != null) {
+            return castling.getKingTarget().getName();
+        }
+        return move != null && move.getTarget() != null
+                ? move.getTarget().getName()
+                : null;
     }
 
     private void closeSessionEngine() {
