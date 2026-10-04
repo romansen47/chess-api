@@ -23,6 +23,7 @@ import demo.chess.definitions.moves.MoveList;
 import demo.chess.definitions.moves.impl.MoveListImpl;
 import demo.chess.definitions.states.State;
 import demo.chess.game.Game;
+import demo.chess.game.MoveTiming;
 import demo.chess.game.impl.Simulation;
 import demo.chess.load.GameLoader;
 import demo.chess.notation.PgnAnnotationParser;
@@ -173,10 +174,12 @@ public class UciGameService {
                 if (!value.isEmpty()) updated.put(annotation.ply(), value);
             }
         }
+        Map<Integer, PgnMoveAnnotation> exportAnnotations =
+                importedContext != null ? updated : withLiveMoveTimings(updated);
         String pgn = gameSaver.toPgn(
                 getAnalysisMoveHistorySnapshot(),
                 getPgnTagsForExport(whiteComputerControlled, blackComputerControlled),
-                updated);
+                exportAnnotations);
         if (importedContext != null) importedContext.setAnnotations(updated);
         else liveAnnotations = new LinkedHashMap<>(updated);
         return pgn;
@@ -249,7 +252,48 @@ public class UciGameService {
     private Map<Integer, PgnMoveAnnotation> currentAnnotations() {
         return importedContext != null
                 ? importedContext.annotationsCopy()
-                : new LinkedHashMap<>(liveAnnotations);
+                : withLiveMoveTimings(liveAnnotations);
+    }
+
+    private Map<Integer, PgnMoveAnnotation> withLiveMoveTimings(
+            Map<Integer, PgnMoveAnnotation> annotations) {
+        Map<Integer, PgnMoveAnnotation> merged = new LinkedHashMap<>();
+        if (annotations != null) {
+            merged.putAll(annotations);
+        }
+
+        Game liveGame = gameService.getCurrentGame();
+        if (liveGame == null || liveGame.getMoveTimings().isEmpty()) {
+            return merged;
+        }
+
+        liveGame.getMoveTimings().forEach((ply, timing) -> {
+            if (ply == null || timing == null || ply <= 0) return;
+            PgnMoveAnnotation existing = merged.get(ply);
+            merged.put(ply, mergeTiming(existing, timing));
+        });
+        return merged;
+    }
+
+    private PgnMoveAnnotation mergeTiming(
+            PgnMoveAnnotation existing,
+            MoveTiming timing) {
+        if (existing == null) {
+            return new PgnMoveAnnotation(
+                    null,
+                    null,
+                    null,
+                    List.of(),
+                    timing.clockMillis(),
+                    timing.elapsedMoveMillis());
+        }
+        return new PgnMoveAnnotation(
+                existing.nag(),
+                existing.comment(),
+                existing.evaluation(),
+                existing.variations(),
+                timing.clockMillis(),
+                timing.elapsedMoveMillis());
     }
 
     private String sideToMove(Game game) {
