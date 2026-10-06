@@ -55,8 +55,9 @@ public class AnalysisReplayService {
     private final UciGameService uciGameService;
     private final AnalysisGameReplayService analysisGameReplayService;
     private final EngineLineDisplayService engineLineDisplayService;
+    private final DeepAnalysisEngineFactory deepAnalysisEngineFactory;
     private final MoveAnnotationClassifier moveAnnotationClassifier = new MoveAnnotationClassifier();
-    private final DeepAnalysisEngineFactory deepAnalysisEngineFactory = new DeepAnalysisEngineFactory();
+    private final Object lifecycleMonitor = new Object();
     private volatile AnalysisReplaySession session;
 
     @Autowired
@@ -67,7 +68,8 @@ public class AnalysisReplayService {
             EvaluationService evaluationService,
             UciGameService uciGameService,
             AnalysisGameReplayService analysisGameReplayService,
-            EngineLineDisplayService engineLineDisplayService) {
+            EngineLineDisplayService engineLineDisplayService,
+            DeepAnalysisEngineFactory deepAnalysisEngineFactory) {
         this.gameService = gameService;
         this.engineSettingsService = engineSettingsService;
         this.engineAvailabilityService = engineAvailabilityService;
@@ -75,6 +77,30 @@ public class AnalysisReplayService {
         this.uciGameService = uciGameService;
         this.analysisGameReplayService = analysisGameReplayService;
         this.engineLineDisplayService = engineLineDisplayService;
+        this.deepAnalysisEngineFactory = deepAnalysisEngineFactory;
+    }
+
+    /**
+     * Compatibility constructor retained for tests and embedders using the
+     * previous dependency set.
+     */
+    public AnalysisReplayService(
+            GameService gameService,
+            EngineSettingsService engineSettingsService,
+            EngineAvailabilityService engineAvailabilityService,
+            EvaluationService evaluationService,
+            UciGameService uciGameService,
+            AnalysisGameReplayService analysisGameReplayService,
+            EngineLineDisplayService engineLineDisplayService) {
+        this(
+                gameService,
+                engineSettingsService,
+                engineAvailabilityService,
+                evaluationService,
+                uciGameService,
+                analysisGameReplayService,
+                engineLineDisplayService,
+                new DeepAnalysisEngineFactory());
     }
 
     /**
@@ -96,72 +122,107 @@ public class AnalysisReplayService {
                 evaluationService,
                 uciGameService,
                 new AnalysisGameReplayService(uciGameService),
-                engineLineDisplayService);
+                engineLineDisplayService,
+                new DeepAnalysisEngineFactory());
     }
 
-    /** Starts a new native deep-analysis replay from the selected game. */
-    public synchronized AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
+    /**
+     * Starts a new native deep-analysis replay from the selected game.
+     *
+     * <p>A previous replay is stopped before any replacement engine is
+     * created. The stop happens outside the replay monitor so a finite UCI
+     * search blocked inside {@link #next()} is interrupted immediately.</p>
+     */
+    public AnalysisReplayStepDto start(AnalysisReplaySettingsDto settings)
             throws NoMoveFoundException, IOException {
-        AnalysisGameContext gameContext = analysisGameReplayService.currentContext();
-        List<Move> moveListSnapshot = gameContext.moves();
-        ChessStartingPosition startingPosition = gameContext.startingPosition();
-        String requestedProfileId = settings != null ? settings.getEngineProfileId() : null;
-        int depth = settings != null ? Math.max(0, settings.getDepth()) : 0;
-        int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
+        synchronized (lifecycleMonitor) {
+            stopCurrentSessionAndWait(true);
 
-        String engineProfileId = engineAvailabilityService
-                .findAvailableDeepAnalysisProfileId(requestedProfileId, startingPosition)
-                .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.DEEP_ANALYSIS));
-        UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
-                engineProfileId, depth, moveTimeSeconds);
+            AnalysisGameContext gameContext = analysisGameReplayService.currentContext();
+            List<Move> moveListSnapshot = gameContext.moves();
+            ChessStartingPosition startingPosition = gameContext.startingPosition();
+            String requestedProfileId = settings != null ? settings.getEngineProfileId() : null;
+            int depth = settings != null ? Math.max(0, settings.getDepth()) : 0;
+            int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
 
-        DeepAnalysisEngine deepAnalysisEngine = deepAnalysisEngineFactory.create(engineConfig.getEngine());
-        String engineName = engineConfig.getEngineName();
-        AnalysisReplaySession newSession = new AnalysisReplaySession(
-                moveListSnapshot,
-                analysisGameReplayService.createPositionAtPly(gameContext, 0),
-                deepAnalysisEngine,
-                engineConfig,
-                engineName);
+            String engineProfileId = engineAvailabilityService
+                    .findAvailableDeepAnalysisProfileId(requestedProfileId, startingPosition)
+                    .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.DEEP_ANALYSIS));
+            UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
+                    engineProfileId, depth, moveTimeSeconds);
 
-        double initialEvaluation = 0.0;
-        newSession.profile.add(new AnalysisProfilePointDto(
-                0, null, null, "Start", initialEvaluation,
-                EvaluationBarMapper.toBar(initialEvaluation), 0));
+            DeepAnalysisEngine deepAnalysisEngine =
+                    deepAnalysisEngineFactory.create(engineConfig.getEngine());
+            String engineName = engineConfig.getEngineName();
+            AnalysisReplaySession newSession = new AnalysisReplaySession(
+                    moveListSnapshot,
+                    analysisGameReplayService.createPositionAtPly(gameContext, 0),
+                    deepAnalysisEngine,
+                    engineConfig,
+                    engineName);
 
-        closeSessionEngine();
-        evaluationService.stopLiveEvaluation();
-        this.session = newSession;
-        return toStepDto(newSession, false, null, null, null, 0.0, 0.5, 0, "Analysis replay started.");
+            double initialEvaluation = 0.0;
+            newSession.profile.add(new AnalysisProfilePointDto(
+                    0, null, null, "Start", initialEvaluation,
+                    EvaluationBarMapper.toBar(initialEvaluation), 0));
+
+            evaluationService.stopLiveEvaluation();
+            synchronized (this) {
+                this.session = newSession;
+                return toStepDto(
+                        newSession,
+                        false,
+                        null,
+                        null,
+                        null,
+                        0.0,
+                        0.5,
+                        0,
+                        "Analysis replay started.");
+            }
+        }
     }
 
     /** Analyzes and applies the next move of the active replay session. */
     public synchronized AnalysisReplayStepDto next() throws NoMoveFoundException, IOException {
-        if (session == null || !session.active) return inactiveStep("No active analysis replay.");
-        if (session.currentPly >= session.originalMoves.size()) {
-            session.active = false;
-            closeSessionEngine();
-            return toStepDto(session, true, null, null, null,
-                    latestEvaluation(session), latestBar(session), latestDepth(session),
+        AnalysisReplaySession source = session;
+        if (source == null || !source.active) return inactiveStep("No active analysis replay.");
+        if (source.currentPly >= source.originalMoves.size()) {
+            source.active = false;
+            safeStop(source.engine);
+            return toStepDto(source, true, null, null, null,
+                    latestEvaluation(source), latestBar(source), latestDepth(source),
                     "Analysis replay finished.");
         }
 
-        Move originalMove = session.originalMoves.get(session.currentPly);
-        DeepAnalysisResult analysisBeforeMove = session.lastDeepAnalysisResult;
+        Move originalMove = source.originalMoves.get(source.currentPly);
+        DeepAnalysisResult analysisBeforeMove = source.lastDeepAnalysisResult;
         Game positionBeforeMove = analysisBeforeMove != null
-                ? Simulation.forkSimulationFrom(session.replayGame.getMoveList())
+                ? Simulation.forkSimulationFrom(source.replayGame.getMoveList())
                 : null;
 
-        Move replayMove = session.replayGame.getPlayer().getMoveInSimulation(session.replayGame, originalMove);
+        Move replayMove = source.replayGame.getPlayer().getMoveInSimulation(source.replayGame, originalMove);
         if (replayMove == null) throw new NoMoveFoundException("Could not map analysis replay move: " + originalMove);
-        String playedMoveUci = UciMoveCodec.encode(session.replayGame, replayMove);
+        String playedMoveUci = UciMoveCodec.encode(source.replayGame, replayMove);
         String from = replayMove.getSource() != null ? replayMove.getSource().getName() : null;
         String to = moveArrowTarget(replayMove);
-        String san = PgnNotation.toDisplayNotationAndApply(session.replayGame, replayMove);
-        session.currentPly++;
+        String san = PgnNotation.toDisplayNotationAndApply(source.replayGame, replayMove);
+        source.currentPly++;
 
-        AnalysisEvaluation evaluation = analyzeCurrentReplayPosition(session);
-        refinePendingForcedReplyAnnotation(session, evaluation);
+        AnalysisEvaluation evaluation = analyzeCurrentReplayPosition(source);
+        if (!source.active) {
+            return toStepDto(
+                    source,
+                    true,
+                    from,
+                    to,
+                    san,
+                    latestEvaluation(source),
+                    latestBar(source),
+                    latestDepth(source),
+                    "Analysis replay cancelled.");
+        }
+        refinePendingForcedReplyAnnotation(source, evaluation);
 
         MoveAnnotation annotation = null;
         if (analysisBeforeMove != null && positionBeforeMove != null) {
@@ -172,21 +233,21 @@ public class AnalysisReplayService {
         boolean deferAnnotation =
                 analysisBeforeMove != null
                 && positionBeforeMove != null
-                && session.currentPly < session.originalMoves.size()
-                && hasExactlyOneLegalReply(session.replayGame);
+                && source.currentPly < source.originalMoves.size()
+                && hasExactlyOneLegalReply(source.replayGame);
 
         AnalysisProfilePointDto profilePoint = new AnalysisProfilePointDto(
-                session.currentPly, from, to, san,
+                source.currentPly, from, to, san,
                 Math.round(evaluation.evaluation * 100.0) / 100.0,
                 evaluation.bar, evaluation.depth, evaluation.lines);
         if (!deferAnnotation) {
             profilePoint.setAnnotation(
                     MoveAnnotationDtoMapper.toDto(annotation));
         }
-        session.profile.add(profilePoint);
+        source.profile.add(profilePoint);
 
         if (deferAnnotation) {
-            session.pendingForcedReplyAnnotation =
+            source.pendingForcedReplyAnnotation =
                     new PendingForcedReplyAnnotation(
                             positionBeforeMove,
                             playedMoveUci,
@@ -195,14 +256,14 @@ public class AnalysisReplayService {
                             profilePoint);
         }
 
-        session.lastDeepAnalysisResult = evaluation.deepAnalysisResult;
+        source.lastDeepAnalysisResult = evaluation.deepAnalysisResult;
 
-        boolean done = session.currentPly >= session.originalMoves.size();
+        boolean done = source.currentPly >= source.originalMoves.size();
         if (done) {
-            session.active = false;
-            closeSessionEngine();
+            source.active = false;
+            safeStop(source.engine);
         }
-        return toStepDto(session, done, from, to, san,
+        return toStepDto(source, done, from, to, san,
                 evaluation.evaluation, evaluation.bar, evaluation.depth,
                 done ? "Analysis replay finished." : null);
     }
@@ -214,14 +275,30 @@ public class AnalysisReplayService {
                 latestEvaluation(session), latestBar(session), latestDepth(session), null);
     }
 
-    /** Cancels the active replay and stops its native engine process. */
-    public synchronized AnalysisReplayStepDto cancel() {
-        if (session == null) return inactiveStep("No active analysis replay.");
-        session.active = false;
-        closeSessionEngine();
-        return toStepDto(session, true, null, null, null,
-                latestEvaluation(session), latestBar(session), latestDepth(session),
-                "Analysis replay cancelled.");
+    /**
+     * Cancels the active replay and stops its native engine process.
+     *
+     * <p>The process stop deliberately happens before acquiring the replay
+     * monitor so cancellation can interrupt a finite search already running
+     * inside {@link #next()}.</p>
+     */
+    public AnalysisReplayStepDto cancel() {
+        synchronized (lifecycleMonitor) {
+            AnalysisReplaySession cancelled = stopCurrentSessionAndWait(false);
+            if (cancelled == null) {
+                return inactiveStep("No active analysis replay.");
+            }
+            return toStepDto(
+                    cancelled,
+                    true,
+                    null,
+                    null,
+                    null,
+                    latestEvaluation(cancelled),
+                    latestBar(cancelled),
+                    latestDepth(cancelled),
+                    "Analysis replay cancelled.");
+        }
     }
 
     /**
@@ -232,15 +309,24 @@ public class AnalysisReplayService {
      * search while holding that monitor; stopping the engine first unblocks it.</p>
      */
     public void clear() {
+        synchronized (lifecycleMonitor) {
+            stopCurrentSessionAndWait(true);
+        }
+    }
+
+    private AnalysisReplaySession stopCurrentSessionAndWait(boolean clearSession) {
         AnalysisReplaySession observed = session;
-        if (observed == null) return;
+        if (observed == null) return null;
 
         observed.active = false;
         safeStop(observed.engine);
 
         synchronized (this) {
-            if (session == observed) session = null;
+            if (clearSession && session == observed) {
+                session = null;
+            }
         }
+        return observed;
     }
 
     private void refinePendingForcedReplyAnnotation(
@@ -359,10 +445,6 @@ public class AnalysisReplayService {
         return move != null && move.getTarget() != null
                 ? move.getTarget().getName()
                 : null;
-    }
-
-    private void closeSessionEngine() {
-        if (session != null && session.engine != null) safeStop(session.engine);
     }
 
     private void safeStop(DeepAnalysisEngine engine) {
