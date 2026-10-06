@@ -27,7 +27,7 @@ import demo.chess.api.dto.BoardDto;
 import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.UciEngineConfig;
-import demo.chess.game.Game;
+import demo.chess.game.impl.Simulation;
 
 class AnalysisReplayServiceLifecycleTest {
 
@@ -113,7 +113,7 @@ class AnalysisReplayServiceLifecycleTest {
         AnalysisGameContext context = new AnalysisGameContext(
                 ChessStartingPosition.STANDARD,
                 List.of());
-        Game replayGame = mock(Game.class);
+        Simulation replayGame = mock(Simulation.class);
         UciEngineConfig config = mock(UciEngineConfig.class);
 
         when(analysisGameReplayService.currentContext()).thenReturn(context);
