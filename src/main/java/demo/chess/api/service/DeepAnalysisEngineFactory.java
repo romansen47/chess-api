@@ -1,12 +1,15 @@
 package demo.chess.api.service;
 
+import org.springframework.stereotype.Component;
+
 import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.impl.DeepAnalysisUciEngine;
 
 /** Creates the native UCI engine process used by deep-analysis replay. */
-final class DeepAnalysisEngineFactory {
+@Component
+class DeepAnalysisEngineFactory {
 
     /**
      * Starts a native deep-analysis engine and maps startup failures to the
