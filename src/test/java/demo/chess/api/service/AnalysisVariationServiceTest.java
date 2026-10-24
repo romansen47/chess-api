@@ -41,6 +41,25 @@ class AnalysisVariationServiceTest {
     }
 
     @Test
+    void returnsSanForAppliedVariationMove() throws Exception {
+        UciGameService uciGameService = mock(UciGameService.class);
+        when(uciGameService.getAnalysisGameContext()).thenReturn(
+                new AnalysisGameContext(ChessStartingPosition.STANDARD, List.of()));
+
+        AnalysisVariationService service = new AnalysisVariationService(uciGameService);
+        AnalysisVariationRequestDto request = new AnalysisVariationRequestDto();
+        request.setAnchorPly(0);
+        request.setMoves(List.of());
+        request.setFrom("e2");
+        request.setTo("e4");
+
+        AnalysisVariationMoveResultDto result = service.applyMove(request);
+
+        assertEquals("e2e4", result.getUci());
+        assertEquals("e4", result.getSan());
+    }
+
+    @Test
     void reconstructsChess960VariationFromOriginalStartingPosition() throws Exception {
         UciGameService uciGameService = mock(UciGameService.class);
         ChessStartingPosition startingPosition = ChessStartingPosition.of(0);

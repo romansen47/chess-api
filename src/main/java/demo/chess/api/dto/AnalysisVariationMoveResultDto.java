@@ -10,6 +10,7 @@ public class AnalysisVariationMoveResultDto {
     private String from;
     private String to;
     private String uci;
+    private String san;
     private String sideToMove;
     private String position;
     private String gameState;
@@ -88,6 +89,14 @@ public class AnalysisVariationMoveResultDto {
 
     public void setUci(String uci) {
         this.uci = uci;
+    }
+
+    public String getSan() {
+        return san;
+    }
+
+    public void setSan(String san) {
+        this.san = san;
     }
 
     public String getSideToMove() {

@@ -220,7 +220,7 @@ public class UciGameService {
                 ? sourceGame.getStartingPosition()
                 : ChessStartingPosition.STANDARD;
 
-        return new UciGameDto(
+        UciGameDto dto = new UciGameDto(
                 moves.size(),
                 sideToMove(sourceGame),
                 BoardPositionSerializer.toPositionString(sourceGame),
@@ -231,6 +231,14 @@ public class UciGameService {
                 annotationDtos(annotations),
                 startingPosition.getId(),
                 startingPosition.initialFen());
+        dto.setContinuable(imported && hasLegalMove(sourceGame));
+        return dto;
+    }
+
+    private boolean hasLegalMove(Game game) throws NoMoveFoundException, IOException {
+        return game != null
+                && game.getPlayer() != null
+                && !game.getPlayer().getValidMoves(game).isEmpty();
     }
 
     private MoveList getAnalysisMoveHistorySnapshot() {
