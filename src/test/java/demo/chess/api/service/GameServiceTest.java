@@ -106,7 +106,7 @@ class GameServiceTest {
         Game game = service.getCurrentGame();
         assertEquals("opening-1", applied.getOpeningId());
         assertEquals(3, game.getMoveList().size());
-        assertEquals(java.util.List.of("e4", "c5", "Nf3"), game.getSanMoveList());
+        assertEquals(java.util.List.of("e4", "c5", "♘f3"), game.getSanMoveList());
         assertEquals(demo.chess.definitions.Color.BLACK, game.getPlayer().getColor());
         assertTrue(game.getMoveTimings().isEmpty());
         assertFalse(game.getWhitePlayer().getChessClock().isStarted());
