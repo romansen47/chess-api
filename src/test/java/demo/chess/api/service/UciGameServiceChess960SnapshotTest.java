@@ -1,7 +1,6 @@
 package demo.chess.api.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
@@ -34,8 +33,6 @@ class UciGameServiceChess960SnapshotTest {
         assertEquals(42L, snapshot.getGame().getDatabaseGameId());
         assertEquals("Alice", snapshot.getGame().getWhitePlayerName());
         assertEquals("Bob", snapshot.getGame().getBlackPlayerName());
-        assertTrue(imported.isContinuable());
-        assertTrue(snapshot.getGame().isContinuable());
     }
     @Test
     void importsChess960MovetextAndAnnotationsWithoutFallingBackToPosition518()
@@ -60,21 +57,6 @@ class UciGameServiceChess960SnapshotTest {
         assertEquals(4, imported.getTotalPlies());
         assertEquals("g1h2", imported.getMoves().get(2).getUci());
         assertEquals("0.20", imported.getAnnotations().get(0).evaluation());
-    }
-
-    @Test
-    void checkmatedImportedGameIsNotContinuable() throws Exception {
-        GameService gameService = new GameService();
-        UciGameService service = new UciGameService(gameService, null);
-        String pgn = """
-                [Result "*"]
-
-                1. f3 e5 2. g4 Qh4# *
-                """;
-
-        UciGameDto imported = service.importGame(pgn, 44L);
-
-        assertFalse(imported.isContinuable());
     }
 
 }

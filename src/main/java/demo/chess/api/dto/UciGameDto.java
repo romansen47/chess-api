@@ -26,7 +26,6 @@ public class UciGameDto {
     private List<GameAnnotationDto> annotations = new ArrayList<>();
     private int startingPositionId = ChessStartingPosition.STANDARD_ID;
     private String initialFen = ChessStartingPosition.STANDARD.initialFen();
-    private boolean continuable;
 
     public UciGameDto() {
     }
@@ -107,6 +106,4 @@ public class UciGameDto {
     public void setStartingPositionId(int startingPositionId) { this.startingPositionId = startingPositionId; }
     public String getInitialFen() { return initialFen; }
     public void setInitialFen(String initialFen) { this.initialFen = initialFen; }
-    public boolean isContinuable() { return continuable; }
-    public void setContinuable(boolean continuable) { this.continuable = continuable; }
 }

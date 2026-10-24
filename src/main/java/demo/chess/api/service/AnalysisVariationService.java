@@ -16,7 +16,6 @@ import demo.chess.definitions.states.State;
 import demo.chess.game.LegalMoveResolver;
 import demo.chess.game.TerminalPositionEvaluator;
 import demo.chess.game.impl.Simulation;
-import demo.chess.notation.PgnNotation;
 import demo.chess.notation.UciMoveCodec;
 
 /**
@@ -80,7 +79,7 @@ public class AnalysisVariationService {
                 request.getTo(),
                 request.getPromotion());
         String uci = UciMoveCodec.encode(simulation, selected);
-        String san = PgnNotation.toSanAndApply(simulation, selected);
+        simulation.apply(selected);
 
         String sideToMove = simulation.getPlayer() != null && simulation.getPlayer().getColor() != null
                 ? simulation.getPlayer().getColor().name().toLowerCase(Locale.ROOT)
@@ -88,11 +87,9 @@ public class AnalysisVariationService {
         State terminalState = TerminalPositionEvaluator.determineState(simulation);
         String gameState = terminalState != null ? terminalState.name() : null;
 
-        AnalysisVariationMoveResultDto result = new AnalysisVariationMoveResultDto(
+        return new AnalysisVariationMoveResultDto(
                 true, null, request.getFrom(), request.getTo(), uci,
                 sideToMove, toPositionString(simulation), gameState);
-        result.setSan(san);
-        return result;
     }
 
     public String toPositionString(Simulation simulation) {
