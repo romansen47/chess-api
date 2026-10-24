@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import demo.chess.api.dto.GameSettingsDto;
 import demo.chess.api.dto.PieceDto;
+import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.game.Game;
 
@@ -86,6 +87,35 @@ class GameServiceTest {
      * Verifies that the complete configured time control is passed to the core game.
      */
     @Test
+    void startsGameFromOpeningHistoryWithFreshClocks() {
+        service = new GameService();
+        GameSettingsDto requested = new GameSettingsDto(
+                120,
+                2,
+                3,
+                30,
+                "WHITE",
+                0L);
+        requested.setOpeningId("opening-1");
+
+        GameSettingsDto applied = service.startNewGame(
+                requested,
+                ChessStartingPosition.STANDARD,
+                java.util.List.of("e2e4", "c7c5", "g1f3"));
+
+        Game game = service.getCurrentGame();
+        assertEquals("opening-1", applied.getOpeningId());
+        assertEquals(3, game.getMoveList().size());
+        assertEquals(java.util.List.of("e4", "c5", "Nf3"), game.getSanMoveList());
+        assertEquals(demo.chess.definitions.Color.BLACK, game.getPlayer().getColor());
+        assertTrue(game.getMoveTimings().isEmpty());
+        assertFalse(game.getWhitePlayer().getChessClock().isStarted());
+        assertFalse(game.getBlackPlayer().getChessClock().isStarted());
+        assertEquals(120_000L, game.getWhitePlayer().getChessClock().getRemainingTimeMillis());
+        assertEquals(120_000L, game.getBlackPlayer().getChessClock().getRemainingTimeMillis());
+    }
+
+    @Test
     void completeTimeControlIsConfiguredInCoreGame() {
         service = new GameService();
 
@@ -114,10 +144,12 @@ class GameServiceTest {
         GameSettingsDto copy = service.getGameSettings();
         copy.setTimeForEachPlayerSeconds(1);
         copy.setStartingColor("BLACK");
+        copy.setOpeningId("changed");
 
         GameSettingsDto unchanged = service.getGameSettings();
         assertEquals(GameService.DEFAULT_TIME_SECONDS, unchanged.getTimeForEachPlayerSeconds());
         assertEquals("WHITE", unchanged.getStartingColor());
+        assertEquals(null, unchanged.getOpeningId());
     }
 
     /**
