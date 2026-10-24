@@ -72,7 +72,9 @@ class GameLifecycleServiceTest {
     void preparesImportedGameReplacementWithoutCreatingNewLiveGame() {
         GameService gameService = mock(GameService.class);
         EngineLifecycleCoordinator coordinator = mock(EngineLifecycleCoordinator.class);
-        GameLifecycleService service = new GameLifecycleService(gameService, coordinator);
+        OpeningLibraryService openingLibraryService = mock(OpeningLibraryService.class);
+        GameLifecycleService service = new GameLifecycleService(
+                gameService, coordinator, openingLibraryService);
 
         service.prepareForGameReplacement();
 
