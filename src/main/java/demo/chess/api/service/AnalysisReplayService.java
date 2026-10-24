@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutionException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import demo.chess.analysis.annotation.MoveAnnotation;
+import demo.chess.analysis.annotation.MoveAnnotationAssessment;
 import demo.chess.analysis.annotation.MoveAnnotationClassifier;
 import demo.chess.api.dto.AnalysisProfilePointDto;
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
@@ -224,10 +224,13 @@ public class AnalysisReplayService {
         }
         refinePendingForcedReplyAnnotation(source, evaluation);
 
-        MoveAnnotation annotation = null;
+        MoveAnnotationAssessment assessment = null;
         if (analysisBeforeMove != null && positionBeforeMove != null) {
-            annotation = moveAnnotationClassifier.classify(
-                    positionBeforeMove, playedMoveUci, analysisBeforeMove, evaluation.evaluation);
+            assessment = moveAnnotationClassifier.assess(
+                    positionBeforeMove,
+                    playedMoveUci,
+                    analysisBeforeMove,
+                    evaluation.evaluation);
         }
 
         boolean deferAnnotation =
@@ -241,8 +244,7 @@ public class AnalysisReplayService {
                 Math.round(evaluation.evaluation * 100.0) / 100.0,
                 evaluation.bar, evaluation.depth, evaluation.lines);
         if (!deferAnnotation) {
-            profilePoint.setAnnotation(
-                    MoveAnnotationDtoMapper.toDto(annotation));
+            applyAssessment(profilePoint, assessment);
         }
         source.profile.add(profilePoint);
 
@@ -337,14 +339,35 @@ public class AnalysisReplayService {
         source.pendingForcedReplyAnnotation = null;
         if (pending == null || !hasUsableEvaluation(evaluation)) return;
 
-        MoveAnnotation refined = moveAnnotationClassifier.classify(
-                pending.positionBeforeMove,
-                pending.playedMoveUci,
-                pending.analysisBeforeMove,
-                pending.resultingEvaluation,
-                evaluation.evaluation);
-        pending.profilePoint.setAnnotation(
-                MoveAnnotationDtoMapper.toDto(refined));
+        MoveAnnotationAssessment refined =
+                moveAnnotationClassifier.assess(
+                        pending.positionBeforeMove,
+                        pending.playedMoveUci,
+                        pending.analysisBeforeMove,
+                        pending.resultingEvaluation,
+                        evaluation.evaluation);
+        applyAssessment(
+                pending.profilePoint,
+                refined);
+    }
+
+
+    private void applyAssessment(
+            AnalysisProfilePointDto profilePoint,
+            MoveAnnotationAssessment assessment) {
+        if (profilePoint == null) {
+            return;
+        }
+        profilePoint.setAnnotation(
+                MoveAnnotationDtoMapper.toDto(
+                        assessment != null
+                                ? assessment.annotation()
+                                : null));
+        profilePoint.setAnnotationDiagnostics(
+                MoveAnnotationDtoMapper.toDiagnosticsDto(
+                        assessment != null
+                                ? assessment.diagnostics()
+                                : null));
     }
 
     private boolean hasUsableEvaluation(AnalysisEvaluation evaluation) {

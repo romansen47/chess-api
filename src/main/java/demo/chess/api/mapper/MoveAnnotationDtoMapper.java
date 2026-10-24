@@ -1,7 +1,10 @@
 package demo.chess.api.mapper;
 
+import demo.chess.api.dto.MoveAnnotationDiagnosticsDto;
 import demo.chess.api.dto.MoveAnnotationDto;
+import demo.chess.analysis.annotation.DeepDiscoveryRejectionReason;
 import demo.chess.analysis.annotation.ExtraordinaryReason;
+import demo.chess.analysis.annotation.MoveAnnotationDiagnostics;
 import demo.chess.analysis.annotation.MaterialSacrificeType;
 import demo.chess.analysis.annotation.MoveAnnotation;
 import demo.chess.analysis.annotation.MoveAnnotationKind;
@@ -50,6 +53,38 @@ public final class MoveAnnotationDtoMapper {
         return dto;
     }
 
+
+    public static MoveAnnotationDiagnosticsDto toDiagnosticsDto(
+            MoveAnnotationDiagnostics diagnostics) {
+        if (diagnostics == null) {
+            return null;
+        }
+
+        MoveAnnotationDiagnosticsDto dto =
+                new MoveAnnotationDiagnosticsDto();
+        dto.setExtraordinaryCandidate(
+                diagnostics.isExtraordinaryCandidate());
+        dto.setDeepDiscoveryRejectedBy(
+                rejectionReason(
+                        diagnostics.getDeepDiscoveryRejectedBy()));
+        dto.setEarlyWindowStartDepth(
+                diagnostics.getEarlyWindowStartDepth());
+        dto.setEarlyWindowEndDepth(
+                diagnostics.getEarlyWindowEndDepth());
+        dto.setEarlySampleCount(
+                diagnostics.getEarlySampleCount());
+        dto.setEarlyDepth(diagnostics.getEarlyDepth());
+        dto.setEarlyRank(diagnostics.getEarlyRank());
+        dto.setFinalDepth(diagnostics.getFinalDepth());
+        dto.setFinalRank(diagnostics.getFinalRank());
+        dto.setFinalRegret(diagnostics.getFinalRegret());
+        dto.setEarlyRegret(diagnostics.getEarlyRegret());
+        dto.setEarlyStrength(diagnostics.getEarlyStrength());
+        dto.setFinalStrength(diagnostics.getFinalStrength());
+        dto.setStrengthGain(diagnostics.getStrengthGain());
+        return dto;
+    }
+
     private static String symbol(MoveAnnotationKind kind) {
         if (kind == null) {
             return "";
@@ -71,6 +106,22 @@ public final class MoveAnnotationDtoMapper {
             case EXTRAORDINARY -> "extraordinary";
             case MISTAKE -> "mistake";
             case BLUNDER -> "blunder";
+        };
+    }
+
+
+    private static String rejectionReason(
+            DeepDiscoveryRejectionReason reason) {
+        if (reason == null) {
+            return null;
+        }
+        return switch (reason) {
+            case INSUFFICIENT_EARLY_SNAPSHOTS ->
+                    "insufficientEarlySnapshots";
+            case EARLY_REGRET_TOO_SMALL ->
+                    "earlyRegretTooSmall";
+            case STRENGTH_GAIN_TOO_SMALL ->
+                    "strengthGainTooSmall";
         };
     }
 

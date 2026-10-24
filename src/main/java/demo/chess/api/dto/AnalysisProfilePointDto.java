@@ -13,6 +13,7 @@ public class AnalysisProfilePointDto {
     private int depth;
     private List<EngineLineDto> lines = List.of();
     private MoveAnnotationDto annotation;
+    private MoveAnnotationDiagnosticsDto annotationDiagnostics;
 
     /**
      * Creates a new AnalysisProfilePointDto instance.
@@ -213,5 +214,22 @@ public class AnalysisProfilePointDto {
      */
     public void setAnnotation(MoveAnnotationDto annotation) {
         this.annotation = annotation;
+    }
+
+    /**
+     * Returns debug-only diagnostics for extraordinary move detection.
+     * @return annotation diagnostics, or null
+     */
+    public MoveAnnotationDiagnosticsDto getAnnotationDiagnostics() {
+        return annotationDiagnostics;
+    }
+
+    /**
+     * Sets debug-only diagnostics for extraordinary move detection.
+     * @param annotationDiagnostics diagnostics
+     */
+    public void setAnnotationDiagnostics(
+            MoveAnnotationDiagnosticsDto annotationDiagnostics) {
+        this.annotationDiagnostics = annotationDiagnostics;
     }
 }
