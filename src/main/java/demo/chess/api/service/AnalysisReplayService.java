@@ -244,7 +244,10 @@ public class AnalysisReplayService {
                 Math.round(evaluation.evaluation * 100.0) / 100.0,
                 evaluation.bar, evaluation.depth, evaluation.lines);
         if (!deferAnnotation) {
-            applyAssessment(profilePoint, assessment);
+            applyAssessment(
+                    profilePoint,
+                    assessment,
+                    positionBeforeMove);
         }
         source.profile.add(profilePoint);
 
@@ -348,13 +351,15 @@ public class AnalysisReplayService {
                         evaluation.evaluation);
         applyAssessment(
                 pending.profilePoint,
-                refined);
+                refined,
+                pending.positionBeforeMove);
     }
 
 
     private void applyAssessment(
             AnalysisProfilePointDto profilePoint,
-            MoveAnnotationAssessment assessment) {
+            MoveAnnotationAssessment assessment,
+            Game positionBeforeMove) {
         if (profilePoint == null) {
             return;
         }
@@ -362,7 +367,8 @@ public class AnalysisReplayService {
                 MoveAnnotationDtoMapper.toDto(
                         assessment != null
                                 ? assessment.annotation()
-                                : null));
+                                : null,
+                        positionBeforeMove));
         profilePoint.setAnnotationDiagnostics(
                 MoveAnnotationDtoMapper.toDiagnosticsDto(
                         assessment != null

@@ -113,11 +113,16 @@ public class AnalysisEvaluationService {
             if (usableResult && engineRuntimeSelectionService.findEvaluationConfig().isPresent()) {
                 AnalysisMoveAssessmentService.Result assessment =
                         moveAssessmentService.assess(ply, result.getEval());
+                Game positionBeforeMove =
+                        analysisGameReplayService.createPositionAtPly(
+                                context,
+                                ply - 1);
                 result.setMoveAnnotationReady(assessment.ready());
                 result.setMoveAnnotationDepth(assessment.depth());
                 result.setMoveAnnotation(
                         demo.chess.api.mapper.MoveAnnotationDtoMapper.toDto(
-                                assessment.annotation()));
+                                assessment.annotation(),
+                                positionBeforeMove));
             }
             return result;
         } catch (NoMoveFoundException | IOException e) {
@@ -176,7 +181,8 @@ public class AnalysisEvaluationService {
                 result.setMoveAnnotationDepth(assessment.depth());
                 result.setMoveAnnotation(
                         demo.chess.api.mapper.MoveAnnotationDtoMapper.toDto(
-                                assessment.annotation()));
+                                assessment.annotation(),
+                                positionBeforeMove));
             }
 
             return result;

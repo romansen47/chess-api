@@ -11,6 +11,8 @@ public class MoveAnnotationDto {
     private Double winChanceLoss;
     private double bestEvaluation;
     private Double secondBestEvaluation;
+    private String bestMove;
+    private String secondBestMove;
 
     private String extraordinaryReason;
     private Double materialInvestment;
@@ -69,6 +71,22 @@ public class MoveAnnotationDto {
 
     public void setSecondBestEvaluation(Double secondBestEvaluation) {
         this.secondBestEvaluation = secondBestEvaluation;
+    }
+
+    public String getBestMove() {
+        return bestMove;
+    }
+
+    public void setBestMove(String bestMove) {
+        this.bestMove = bestMove;
+    }
+
+    public String getSecondBestMove() {
+        return secondBestMove;
+    }
+
+    public void setSecondBestMove(String secondBestMove) {
+        this.secondBestMove = secondBestMove;
     }
 
     public String getExtraordinaryReason() {

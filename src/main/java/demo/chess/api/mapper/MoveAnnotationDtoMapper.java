@@ -8,6 +8,11 @@ import demo.chess.analysis.annotation.MoveAnnotationDiagnostics;
 import demo.chess.analysis.annotation.MaterialSacrificeType;
 import demo.chess.analysis.annotation.MoveAnnotation;
 import demo.chess.analysis.annotation.MoveAnnotationKind;
+import demo.chess.definitions.moves.Move;
+import demo.chess.game.Game;
+import demo.chess.game.LegalMoveResolver;
+import demo.chess.game.impl.Simulation;
+import demo.chess.notation.PgnNotation;
 
 /**
  * Maps chess-core annotation domain objects to the stable API representation.
@@ -28,6 +33,8 @@ public final class MoveAnnotationDtoMapper {
         dto.setWinChanceLoss(annotation.getWinChanceLoss());
         dto.setBestEvaluation(annotation.getBestEvaluation());
         dto.setSecondBestEvaluation(annotation.getSecondBestEvaluation());
+        dto.setBestMove(annotation.getBestMoveUci());
+        dto.setSecondBestMove(annotation.getSecondBestMoveUci());
 
         dto.setExtraordinaryReason(
                 reason(annotation.getExtraordinaryReason()));
@@ -53,6 +60,45 @@ public final class MoveAnnotationDtoMapper {
         return dto;
     }
 
+
+
+    /**
+     * Maps an annotation and converts referenced UCI moves to display notation
+     * in the supplied pre-move position. UCI remains the fallback if replay
+     * conversion is unavailable.
+     */
+    public static MoveAnnotationDto toDto(
+            MoveAnnotation annotation,
+            Game positionBeforeMove) {
+        MoveAnnotationDto dto = toDto(annotation);
+        if (dto == null || positionBeforeMove == null) {
+            return dto;
+        }
+
+        dto.setBestMove(displayMove(
+                positionBeforeMove,
+                annotation.getBestMoveUci()));
+        dto.setSecondBestMove(displayMove(
+                positionBeforeMove,
+                annotation.getSecondBestMoveUci()));
+        return dto;
+    }
+
+    private static String displayMove(
+            Game positionBeforeMove,
+            String moveUci) {
+        if (moveUci == null || moveUci.isBlank()) {
+            return null;
+        }
+
+        try {
+            Game replay = Simulation.forkSimulationFrom(positionBeforeMove);
+            Move move = LegalMoveResolver.resolveUci(replay, moveUci);
+            return PgnNotation.toDisplayNotationAndApply(replay, move);
+        } catch (Exception ignored) {
+            return moveUci;
+        }
+    }
 
     public static MoveAnnotationDiagnosticsDto toDiagnosticsDto(
             MoveAnnotationDiagnostics diagnostics) {
