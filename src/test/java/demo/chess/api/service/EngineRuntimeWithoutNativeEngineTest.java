@@ -141,8 +141,9 @@ class EngineRuntimeWithoutNativeEngineTest {
         GameService gameService = new GameService();
         EngineLifecycleCoordinator lifecycleCoordinator =
                 mock(EngineLifecycleCoordinator.class);
+        OpeningLibraryService openingLibraryService = mock(OpeningLibraryService.class);
         GameLifecycleService lifecycleService =
-                new GameLifecycleService(gameService, lifecycleCoordinator);
+                new GameLifecycleService(gameService, lifecycleCoordinator, openingLibraryService);
 
         GameSettingsDto settings = assertDoesNotThrow(() ->
                 lifecycleService.startNewGame(new GameSettingsDto(
