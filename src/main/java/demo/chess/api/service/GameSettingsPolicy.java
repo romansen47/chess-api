@@ -44,7 +44,7 @@ final class GameSettingsPolicy {
 
         ChessStartingPosition startingPosition = ChessStartingPosition.of(source.getStartingPositionId());
         long nextVersion = current != null ? current.getVersion() + 1 : 1;
-        return new GameSettingsDto(
+        GameSettingsDto normalized = new GameSettingsDto(
                 timeForEachPlayerSeconds,
                 incrementForWhiteSeconds,
                 incrementForBlackSeconds,
@@ -52,11 +52,13 @@ final class GameSettingsPolicy {
                 startingColor,
                 startingPosition.getId(),
                 nextVersion);
+        normalized.setOpeningId(normalizeOpeningId(source.getOpeningId()));
+        return normalized;
     }
 
     static GameSettingsDto copy(GameSettingsDto settings) {
         if (settings == null) return defaults();
-        return new GameSettingsDto(
+        GameSettingsDto copy = new GameSettingsDto(
                 settings.getTimeForEachPlayerSeconds(),
                 settings.getIncrementForWhiteSeconds(),
                 settings.getIncrementForBlackSeconds(),
@@ -64,5 +66,11 @@ final class GameSettingsPolicy {
                 settings.getStartingColor(),
                 settings.getStartingPositionId(),
                 settings.getVersion());
+        copy.setOpeningId(settings.getOpeningId());
+        return copy;
+    }
+
+    private static String normalizeOpeningId(String openingId) {
+        return openingId == null || openingId.isBlank() ? null : openingId.trim();
     }
 }

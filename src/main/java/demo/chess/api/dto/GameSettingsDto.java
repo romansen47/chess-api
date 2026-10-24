@@ -20,6 +20,7 @@ public class GameSettingsDto {
     private int additionalTimeAfter40MovesSeconds;
     private String startingColor;
     private int startingPositionId = ChessStartingPosition.STANDARD_ID;
+    private String openingId;
     private long version;
 
     // Legacy request fields from the former per-game engine-profile selection.
@@ -115,6 +116,14 @@ public class GameSettingsDto {
 
     public void setStartingPositionId(int startingPositionId) {
         this.startingPositionId = startingPositionId;
+    }
+
+    public String getOpeningId() {
+        return openingId;
+    }
+
+    public void setOpeningId(String openingId) {
+        this.openingId = openingId;
     }
 
     public long getVersion() {

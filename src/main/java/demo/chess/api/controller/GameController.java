@@ -89,10 +89,14 @@ public class GameController {
      * @return the result of the operation
      */
     @PostMapping("/new-game")
-    public ResponseEntity<GameSettingsDto> startNewGame(@RequestBody(required = false) GameSettingsDto settings) {
-        GameSettingsDto appliedSettings = gameLifecycleService.startNewGame(settings);
-        uciGameService.clearImportedGame();
-        return ResponseEntity.ok(appliedSettings);
+    public ResponseEntity<?> startNewGame(@RequestBody(required = false) GameSettingsDto settings) {
+        try {
+            GameSettingsDto appliedSettings = gameLifecycleService.startNewGame(settings);
+            uciGameService.clearImportedGame();
+            return ResponseEntity.ok(appliedSettings);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     /**

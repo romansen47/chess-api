@@ -15,6 +15,7 @@ import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
 import demo.chess.game.LegalMoveResolver;
+import demo.chess.load.GameLoader;
 
 /**
  * Owns the lifecycle of the currently played game.
@@ -29,6 +30,7 @@ public class GameService {
     public static final int DEFAULT_TIME_SECONDS = 5 * 60;
     public static final int DEFAULT_INCREMENT_SECONDS = 0;
 
+    private final GameLoader gameLoader = new GameLoader();
     private Game game;
     private GameSettingsDto gameSettings;
 
@@ -49,9 +51,45 @@ public class GameService {
      * @return normalized settings snapshot
      */
     public synchronized GameSettingsDto startNewGame(GameSettingsDto settings) {
+        return startNewGame(settings, null, List.of());
+    }
+
+    /**
+     * Starts a live game from an optional prepared opening history.
+     *
+     * <p>The opening is applied through the normal legal move path. Afterwards
+     * only live clock/timing state is reset, so the full chess history remains
+     * authoritative for castling, en passant, repetition and PGN export.</p>
+     */
+    public synchronized GameSettingsDto startNewGame(
+            GameSettingsDto settings,
+            ChessStartingPosition openingStartingPosition,
+            List<String> openingMoves) {
         GameSettingsDto normalizedSettings = GameSettingsPolicy.normalize(settings, this.gameSettings);
+        if (openingStartingPosition != null) {
+            normalizedSettings.setStartingPositionId(openingStartingPosition.getId());
+        }
+
+        Game candidate = createGame(normalizedSettings);
+        List<String> moves = openingMoves == null ? List.of() : List.copyOf(openingMoves);
+        if (!moves.isEmpty()) {
+            try {
+                gameLoader.loadGame(moves, candidate);
+                if (candidate.getState() != null) {
+                    candidate.resetClocks();
+                    throw new IllegalArgumentException(
+                            "Selected opening ends in a finished game: " + candidate.getState());
+                }
+                candidate.resetClocks();
+            } catch (NoMoveFoundException | IOException e) {
+                stopCandidateClocks(candidate);
+                throw new IllegalArgumentException(
+                        "Could not apply selected opening: " + e.getMessage(), e);
+            }
+        }
+
         this.gameSettings = normalizedSettings;
-        this.game = createGame(normalizedSettings);
+        this.game = candidate;
         return GameSettingsPolicy.copy(this.gameSettings);
     }
 
@@ -75,6 +113,16 @@ public class GameService {
                 settings.getIncrementForBlackSeconds(),
                 settings.getAdditionalTimeAfter40MovesSeconds());
         return createdGame;
+    }
+
+    private void stopCandidateClocks(Game candidate) {
+        if (candidate == null) return;
+        if (candidate.getWhitePlayer() != null && candidate.getWhitePlayer().getChessClock() != null) {
+            candidate.getWhitePlayer().getChessClock().stop();
+        }
+        if (candidate.getBlackPlayer() != null && candidate.getBlackPlayer().getChessClock() != null) {
+            candidate.getBlackPlayer().getChessClock().stop();
+        }
     }
 
     /** Applies an already resolved legal move to the current game. */

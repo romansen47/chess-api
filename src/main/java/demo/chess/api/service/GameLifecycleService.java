@@ -3,6 +3,8 @@ package demo.chess.api.service;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.GameSettingsDto;
+import demo.chess.api.dto.OpeningDto;
+import demo.chess.definitions.ChessStartingPosition;
 
 /** Coordinates replacement of the active game as one backend-owned transition. */
 @Service
@@ -10,12 +12,15 @@ public class GameLifecycleService {
 
     private final GameService gameService;
     private final EngineLifecycleCoordinator engineLifecycleCoordinator;
+    private final OpeningLibraryService openingLibraryService;
 
     public GameLifecycleService(
             GameService gameService,
-            EngineLifecycleCoordinator engineLifecycleCoordinator) {
+            EngineLifecycleCoordinator engineLifecycleCoordinator,
+            OpeningLibraryService openingLibraryService) {
         this.gameService = gameService;
         this.engineLifecycleCoordinator = engineLifecycleCoordinator;
+        this.openingLibraryService = openingLibraryService;
     }
 
     /**
@@ -24,7 +29,21 @@ public class GameLifecycleService {
      */
     public synchronized GameSettingsDto startNewGame(GameSettingsDto settings) {
         prepareForGameReplacement();
-        return gameService.startNewGame(settings);
+
+        GameSettingsDto requested = settings != null ? settings : gameService.getGameSettings();
+        String openingId = requested != null ? requested.getOpeningId() : null;
+        if (openingId == null || openingId.isBlank()) {
+            return gameService.startNewGame(settings);
+        }
+
+        OpeningDto opening = openingLibraryService.getOpening(openingId.trim());
+        if (!opening.isPlayable()) {
+            throw new IllegalArgumentException("Selected opening cannot be continued");
+        }
+        return gameService.startNewGame(
+                settings,
+                ChessStartingPosition.of(opening.getStartingPositionId()),
+                opening.getMoves());
     }
 
     /**
