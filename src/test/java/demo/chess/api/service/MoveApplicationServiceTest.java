@@ -44,7 +44,7 @@ class MoveApplicationServiceTest {
 
         assertEquals(MoveOutcomeType.INVALID_REQUEST, outcome.type());
         assertEquals(0, gameService.getCurrentGame().getMoveList().size());
-        assertTrue(outcome.result().getError().contains("from/to"));
+        assertTrue(outcome.result().getMessage().contains("from/to"));
     }
 
     /** Stops clocks created by the real application service fixture. */
