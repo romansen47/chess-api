@@ -31,6 +31,7 @@ public class UciGameDto {
     private boolean standardStartingPosition = true;
     private Map<String, String> pgnTags = new LinkedHashMap<>();
 
+    /** Creates an empty snapshot for serialization frameworks. */
     public UciGameDto() {
     }
 
@@ -87,35 +88,59 @@ public class UciGameDto {
         this.standardStartingPosition = ChessStartingPosition.of(startingPositionId).isStandard();
     }
 
+    /** @return total number of half-moves in the snapshot */
     public int getTotalPlies() { return totalPlies; }
+    /** @param totalPlies total number of half-moves */
     public void setTotalPlies(int totalPlies) { this.totalPlies = totalPlies; }
+    /** @return side to move */
     public String getSideToMove() { return sideToMove; }
+    /** @param sideToMove side to move */
     public void setSideToMove(String sideToMove) { this.sideToMove = sideToMove; }
+    /** @return compact current board position */
     public String getPosition() { return position; }
+    /** @param position compact current board position */
     public void setPosition(String position) { this.position = position; }
+    /** @return replayable move history */
     public List<UciGameMoveDto> getMoves() { return moves; }
+    /** @param moves replayable move history */
     public void setMoves(List<UciGameMoveDto> moves) {
         this.moves = moves != null ? new ArrayList<>(moves) : new ArrayList<>();
     }
+    /** @return displayed White player name */
     public String getWhitePlayerName() { return whitePlayerName; }
+    /** @param whitePlayerName displayed White player name */
     public void setWhitePlayerName(String whitePlayerName) { this.whitePlayerName = whitePlayerName; }
+    /** @return displayed Black player name */
     public String getBlackPlayerName() { return blackPlayerName; }
+    /** @param blackPlayerName displayed Black player name */
     public void setBlackPlayerName(String blackPlayerName) { this.blackPlayerName = blackPlayerName; }
+    /** @return backing database game id, or {@code null} */
     public Long getDatabaseGameId() { return databaseGameId; }
+    /** @param databaseGameId backing database game id */
     public void setDatabaseGameId(Long databaseGameId) { this.databaseGameId = databaseGameId; }
+    /** @return stored game annotations */
     public List<GameAnnotationDto> getAnnotations() { return annotations; }
+    /** @param annotations stored game annotations */
     public void setAnnotations(List<GameAnnotationDto> annotations) {
         this.annotations = annotations != null ? new ArrayList<>(annotations) : new ArrayList<>();
     }
+    /** @return Scharnagl starting-position identifier */
     public int getStartingPositionId() { return startingPositionId; }
+    /** @param startingPositionId Scharnagl starting-position identifier */
     public void setStartingPositionId(int startingPositionId) { this.startingPositionId = startingPositionId; }
+    /** @return explicit initial FEN used for replay */
     public String getInitialFen() { return initialFen; }
+    /** @param initialFen explicit initial FEN used for replay */
     public void setInitialFen(String initialFen) { this.initialFen = initialFen; }
+    /** @return whether the semantic starting position is classical Scharnagl 518 */
     public boolean isStandardStartingPosition() { return standardStartingPosition; }
+    /** @param standardStartingPosition whether the semantic starting position is classical */
     public void setStandardStartingPosition(boolean standardStartingPosition) {
         this.standardStartingPosition = standardStartingPosition;
     }
+    /** @return defensive copy of PGN tags */
     public Map<String, String> getPgnTags() { return new LinkedHashMap<>(pgnTags); }
+    /** @param pgnTags PGN tags to copy into the snapshot */
     public void setPgnTags(Map<String, String> pgnTags) {
         this.pgnTags = pgnTags == null ? new LinkedHashMap<>() : new LinkedHashMap<>(pgnTags);
     }
