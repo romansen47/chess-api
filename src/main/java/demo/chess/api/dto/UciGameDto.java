@@ -28,6 +28,7 @@ public class UciGameDto {
     private List<GameAnnotationDto> annotations = new ArrayList<>();
     private int startingPositionId = ChessStartingPosition.STANDARD_ID;
     private String initialFen = ChessStartingPosition.STANDARD.initialFen();
+    private boolean standardStartingPosition = true;
     private Map<String, String> pgnTags = new LinkedHashMap<>();
 
     public UciGameDto() {
@@ -83,6 +84,7 @@ public class UciGameDto {
         this.annotations = annotations != null ? new ArrayList<>(annotations) : new ArrayList<>();
         this.startingPositionId = startingPositionId;
         this.initialFen = initialFen;
+        this.standardStartingPosition = ChessStartingPosition.of(startingPositionId).isStandard();
     }
 
     public int getTotalPlies() { return totalPlies; }
@@ -109,6 +111,10 @@ public class UciGameDto {
     public void setStartingPositionId(int startingPositionId) { this.startingPositionId = startingPositionId; }
     public String getInitialFen() { return initialFen; }
     public void setInitialFen(String initialFen) { this.initialFen = initialFen; }
+    public boolean isStandardStartingPosition() { return standardStartingPosition; }
+    public void setStandardStartingPosition(boolean standardStartingPosition) {
+        this.standardStartingPosition = standardStartingPosition;
+    }
     public Map<String, String> getPgnTags() { return new LinkedHashMap<>(pgnTags); }
     public void setPgnTags(Map<String, String> pgnTags) {
         this.pgnTags = pgnTags == null ? new LinkedHashMap<>() : new LinkedHashMap<>(pgnTags);
