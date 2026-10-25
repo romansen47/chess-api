@@ -20,11 +20,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.GameAnnotationsRequestDto;
+import demo.chess.api.dto.GameMetadataDto;
 import demo.chess.api.dto.GameSettingsDto;
 import demo.chess.api.dto.GameSnapshotDto;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.api.service.ChessDatabaseService;
 import demo.chess.api.service.GameLifecycleService;
+import demo.chess.api.service.GameMetadataService;
 import demo.chess.api.service.GameService;
 import demo.chess.api.service.UciGameService;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
@@ -39,6 +41,7 @@ public class GameController {
     private final GameLifecycleService gameLifecycleService;
     private final UciGameService uciGameService;
     private final ChessDatabaseService chessDatabaseService;
+    private final GameMetadataService gameMetadataService;
     private final SinglePgnGameReader singlePgnGameReader = new SinglePgnGameReader();
 
     /**
@@ -52,11 +55,13 @@ public class GameController {
             GameService gameService,
             GameLifecycleService gameLifecycleService,
             UciGameService uciGameService,
-            ChessDatabaseService chessDatabaseService) {
+            ChessDatabaseService chessDatabaseService,
+            GameMetadataService gameMetadataService) {
         this.gameService = gameService;
         this.gameLifecycleService = gameLifecycleService;
         this.uciGameService = uciGameService;
         this.chessDatabaseService = chessDatabaseService;
+        this.gameMetadataService = gameMetadataService;
     }
 
     /**
@@ -148,6 +153,22 @@ public class GameController {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (SQLException | IOException e) {
             return ResponseEntity.internalServerError().body("Could not save game annotations: " + e.getMessage());
+        }
+    }
+
+    @PostMapping(
+            value = "/game/metadata",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> saveGameMetadata(@RequestBody GameMetadataDto request) {
+        try {
+            return ResponseEntity.ok(gameMetadataService.updateMetadata(request));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+        } catch (NoMoveFoundException | SQLException | IOException e) {
+            return ResponseEntity.internalServerError().body("Could not save game metadata: " + e.getMessage());
         }
     }
 

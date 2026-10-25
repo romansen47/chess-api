@@ -42,6 +42,11 @@ final class ImportedGameContext {
         return new LinkedHashMap<>(pgnTags);
     }
 
+    void setPgnTags(Map<String, String> tags) {
+        pgnTags.clear();
+        if (tags != null) pgnTags.putAll(tags);
+    }
+
     Long databaseGameId() {
         return databaseGameId;
     }

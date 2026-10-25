@@ -8,6 +8,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 
@@ -43,6 +45,8 @@ import demo.chess.save.GameSaver;
 public class UciGameService {
 
     private static final DateTimeFormatter PGN_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy.MM.dd");
+    private static final Pattern PGN_TAG_NAME = Pattern.compile("[A-Za-z0-9_]+");
+    private static final Set<String> PROTECTED_METADATA_TAGS = Set.of("variant", "setup", "fen");
 
     private final GameService gameService;
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
@@ -220,7 +224,7 @@ public class UciGameService {
                 ? sourceGame.getStartingPosition()
                 : ChessStartingPosition.STANDARD;
 
-        return new UciGameDto(
+        UciGameDto dto = new UciGameDto(
                 moves.size(),
                 sideToMove(sourceGame),
                 BoardPositionSerializer.toPositionString(sourceGame),
@@ -231,6 +235,84 @@ public class UciGameService {
                 annotationDtos(annotations),
                 startingPosition.getId(),
                 startingPosition.initialFen());
+        dto.setPgnTags(imported ? pgnTags : Map.of());
+        return dto;
+    }
+
+    synchronized PreparedMetadataUpdate prepareMetadataUpdate(Map<String, String> requestedTags)
+            throws NoMoveFoundException, IOException {
+        if (importedContext == null) {
+            throw new IllegalStateException("Game metadata can only be edited for an imported stored game.");
+        }
+
+        Map<String, String> current = importedContext.pgnTagsCopy();
+        Map<String, String> candidate = new LinkedHashMap<>();
+        if (requestedTags != null) {
+            for (Map.Entry<String, String> entry : requestedTags.entrySet()) {
+                String key = entry.getKey() == null ? "" : entry.getKey().trim();
+                if (key.isEmpty() || !PGN_TAG_NAME.matcher(key).matches()) {
+                    throw new IllegalArgumentException("Invalid PGN tag name: " + entry.getKey());
+                }
+
+                String value = entry.getValue() == null ? "" : entry.getValue().trim();
+                String normalizedKey = key.toLowerCase(Locale.ROOT);
+                if (PROTECTED_METADATA_TAGS.contains(normalizedKey)) {
+                    String existing = findTagIgnoreCase(current, key);
+                    if (existing != null && !existing.equals(value)) {
+                        throw new IllegalArgumentException(key + " is managed by the chess position and cannot be edited.");
+                    }
+                    continue;
+                }
+                if (!value.isEmpty()) candidate.put(key, value);
+            }
+        }
+
+        for (Map.Entry<String, String> entry : current.entrySet()) {
+            if (entry.getKey() != null
+                    && PROTECTED_METADATA_TAGS.contains(entry.getKey().toLowerCase(Locale.ROOT))) {
+                candidate.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        validateResult(candidate);
+        String pgn = gameSaver.toPgn(
+                getAnalysisMoveHistorySnapshot(),
+                candidate,
+                currentAnnotations());
+        Map<String, String> canonicalTags = new LinkedHashMap<>(gameLoader.parsePgnTags(pgn));
+        return new PreparedMetadataUpdate(canonicalTags, pgn);
+    }
+
+    synchronized void applyMetadataUpdate(PreparedMetadataUpdate prepared) {
+        if (importedContext == null) {
+            throw new IllegalStateException("No imported game selected.");
+        }
+        importedContext.setPgnTags(prepared.tags());
+    }
+
+    private void validateResult(Map<String, String> tags) {
+        String result = findTagIgnoreCase(tags, "Result");
+        if (result == null) return;
+        if (!"*".equals(result)
+                && !"1-0".equals(result)
+                && !"0-1".equals(result)
+                && !"1/2-1/2".equals(result)) {
+            throw new IllegalArgumentException("Invalid PGN result: " + result);
+        }
+    }
+
+    private String findTagIgnoreCase(Map<String, String> tags, String key) {
+        if (tags == null || key == null) return null;
+        for (Map.Entry<String, String> entry : tags.entrySet()) {
+            if (key.equalsIgnoreCase(entry.getKey())) return entry.getValue();
+        }
+        return null;
+    }
+
+    record PreparedMetadataUpdate(Map<String, String> tags, String pgn) {
+        PreparedMetadataUpdate {
+            tags = tags == null ? Map.of() : Map.copyOf(tags);
+        }
     }
 
     private MoveList getAnalysisMoveHistorySnapshot() {

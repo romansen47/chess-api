@@ -1,7 +1,9 @@
 package demo.chess.api.dto;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import demo.chess.definitions.ChessStartingPosition;
 
@@ -26,6 +28,7 @@ public class UciGameDto {
     private List<GameAnnotationDto> annotations = new ArrayList<>();
     private int startingPositionId = ChessStartingPosition.STANDARD_ID;
     private String initialFen = ChessStartingPosition.STANDARD.initialFen();
+    private Map<String, String> pgnTags = new LinkedHashMap<>();
 
     public UciGameDto() {
     }
@@ -106,4 +109,8 @@ public class UciGameDto {
     public void setStartingPositionId(int startingPositionId) { this.startingPositionId = startingPositionId; }
     public String getInitialFen() { return initialFen; }
     public void setInitialFen(String initialFen) { this.initialFen = initialFen; }
+    public Map<String, String> getPgnTags() { return new LinkedHashMap<>(pgnTags); }
+    public void setPgnTags(Map<String, String> pgnTags) {
+        this.pgnTags = pgnTags == null ? new LinkedHashMap<>() : new LinkedHashMap<>(pgnTags);
+    }
 }
