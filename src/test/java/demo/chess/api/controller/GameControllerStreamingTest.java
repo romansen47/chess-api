@@ -17,6 +17,7 @@ import org.springframework.mock.web.MockHttpServletRequest;
 
 import demo.chess.api.service.ChessDatabaseService;
 import demo.chess.api.service.GameLifecycleService;
+import demo.chess.api.service.GameMetadataService;
 import demo.chess.api.service.GameService;
 import demo.chess.api.service.UciGameService;
 
@@ -32,7 +33,8 @@ class GameControllerStreamingTest {
                 gameService,
                 gameLifecycleService,
                 uciGameService,
-                chessDatabaseService);
+                chessDatabaseService,
+                mock(GameMetadataService.class));
 
         String pgn = """
                 [Event "First"]
