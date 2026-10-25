@@ -21,6 +21,13 @@ import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
 import demo.chess.notation.UciMoveCodec;
 
+/**
+ * Coordinates one computer-player move against the current game.
+ *
+ * <p>Engine lifecycle and runtime selection are application concerns here;
+ * move legality and application remain authoritative in the chess core and
+ * {@link GameService}.</p>
+ */
 @Service
 public class ComputerMoveService {
 
@@ -39,8 +46,9 @@ public class ComputerMoveService {
     private long blackPlayerEngineGeneration;
 
     /**
-     * Creates a new ComputerMoveService instance.
-     * @param gameService the game service
+     * Creates the computer-move application service.
+     *
+     * @param gameService owner of the current game
      * @param engineRuntimeSelectionService runtime engine profile selections
      */
     public ComputerMoveService(
@@ -56,8 +64,13 @@ public class ComputerMoveService {
     }
 
     /**
-     * Performs the make computer move operation.
-     * @return the result of the operation
+     * Requests, validates and applies one move from the configured player engine.
+     *
+     * @return move result, including cancellation and game-change outcomes
+     * @throws NoMoveFoundException when the engine result cannot be mapped to a legal move
+     * @throws IOException when engine communication fails
+     * @throws InterruptedException when engine communication is interrupted
+     * @throws ExecutionException when asynchronous engine work fails
      */
     public MoveResultDto makeComputerMove() throws NoMoveFoundException, IOException, InterruptedException, ExecutionException {
         Game game = gameService.getCurrentGame();
