@@ -41,9 +41,10 @@ public class AnalysisReplayController {
     }
 
     /**
-     * Performs the start operation.
-     * @param settings the settings
-     * @return the result of the operation
+     * Starts a new deep-analysis replay with the requested engine settings.
+     *
+     * @param settings analysis settings, or {@code null} for service defaults
+     * @return initial replay state
      */
     @PostMapping("/start")
     public ResponseEntity<?> start(@RequestBody(required = false) AnalysisReplaySettingsDto settings) {
@@ -59,8 +60,9 @@ public class AnalysisReplayController {
     }
 
     /**
-     * Performs the next operation.
-     * @return the result of the operation
+     * Advances the active deep-analysis replay by one ply.
+     *
+     * @return updated replay state
      */
     @PostMapping("/next")
     public ResponseEntity<?> next() {
@@ -76,8 +78,9 @@ public class AnalysisReplayController {
     }
 
     /**
-     * Returns whether this object can cel.
-     * @return true when the condition is satisfied; otherwise false
+     * Cancels the active deep-analysis replay and stops its engine.
+     *
+     * @return final cancelled replay state
      */
     @PostMapping("/cancel")
     public ResponseEntity<?> cancel() {
