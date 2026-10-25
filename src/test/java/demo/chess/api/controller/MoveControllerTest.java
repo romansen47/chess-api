@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import demo.chess.api.dto.MoveRequestDto;
 import demo.chess.api.dto.MoveResultDto;
 import demo.chess.api.service.GameService;
+import demo.chess.api.service.MoveApplicationService;
 
 class MoveControllerTest {
 
@@ -27,7 +28,7 @@ class MoveControllerTest {
     @Test
     void successfulMoveResponsesExposeAuthoritativePly() {
         gameService = new GameService();
-        MoveController controller = new MoveController(gameService);
+        MoveController controller = new MoveController(new MoveApplicationService(gameService));
 
         ResponseEntity<MoveResultDto> whiteResponse =
                 controller.makeMove(new MoveRequestDto("e2", "e4", null));
