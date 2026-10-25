@@ -32,10 +32,20 @@ public class EngineRuntimeSelectionService {
     private long blackPlayerSelectionVersion = 1L;
     private long evaluationSelectionVersion = 1L;
 
+    /**
+     * Creates the runtime-selection overlay above persistent engine settings.
+     *
+     * @param engineSettingsService persistent engine/profile settings
+     */
     public EngineRuntimeSelectionService(EngineSettingsService engineSettingsService) {
         this.engineSettingsService = engineSettingsService;
     }
 
+    /**
+     * Returns the currently valid runtime overrides.
+     *
+     * @return runtime assignment snapshot
+     */
     public synchronized EngineRuntimeAssignmentsDto getAssignments() {
         return new EngineRuntimeAssignmentsDto(
                 validOverride(whitePlayerProfileId),
@@ -43,6 +53,11 @@ public class EngineRuntimeSelectionService {
                 validOverride(evaluationProfileId));
     }
 
+    /**
+     * Sets or clears the White-player runtime profile override.
+     *
+     * @param profileId profile id; blank clears the override
+     */
     public synchronized void setWhitePlayerProfileId(String profileId) {
         String normalized = normalizeOverride(profileId);
         if (!Objects.equals(normalized, whitePlayerProfileId)) {
@@ -51,6 +66,11 @@ public class EngineRuntimeSelectionService {
         }
     }
 
+    /**
+     * Sets or clears the Black-player runtime profile override.
+     *
+     * @param profileId profile id; blank clears the override
+     */
     public synchronized void setBlackPlayerProfileId(String profileId) {
         String normalized = normalizeOverride(profileId);
         if (!Objects.equals(normalized, blackPlayerProfileId)) {
@@ -59,6 +79,11 @@ public class EngineRuntimeSelectionService {
         }
     }
 
+    /**
+     * Sets or clears the live-evaluation runtime profile override.
+     *
+     * @param profileId profile id; blank clears the override
+     */
     public synchronized void setEvaluationProfileId(String profileId) {
         String normalized = normalizeOverride(profileId);
         if (!Objects.equals(normalized, evaluationProfileId)) {
@@ -67,16 +92,31 @@ public class EngineRuntimeSelectionService {
         }
     }
 
+    /**
+     * Returns the effective White-player profile after applying the runtime override.
+     *
+     * @return effective profile id, or {@code null}
+     */
     public synchronized String getEffectiveWhitePlayerProfileId() {
         String override = validOverride(whitePlayerProfileId);
         return override != null ? override : engineSettingsService.getDefaultWhitePlayerProfileId();
     }
 
+    /**
+     * Returns the effective Black-player profile after applying the runtime override.
+     *
+     * @return effective profile id, or {@code null}
+     */
     public synchronized String getEffectiveBlackPlayerProfileId() {
         String override = validOverride(blackPlayerProfileId);
         return override != null ? override : engineSettingsService.getDefaultBlackPlayerProfileId();
     }
 
+    /**
+     * Returns the effective live-evaluation profile after applying the runtime override.
+     *
+     * @return effective profile id, or {@code null}
+     */
     public synchronized String getEffectiveEvaluationProfileId() {
         String override = validOverride(evaluationProfileId);
         return override != null ? override : engineSettingsService.getDefaultEvaluationProfileId();
