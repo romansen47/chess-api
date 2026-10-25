@@ -33,10 +33,21 @@ public class MoveApplicationService {
 
     private final GameService gameService;
 
+    /**
+     * Creates the board-interaction application service.
+     *
+     * @param gameService owner of the current game lifecycle
+     */
     public MoveApplicationService(GameService gameService) {
         this.gameService = gameService;
     }
 
+    /**
+     * Returns the legal moves available from one board square.
+     *
+     * @param from algebraic source square such as {@code e2}
+     * @return compatibility targets and canonical legal-move descriptors
+     */
     public PossibleMovesResponse getPossibleMoves(String from) {
         try {
             Game game = gameService.getCurrentGame();
@@ -59,10 +70,21 @@ public class MoveApplicationService {
         }
     }
 
+    /**
+     * Returns the current board projection.
+     *
+     * @return current board DTO
+     */
     public BoardDto getBoard() {
         return gameService.getBoardView();
     }
 
+    /**
+     * Applies a human move request through the core legal-move resolver.
+     *
+     * @param request requested source, target and optional promotion
+     * @return application outcome including the move-response DTO
+     */
     public MoveOutcome makeMove(MoveRequestDto request) {
         String from = request != null ? request.getFrom() : null;
         String to = request != null ? request.getTo() : null;
@@ -112,12 +134,19 @@ public class MoveApplicationService {
                 && left.getRank() == right.getRank();
     }
 
+    /** Result category used by the HTTP adapter to choose a status code. */
     public enum MoveOutcomeType {
         SUCCESS,
         INVALID_REQUEST,
         INTERNAL_ERROR
     }
 
+    /**
+     * Application result independent of HTTP response types.
+     *
+     * @param type result category
+     * @param result move-response payload
+     */
     public record MoveOutcome(MoveOutcomeType type, MoveResultDto result) {
         static MoveOutcome success(MoveResultDto result) {
             return new MoveOutcome(MoveOutcomeType.SUCCESS, result);
@@ -132,6 +161,7 @@ public class MoveApplicationService {
         }
     }
 
+    /** Signals an unexpected failure while projecting legal moves. */
     public static final class MoveProcessingException extends RuntimeException {
         private static final long serialVersionUID = 1L;
 
