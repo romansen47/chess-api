@@ -122,89 +122,116 @@ public class EngineRuntimeSelectionService {
         return override != null ? override : engineSettingsService.getDefaultEvaluationProfileId();
     }
 
+    /** @return effective White-player config when one is available */
     public synchronized Optional<UciEngineConfig> findWhitePlayerConfig() {
         return findConfig(getEffectiveWhitePlayerProfileId());
     }
 
+    /** @return effective Black-player config when one is available */
     public synchronized Optional<UciEngineConfig> findBlackPlayerConfig() {
         return findConfig(getEffectiveBlackPlayerProfileId());
     }
 
+    /** @return effective live-evaluation config when one is available */
     public synchronized Optional<UciEngineConfig> findEvaluationConfig() {
         return findConfig(getEffectiveEvaluationProfileId());
     }
 
+    /** @return effective White-player config
+     * @throws NativeEngineUnavailableException when none is configured
+     */
     public synchronized UciEngineConfig requireWhitePlayerConfig() {
         return findWhitePlayerConfig()
                 .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.WHITE_PLAYER));
     }
 
+    /** @return effective Black-player config
+     * @throws NativeEngineUnavailableException when none is configured
+     */
     public synchronized UciEngineConfig requireBlackPlayerConfig() {
         return findBlackPlayerConfig()
                 .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.BLACK_PLAYER));
     }
 
+    /** @return effective live-evaluation config
+     * @throws NativeEngineUnavailableException when none is configured
+     */
     public synchronized UciEngineConfig requireEvaluationConfig() {
         return findEvaluationConfig()
                 .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.EVALUATION));
     }
 
+    /** @return effective White-player config */
     public synchronized UciEngineConfig getWhitePlayerConfig() {
         return requireWhitePlayerConfig();
     }
 
+    /** @return effective Black-player config */
     public synchronized UciEngineConfig getBlackPlayerConfig() {
         return requireBlackPlayerConfig();
     }
 
+    /** @return effective live-evaluation config */
     public synchronized UciEngineConfig getEvaluationConfig() {
         return requireEvaluationConfig();
     }
 
+    /** @return White-player engine path when configured */
     public synchronized Optional<String> findWhitePlayerEnginePath() {
         return findWhitePlayerConfig().map(UciEngineConfig::getEngine);
     }
 
+    /** @return Black-player engine path when configured */
     public synchronized Optional<String> findBlackPlayerEnginePath() {
         return findBlackPlayerConfig().map(UciEngineConfig::getEngine);
     }
 
+    /** @return live-evaluation engine path when configured */
     public synchronized Optional<String> findEvaluationEnginePath() {
         return findEvaluationConfig().map(UciEngineConfig::getEngine);
     }
 
+    /** @return required White-player engine path */
     public synchronized String getWhitePlayerEnginePath() {
         return requireWhitePlayerConfig().getEngine();
     }
 
+    /** @return required Black-player engine path */
     public synchronized String getBlackPlayerEnginePath() {
         return requireBlackPlayerConfig().getEngine();
     }
 
+    /** @return required live-evaluation engine path */
     public synchronized String getEvaluationEnginePath() {
         return requireEvaluationConfig().getEngine();
     }
 
+    /** @return display name of the effective White-player engine */
     public synchronized String getWhitePlayerEngineName() {
         return engineSettingsService.getEngineName(getWhitePlayerEnginePath());
     }
 
+    /** @return display name of the effective Black-player engine */
     public synchronized String getBlackPlayerEngineName() {
         return engineSettingsService.getEngineName(getBlackPlayerEnginePath());
     }
 
+    /** @return display name of the effective live-evaluation engine */
     public synchronized String getEvaluationEngineName() {
         return engineSettingsService.getEngineName(getEvaluationEnginePath());
     }
 
+    /** @return version token for White-player runtime selection */
     public synchronized long getWhitePlayerVersion() {
         return combinedVersion(whitePlayerSelectionVersion);
     }
 
+    /** @return version token for Black-player runtime selection */
     public synchronized long getBlackPlayerVersion() {
         return combinedVersion(blackPlayerSelectionVersion);
     }
 
+    /** @return version token for live-evaluation runtime selection */
     public synchronized long getEvaluationVersion() {
         return combinedVersion(evaluationSelectionVersion);
     }
