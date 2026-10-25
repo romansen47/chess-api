@@ -8,6 +8,13 @@ import demo.chess.api.dto.ClockDto;
 import demo.chess.definitions.clocks.impl.ChessClock;
 import demo.chess.game.Game;
 
+/**
+ * Projects the core-owned chess clocks into the API representation.
+ *
+ * <p>The service does not own timekeeping. It reads the current game clocks,
+ * formats the configured time control and enriches the response with the
+ * current runtime engine labels.</p>
+ */
 @Service
 public class ClockService {
 
@@ -15,8 +22,9 @@ public class ClockService {
     private final EngineRuntimeSelectionService engineRuntimeSelectionService;
 
     /**
-     * Creates a new ClockService instance.
-     * @param gameService the game service
+     * Creates the clock projection service.
+     *
+     * @param gameService owner of the current game
      * @param engineRuntimeSelectionService runtime engine profile selections
      */
     public ClockService(
@@ -27,8 +35,9 @@ public class ClockService {
     }
 
     /**
-     * Returns the clock.
-     * @return the clock
+     * Returns the current clock and player/engine display state.
+     *
+     * @return current clock DTO
      */
     public ClockDto getClock() {
         Game game = gameService.getCurrentGame();
@@ -97,11 +106,12 @@ public class ClockService {
     }
 
     /**
-     * Formats the time control.
-     * @param timeForEachPlayer the time for each player
-     * @param incrementForWhite the increment for white
-     * @param incrementForBlack the increment for black
-     * @return the result of the operation
+     * Formats the configured base time and asymmetric increments for display.
+     *
+     * @param timeForEachPlayer base time in seconds
+     * @param incrementForWhite White increment in seconds
+     * @param incrementForBlack Black increment in seconds
+     * @return compact display value such as {@code 5+0} or {@code 5+2/3}
      */
     private String formatTimeControl(int timeForEachPlayer, int incrementForWhite, int incrementForBlack) {
         String base;
