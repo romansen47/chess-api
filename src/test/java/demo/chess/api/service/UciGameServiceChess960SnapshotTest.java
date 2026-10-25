@@ -1,7 +1,11 @@
 package demo.chess.api.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -59,4 +63,44 @@ class UciGameServiceChess960SnapshotTest {
         assertEquals("0.20", imported.getAnnotations().get(0).evaluation());
     }
 
+
+    @Test
+    void editsImportedMetadataWhileProtectingChess960Identity() throws Exception {
+        GameService gameService = new GameService();
+        UciGameService service = new UciGameService(gameService, null);
+        ChessStartingPosition position = ChessStartingPosition.of(0);
+        String pgn = "[Event \"Original\"]\n"
+                + "[Site \"Old Site\"]\n"
+                + "[Variant \"Chess960\"]\n"
+                + "[SetUp \"1\"]\n"
+                + "[FEN \"" + position.initialFen() + "\"]\n"
+                + "[White \"Alice\"]\n"
+                + "[Black \"Bob\"]\n"
+                + "[Result \"*\"]\n\n*\n";
+
+        UciGameDto imported = service.importGame(pgn, 42L);
+        Map<String, String> edited = new LinkedHashMap<>(imported.getPgnTags());
+        edited.put("Event", "Edited");
+        edited.put("Site", "Stuttgart");
+        edited.put("White", "Carol");
+        edited.put("Black", "Dave");
+
+        UciGameService.PreparedMetadataUpdate prepared =
+                service.prepareMetadataUpdate(edited);
+        service.applyMetadataUpdate(prepared);
+
+        UciGameDto snapshot = service.getCurrentGameSnapshot().getGame();
+        assertEquals("Edited", snapshot.getPgnTags().get("Event"));
+        assertEquals("Stuttgart", snapshot.getPgnTags().get("Site"));
+        assertEquals("Carol", snapshot.getWhitePlayerName());
+        assertEquals("Dave", snapshot.getBlackPlayerName());
+        assertEquals(position.initialFen(), snapshot.getPgnTags().get("FEN"));
+        assertTrue(prepared.pgn().contains("[Event \"Edited\"]"));
+
+        Map<String, String> illegal = new LinkedHashMap<>(edited);
+        illegal.put("FEN", ChessStartingPosition.STANDARD.initialFen());
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> service.prepareMetadataUpdate(illegal));
+    }
 }

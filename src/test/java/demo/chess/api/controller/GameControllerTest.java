@@ -19,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.api.service.ChessDatabaseService;
 import demo.chess.api.service.GameLifecycleService;
+import demo.chess.api.service.GameMetadataService;
 import demo.chess.api.service.GameService;
 import demo.chess.api.service.UciGameService;
 
@@ -34,11 +35,13 @@ class GameControllerTest {
         GameLifecycleService gameLifecycleService = mock(GameLifecycleService.class);
         UciGameService uciGameService = mock(UciGameService.class);
         ChessDatabaseService chessDatabaseService = mock(ChessDatabaseService.class);
+        GameMetadataService gameMetadataService = mock(GameMetadataService.class);
         GameController controller = new GameController(
                 gameService,
                 gameLifecycleService,
                 uciGameService,
-                chessDatabaseService);
+                chessDatabaseService,
+                gameMetadataService);
 
         String pgn = """
                 [Event "Single Import"]
@@ -74,11 +77,13 @@ class GameControllerTest {
         GameLifecycleService gameLifecycleService = mock(GameLifecycleService.class);
         UciGameService uciGameService = mock(UciGameService.class);
         ChessDatabaseService chessDatabaseService = mock(ChessDatabaseService.class);
+        GameMetadataService gameMetadataService = mock(GameMetadataService.class);
         GameController controller = new GameController(
                 gameService,
                 gameLifecycleService,
                 uciGameService,
-                chessDatabaseService);
+                chessDatabaseService,
+                gameMetadataService);
 
         String pgn = """
                 [Event "First"]
@@ -112,11 +117,13 @@ class GameControllerTest {
         GameLifecycleService gameLifecycleService = mock(GameLifecycleService.class);
         UciGameService uciGameService = mock(UciGameService.class);
         ChessDatabaseService chessDatabaseService = mock(ChessDatabaseService.class);
+        GameMetadataService gameMetadataService = mock(GameMetadataService.class);
         GameController controller = new GameController(
                 gameService,
                 gameLifecycleService,
                 uciGameService,
-                chessDatabaseService);
+                chessDatabaseService,
+                gameMetadataService);
 
         ResponseEntity<?> response = controller.importPgnGame("   \n\t");
 
