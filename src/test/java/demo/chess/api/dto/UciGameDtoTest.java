@@ -11,6 +11,7 @@ import demo.chess.definitions.ChessStartingPosition;
 
 class UciGameDtoTest {
 
+    /** Verifies that snapshot clients receive semantic standard-position information. */
     @Test
     void exposesSemanticStandardStartingPositionWithoutInspectingFenInClients() {
         UciGameDto standard = new UciGameDto(
