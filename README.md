@@ -17,6 +17,12 @@ REST controller
 
 Controllers should remain thin. In particular, they should not contain Chess960 castling rules, UCI encoding rules, board traversal logic, executable probing, or engine fallback policy. Those concerns have dedicated application/core components.
 
+### Human move boundary
+
+`MoveController` is intentionally an HTTP-only adapter. Board interaction and legal-move projection are coordinated by `MoveApplicationService`, which delegates legality and canonical UCI semantics to the `chess` core. Controllers must not traverse core boards or legal-move collections directly.
+
+Game snapshots expose `standardStartingPosition` as semantic information derived from `ChessStartingPosition`. Clients must use that semantic field for presentation instead of re-deriving the variant from FEN text.
+
 ### DTO boundary
 
 REST DTOs are transport objects and deliberately contain primitive/string representations rather than exposing mutable core objects. `GameSettingsDto` carries the Scharnagl `startingPositionId`; `UciGameDto` additionally carries `initialFen` because a move list without its initial position cannot reconstruct a Chess960 game.
