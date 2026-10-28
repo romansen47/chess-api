@@ -70,24 +70,6 @@ public class OpeningLibraryService {
         return toDto(requireOpening(id));
     }
 
-    /**
-     * Returns every exact move-order line assigned to one named variation.
-     *
-     * @param variationName complete stored variation name
-     * @return exact lines in that variation
-     */
-    public synchronized List<OpeningDto> getOpeningLinesForVariation(String variationName) {
-        if (variationName == null || variationName.isBlank()) {
-            return List.of();
-        }
-        String requested = variationName.trim();
-        return openings.values().stream()
-                .filter(opening -> opening.name().equals(requested))
-                .map(this::toDto)
-                .sorted(Comparator.comparingInt(opening -> opening.getMoves().size()))
-                .toList();
-    }
-
     public synchronized List<OpeningDto> importPgn(String content, String fileName)
             throws NoMoveFoundException, IOException {
         List<String> games = gameLoader.splitPgnGames(content);
