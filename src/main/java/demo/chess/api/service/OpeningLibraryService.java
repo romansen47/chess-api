@@ -92,8 +92,8 @@ public class OpeningLibraryService {
             Map<String, String> tags = gameLoader.parsePgnTags(pgn);
             ManagedOpening opening = new ManagedOpening(
                     UUID.randomUUID().toString(),
-                    openingName(tags, fileName, index + 1, games.size()),
-                    cleanTag(tags, "ECO"),
+                    OpeningPgnMetadata.openingName(tags, fileName, index + 1, games.size()),
+                    OpeningPgnMetadata.cleanTag(tags, "ECO"),
                     startingPosition.getId(),
                     List.copyOf(moves));
             toDto(opening);
@@ -181,45 +181,6 @@ public class OpeningLibraryService {
             throw new IllegalArgumentException("Unknown opening id: " + id);
         }
         return opening;
-    }
-
-    private String openingName(
-            Map<String, String> tags,
-            String fileName,
-            int index,
-            int totalGames) {
-        String tagged = firstNonBlank(
-                cleanTag(tags, "Opening"),
-                cleanTag(tags, "Variation"),
-                cleanTag(tags, "Event"));
-        if (tagged != null) return tagged;
-
-        String base = fileName == null ? "" : fileName.trim();
-        if (!base.isEmpty()) {
-            int slash = Math.max(base.lastIndexOf('/'), base.lastIndexOf('\\'));
-            if (slash >= 0) base = base.substring(slash + 1);
-            int dot = base.lastIndexOf('.');
-            if (dot > 0) base = base.substring(0, dot);
-        }
-        if (base.isBlank()) base = "Opening";
-        return totalGames > 1 ? base + " #" + index : base;
-    }
-
-    private String cleanTag(Map<String, String> tags, String requestedKey) {
-        if (tags == null || requestedKey == null) return null;
-        for (Map.Entry<String, String> entry : tags.entrySet()) {
-            if (!requestedKey.equalsIgnoreCase(entry.getKey())) continue;
-            String value = entry.getValue();
-            return value == null || value.isBlank() ? null : value.trim();
-        }
-        return null;
-    }
-
-    private String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) return value;
-        }
-        return null;
     }
 
     private void loadStore() {
