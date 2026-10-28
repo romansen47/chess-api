@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,6 +50,7 @@ public class OpeningLibraryService {
     private final Path storePath;
     private final GameLoader gameLoader = new GameLoader();
     private final LinkedHashMap<String, ManagedOpening> openings = new LinkedHashMap<>();
+    private final Map<String, OpeningDto> dtoCache = new HashMap<>();
     private long version = 1L;
 
     public OpeningLibraryService(ObjectMapper objectMapper) {
@@ -96,10 +98,11 @@ public class OpeningLibraryService {
                     OpeningPgnMetadata.cleanTag(tags, "ECO"),
                     startingPosition.getId(),
                     List.copyOf(moves));
-            toDto(opening);
-            if (knownOpeningKeys.add(openingKey(opening))) {
-                imported.add(opening);
+            if (!knownOpeningKeys.add(openingKey(opening))) {
+                continue;
             }
+            toDto(opening);
+            imported.add(opening);
         }
 
         if (imported.isEmpty()) {
@@ -126,6 +129,7 @@ public class OpeningLibraryService {
                 existing.startingPositionId(),
                 existing.moves());
         openings.put(existing.id(), replacement);
+        dtoCache.remove(existing.id());
         version++;
         persistStore();
         return toDto(replacement);
@@ -134,11 +138,16 @@ public class OpeningLibraryService {
     public synchronized void deleteOpening(String id) {
         requireOpening(id);
         openings.remove(id);
+        dtoCache.remove(id);
         version++;
         persistStore();
     }
 
     private OpeningDto toDto(ManagedOpening opening) {
+        OpeningDto cached = dtoCache.get(opening.id());
+        if (cached != null) {
+            return cached;
+        }
         try {
             ChessStartingPosition startingPosition = ChessStartingPosition.of(opening.startingPositionId());
             Game simulation = Simulation.createSimulation(startingPosition);
@@ -165,6 +174,7 @@ public class OpeningLibraryService {
             dto.setPosition(BoardPositionSerializer.toPositionString(simulation));
             dto.setSideToMove(simulation.getPlayer().getColor().name().toLowerCase(Locale.ROOT));
             dto.setPlayable(playable);
+            dtoCache.put(opening.id(), dto);
             return dto;
         } catch (NoMoveFoundException | IOException e) {
             throw new IllegalStateException("Stored opening is invalid: " + opening.name(), e);
@@ -214,6 +224,7 @@ public class OpeningLibraryService {
         } catch (Exception e) {
             logger.warn("Could not load opening library " + storePath + ": " + e.getMessage());
             openings.clear();
+            dtoCache.clear();
             version = 1L;
         }
     }
