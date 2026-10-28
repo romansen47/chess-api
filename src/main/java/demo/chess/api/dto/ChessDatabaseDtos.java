@@ -92,8 +92,8 @@ public final class ChessDatabaseDtos {
      * @param result PGN result
      * @param minElo minimum rating for both players
      * @param eco ECO code prefix
-     * @param openingStartingPositionId starting position for an opening-line filter
-     * @param openingMoves UCI move prefix for an opening-line filter
+     * @param openingVariation complete opening-variation name; matches any explicit move order
+     * @param openingLineId optional exact opening-line id within the variation
      * @param limit maximum result count
      */
     public record SearchRequest(
@@ -106,8 +106,8 @@ public final class ChessDatabaseDtos {
             String result,
             Integer minElo,
             String eco,
-            Integer openingStartingPositionId,
-            List<String> openingMoves,
+            String openingVariation,
+            String openingLineId,
             Integer limit) {
 
         /** Backward-compatible constructor without opening filters. */
@@ -124,7 +124,7 @@ public final class ChessDatabaseDtos {
             this(
                     white, black, player, player2,
                     fromYear, toYear, result, minElo,
-                    null, null, List.of(), limit);
+                    null, null, null, limit);
         }
 
         /**
