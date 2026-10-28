@@ -93,6 +93,69 @@ class OpeningLibraryServiceTest {
         assertTrue(service.getOpenings().isEmpty());
     }
 
+
+    @Test
+    void deduplicatesIdenticalOpeningLinesWithinOneImport() throws Exception {
+        System.setProperty("chess.opening.library.file", tempDir.resolve("openings.json").toString());
+        OpeningLibraryService service = new OpeningLibraryService(new ObjectMapper());
+
+        String pgn = """
+                [Opening "Italian Game"]
+                [ECO "C50"]
+                [Result "1-0"]
+
+                1. e4 e5 2. Nf3 Nc6 1-0
+
+                [Opening "Italian Game"]
+                [ECO "C50"]
+                [Result "0-1"]
+
+                1. e4 e5 2. Nf3 Nc6 0-1
+
+                [Opening "Italian Game"]
+                [ECO "C50"]
+                [Result "1/2-1/2"]
+
+                1. e4 e5 2. Nf3 Nc6 1/2-1/2
+                """;
+
+        List<OpeningDto> imported = service.importPgn(pgn, "duplicates.pgn");
+
+        assertEquals(1, imported.size());
+        assertEquals(1, service.getOpenings().size());
+        assertEquals("Italian Game", service.getOpenings().get(0).getName());
+    }
+
+    @Test
+    void removesLegacyDuplicateLinesWhenLoadingTheStore() throws Exception {
+        Path store = tempDir.resolve("openings.json");
+        System.setProperty("chess.opening.library.file", store.toString());
+        java.nio.file.Files.writeString(store, """
+                {
+                  "version" : 3,
+                  "openings" : [ {
+                    "id" : "one",
+                    "name" : "Italian Game",
+                    "eco" : "C50",
+                    "startingPositionId" : 518,
+                    "moves" : [ "e2e4", "e7e5", "g1f3", "b8c6" ]
+                  }, {
+                    "id" : "two",
+                    "name" : "Italian Game duplicate",
+                    "eco" : "C50",
+                    "startingPositionId" : 518,
+                    "moves" : [ "e2e4", "e7e5", "g1f3", "b8c6" ]
+                  } ]
+                }
+                """);
+
+        OpeningLibraryService service = new OpeningLibraryService(new ObjectMapper());
+
+        assertEquals(1, service.getOpenings().size());
+        OpeningLibraryService reloaded = new OpeningLibraryService(new ObjectMapper());
+        assertEquals(1, reloaded.getOpenings().size());
+    }
+
     @Test
     void marksCheckmatedLineAsNotPlayable() throws Exception {
         System.setProperty("chess.opening.library.file", tempDir.resolve("openings.json").toString());
