@@ -41,7 +41,9 @@ public class DatabaseOpeningSearchResolver {
             return List.of();
         }
 
-        List<OpeningDto> lines = openingLibraryService.getOpeningLinesForVariation(variation);
+        List<OpeningDto> lines = openingLibraryService.getOpenings().stream()
+                .filter(opening -> variation.equals(opening.getName()))
+                .toList();
         if (lines.isEmpty()) {
             throw new IllegalArgumentException("Unknown opening variation: " + variation);
         }
