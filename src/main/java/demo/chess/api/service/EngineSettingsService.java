@@ -1,14 +1,8 @@
 package demo.chess.api.service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -23,39 +17,25 @@ import demo.chess.api.dto.EngineConfigStoreDto;
 import demo.chess.api.dto.EngineDefinitionDto;
 import demo.chess.api.dto.EngineProfileAssignmentsDto;
 import demo.chess.api.dto.EngineProfileDto;
-import demo.chess.api.dto.ManagedEngineConfigDto;
-import demo.chess.api.dto.UciOptionDto;
+import demo.chess.api.service.EngineSettingsRegistry.ManagedEngineDefinition;
+import demo.chess.api.service.EngineSettingsRegistry.ManagedProfile;
 import demo.chess.definitions.engines.EngineConfigType;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.UciEngineDefinition;
 import demo.chess.definitions.engines.UciEngineInspector;
-import demo.chess.definitions.engines.UciOption;
-import demo.chess.definitions.engines.UciOptionType;
-import demo.chess.definitions.engines.UciSystemOptions;
 
-/**
- * Registry for UCI engines, reusable profiles and their use-case assignments.
- *
- * Engine definition: executable + UCI identity + option schema/defaults.
- * Profile: one engine + concrete UCI option values.
- * Assignment: which profile is used by White CPU, Black CPU, live evaluation
- *             and deep analysis by default.
- *
- * A profile intentionally has no PLAYER/EVALUATION/DEEP_ANALYSIS type. The same
- * profile may be assigned to any number of use cases.
- */
+/** Coordinates engine/profile CRUD, assignments, runtime versions and persistence. */
 @Service
 public class EngineSettingsService {
 
     private static final Log logger = LogFactory.getLog(EngineSettingsService.class);
-    private static final String STORE_PROPERTY = "chess.engine.config.file";
-
     private final EngineDiscoveryService engineDiscoveryService;
     private final String defaultEnginePath;
-    private final ObjectMapper objectMapper;
-    private final Path storePath;
-    private final LinkedHashMap<String, ManagedEngineDefinition> engines = new LinkedHashMap<>();
-    private final LinkedHashMap<String, ManagedProfile> profiles = new LinkedHashMap<>();
+    private final EngineSettingsRegistry registry = new EngineSettingsRegistry();
+    private final EngineSettingsStore store;
+    private final LegacyEngineSettingsMigrator legacyMigrator = new LegacyEngineSettingsMigrator();
+    private final LinkedHashMap<String, ManagedEngineDefinition> engines = registry.engines();
+    private final LinkedHashMap<String, ManagedProfile> profiles = registry.profiles();
 
     private String fallbackProfileId;
     private String defaultWhitePlayerProfileId;
@@ -68,16 +48,10 @@ public class EngineSettingsService {
     private long blackPlayerVersion = 1L;
     private long evaluationVersion = 1L;
 
-    /**
-     * Creates a new EngineSettingsService instance.
-     * @param objectMapper the object mapper
-     * @param engineDiscoveryService the engine discovery service
-     */
     public EngineSettingsService(ObjectMapper objectMapper, EngineDiscoveryService engineDiscoveryService) {
-        this.objectMapper = objectMapper;
+        this.store = new EngineSettingsStore(objectMapper);
         this.engineDiscoveryService = engineDiscoveryService;
         this.defaultEnginePath = engineDiscoveryService.getPreferredEnginePath();
-        this.storePath = resolveStorePath();
 
         boolean storedConfigurationLoaded = loadStore();
 
@@ -92,10 +66,6 @@ public class EngineSettingsService {
         persistStore();
     }
 
-    /**
-     * Resets the to fallback defaults.
-     * @return the result of the operation
-     */
     public synchronized EngineConfigOverviewDto resetToFallbackDefaults() {
         engines.clear();
         profiles.clear();
@@ -120,10 +90,6 @@ public class EngineSettingsService {
         return getOverview();
     }
 
-    /**
-     * Performs the discover system engines operation.
-     * @return the result of the operation
-     */
     public synchronized EngineConfigOverviewDto discoverSystemEngines() {
         String previousWhite = defaultWhitePlayerProfileId;
         String previousBlack = defaultBlackPlayerProfileId;
@@ -149,15 +115,6 @@ public class EngineSettingsService {
         return getOverview();
     }
 
-    /**
-     * Discovers server-owned UCI executables without registering them.
-     *
-     * <p>The browser never opens a file chooser on the backend host. Discovery
-     * returns inspected candidates from the configured server directory and the
-     * client explicitly chooses which candidate to register.</p>
-     *
-     * @return unregistered engine definitions with {@code id == null}
-     */
     public synchronized List<EngineDefinitionDto> discoverEngineCandidates() {
         return engineDiscoveryService.discover().stream()
                 .filter(definition -> findEngineByPath(definition.getEngine()) == null)
@@ -173,10 +130,6 @@ public class EngineSettingsService {
                 .toList();
     }
 
-    /**
-     * Returns the overview.
-     * @return the overview
-     */
     public synchronized EngineConfigOverviewDto getOverview() {
         List<EngineDefinitionDto> engineDtos = engines.values().stream()
                 .map(this::toDto)
@@ -194,11 +147,6 @@ public class EngineSettingsService {
                 version);
     }
 
-    /**
-     * Updates the default assignments.
-     * @param incoming the incoming
-     * @return the result of the operation
-     */
     public synchronized EngineProfileAssignmentsDto updateDefaultAssignments(EngineProfileAssignmentsDto incoming) {
         if (incoming == null) {
             throw new IllegalArgumentException("Default profile assignments must not be null");
@@ -237,12 +185,6 @@ public class EngineSettingsService {
         return currentAssignments();
     }
 
-    /**
-     * Performs the inspect engine definition operation.
-     * @param enginePath the engine path
-     * @param requestedName the requested name
-     * @return the result of the operation
-     */
     public synchronized EngineDefinitionDto inspectEngineDefinition(String enginePath, String requestedName) {
         try {
             UciEngineDefinition inspected = UciEngineInspector.inspect(enginePath);
@@ -258,11 +200,6 @@ public class EngineSettingsService {
         }
     }
 
-    /**
-     * Creates the engine.
-     * @param incoming the incoming
-     * @return the result of the operation
-     */
     public synchronized EngineDefinitionDto createEngine(EngineDefinitionDto incoming) {
         if (incoming == null) {
             throw new IllegalArgumentException("Engine definition must not be null");
@@ -287,12 +224,6 @@ public class EngineSettingsService {
         return toDto(managed);
     }
 
-    /**
-     * Updates the engine.
-     * @param id the id
-     * @param incoming the incoming
-     * @return the result of the operation
-     */
     public synchronized EngineDefinitionDto updateEngine(String id, EngineDefinitionDto incoming) {
         ManagedEngineDefinition existing = requireEngine(id);
         if (incoming == null) {
@@ -315,10 +246,6 @@ public class EngineSettingsService {
         return toDto(replacement);
     }
 
-    /**
-     * Deletes the engine.
-     * @param id the id
-     */
     public synchronized void deleteEngine(String id) {
         ManagedEngineDefinition existing = requireEngine(id);
 
@@ -353,11 +280,6 @@ public class EngineSettingsService {
         persistStore();
     }
 
-    /**
-     * Creates the profile.
-     * @param incoming the incoming
-     * @return the result of the operation
-     */
     public synchronized EngineProfileDto createProfile(EngineProfileDto incoming) {
         if (incoming == null) {
             throw new IllegalArgumentException("Engine profile must not be null");
@@ -374,12 +296,6 @@ public class EngineSettingsService {
         return toDto(profile);
     }
 
-    /**
-     * Updates the profile.
-     * @param id the id
-     * @param incoming the incoming
-     * @return the result of the operation
-     */
     public synchronized EngineProfileDto updateProfile(String id, EngineProfileDto incoming) {
         ManagedProfile existing = requireProfile(id);
         if (incoming == null) {
@@ -398,10 +314,6 @@ public class EngineSettingsService {
         return toDto(replacement);
     }
 
-    /**
-     * Deletes the profile.
-     * @param id the id
-     */
     public synchronized void deleteProfile(String id) {
         ManagedProfile existing = requireProfile(id);
         if (existing.id.equals(fallbackProfileId)) {
@@ -416,96 +328,46 @@ public class EngineSettingsService {
         persistStore();
     }
 
-    /**
-     * Performs the normalize profile id operation.
-     * @param profileId the profile id
-     * @return the result of the operation
-     */
     public synchronized String normalizeProfileId(String profileId) {
         return resolveProfileId(profileId, fallbackProfileId);
     }
 
-    /**
-     * Performs the normalize deep analysis profile id operation.
-     * @param profileId the profile id
-     * @return the result of the operation
-     */
     public synchronized String normalizeDeepAnalysisProfileId(String profileId) {
         return resolveProfileId(profileId, defaultDeepAnalysisProfileId);
     }
 
-    /**
-     * Returns the default white player profile id.
-     * @return the default white player profile id
-     */
     public synchronized String getDefaultWhitePlayerProfileId() {
         return defaultWhitePlayerProfileId;
     }
 
-    /**
-     * Returns the default black player profile id.
-     * @return the default black player profile id
-     */
     public synchronized String getDefaultBlackPlayerProfileId() {
         return defaultBlackPlayerProfileId;
     }
 
-    /**
-     * Returns the default evaluation profile id.
-     * @return the default evaluation profile id
-     */
     public synchronized String getDefaultEvaluationProfileId() {
         return defaultEvaluationProfileId;
     }
 
-    /**
-     * Returns the default deep analysis profile id.
-     * @return the default deep analysis profile id
-     */
     public synchronized String getDefaultDeepAnalysisProfileId() {
         return defaultDeepAnalysisProfileId;
     }
 
-    /**
-     * Returns the config.
-     * @param id the id
-     * @return the config
-     */
     public synchronized UciEngineConfig getConfig(String id) {
         return resolveRuntimeConfig(requireProfile(id), 0, 0);
     }
 
-    /**
-     * Returns the white player config.
-     * @return the white player config
-     */
     public synchronized UciEngineConfig getWhitePlayerConfig() {
         return resolveRuntimeConfig(requireProfile(defaultWhitePlayerProfileId), 0, 0);
     }
 
-    /**
-     * Returns the black player config.
-     * @return the black player config
-     */
     public synchronized UciEngineConfig getBlackPlayerConfig() {
         return resolveRuntimeConfig(requireProfile(defaultBlackPlayerProfileId), 0, 0);
     }
 
-    /**
-     * Performs the to evaluation engine config operation.
-     * @return the result of the operation
-     */
     public synchronized UciEngineConfig toEvaluationEngineConfig() {
         return resolveRuntimeConfig(requireProfile(defaultEvaluationProfileId), 0, 0);
     }
 
-    /**
-     * Returns the deep analysis config.
-     * @param profileId the profile id
-     * @param depth the depth
-     * @param moveTimeSeconds the move time seconds
-     * @return the deep analysis config
-     */
     public synchronized UciEngineConfig getDeepAnalysisConfig(
             String profileId,
             int depth,
@@ -516,59 +378,30 @@ public class EngineSettingsService {
         return resolveRuntimeConfig(requireProfile(resolved), safeDepth, safeMoveTimeSeconds);
     }
 
-    /**
-     * Returns the white player engine path.
-     * @return the white player engine path
-     */
     public synchronized String getWhitePlayerEnginePath() {
         return engineForProfile(requireProfile(defaultWhitePlayerProfileId)).definition.getEngine();
     }
 
-    /**
-     * Returns the black player engine path.
-     * @return the black player engine path
-     */
     public synchronized String getBlackPlayerEnginePath() {
         return engineForProfile(requireProfile(defaultBlackPlayerProfileId)).definition.getEngine();
     }
 
-    /**
-     * Returns the evaluation engine path.
-     * @return the evaluation engine path
-     */
     public synchronized String getEvaluationEnginePath() {
         return engineForProfile(requireProfile(defaultEvaluationProfileId)).definition.getEngine();
     }
 
-    /**
-     * Returns the white player engine name.
-     * @return the white player engine name
-     */
     public synchronized String getWhitePlayerEngineName() {
         return engineForProfile(requireProfile(defaultWhitePlayerProfileId)).definition.getEngineName();
     }
 
-    /**
-     * Returns the black player engine name.
-     * @return the black player engine name
-     */
     public synchronized String getBlackPlayerEngineName() {
         return engineForProfile(requireProfile(defaultBlackPlayerProfileId)).definition.getEngineName();
     }
 
-    /**
-     * Returns the evaluation engine name.
-     * @return the evaluation engine name
-     */
     public synchronized String getEvaluationEngineName() {
         return engineForProfile(requireProfile(defaultEvaluationProfileId)).definition.getEngineName();
     }
 
-    /**
-     * Returns the engine name.
-     * @param enginePath the engine path
-     * @return the engine name
-     */
     public synchronized String getEngineName(String enginePath) {
         ManagedEngineDefinition managed = findEngineByPath(enginePath);
         if (managed != null) {
@@ -581,50 +414,26 @@ public class EngineSettingsService {
         }
     }
 
-    /**
-     * Returns the version.
-     * @return the version
-     */
     public synchronized long getVersion() {
         return version;
     }
 
-    /**
-     * Returns the white player version.
-     * @return the white player version
-     */
     public synchronized long getWhitePlayerVersion() {
         return whitePlayerVersion;
     }
 
-    /**
-     * Returns the black player version.
-     * @return the black player version
-     */
     public synchronized long getBlackPlayerVersion() {
         return blackPlayerVersion;
     }
 
-    /**
-     * Returns the evaluation version.
-     * @return the evaluation version
-     */
     public synchronized long getEvaluationVersion() {
         return evaluationVersion;
     }
 
-    /**
-     * Returns the default engine path.
-     * @return the default engine path
-     */
     public String getDefaultEnginePath() {
         return defaultEnginePath;
     }
 
-    /**
-     * Performs the current assignments operation.
-     * @return the result of the operation
-     */
     private EngineProfileAssignmentsDto currentAssignments() {
         return new EngineProfileAssignmentsDto(
                 defaultWhitePlayerProfileId,
@@ -633,153 +442,29 @@ public class EngineSettingsService {
                 defaultDeepAnalysisProfileId);
     }
 
-    /**
-     * Performs the definition from dto operation.
-     * @param dto the dto
-     * @return the result of the operation
-     */
     private UciEngineDefinition definitionFromDto(EngineDefinitionDto dto) {
-        if (dto.getEngine() == null || dto.getEngine().isBlank()) {
-            throw new IllegalArgumentException("Engine path must not be blank");
-        }
-
-        LinkedHashMap<String, UciOption> options = new LinkedHashMap<>();
-        for (Map.Entry<String, UciOptionDto> entry : dto.getOptions().entrySet()) {
-            UciOptionDto source = entry.getValue();
-            if (source == null) {
-                continue;
-            }
-            UciOptionType optionType = UciOptionType.fromUciValue(source.getType());
-            String configuredDefault = optionType == UciOptionType.BUTTON ? null : source.getDefaultValue();
-            options.put(entry.getKey(), new UciOption(
-                    optionType,
-                    configuredDefault,
-                    configuredDefault,
-                    source.getMin(),
-                    source.getMax(),
-                    source.getVars()));
-        }
-
-        return new UciEngineDefinition(
-                dto.getEngine(),
-                dto.getEngineName(),
-                dto.getEngineAuthor(),
-                options);
+        return registry.definitionFromDto(dto);
     }
 
-    /**
-     * Performs the profile from dto operation.
-     * @param id the id
-     * @param dto the dto
-     * @return the result of the operation
-     */
     private ManagedProfile profileFromDto(String id, EngineProfileDto dto) {
-        if (dto.getEngineId() == null || dto.getEngineId().isBlank()) {
-            throw new IllegalArgumentException("An engine must be selected before a profile can be created");
-        }
-        ManagedEngineDefinition engine = requireEngine(dto.getEngineId().trim());
-
-        for (String incomingName : dto.getOptionValues().keySet()) {
-            if (UciSystemOptions.isSystemManaged(incomingName)) {
-                continue;
-            }
-            UciOption option = engine.definition.getOption(incomingName);
-            if (option == null) {
-                throw new IllegalArgumentException(
-                        "Profile contains option '" + incomingName
-                                + "' which is not supported by engine " + engine.name);
-            }
-            if (!option.isConfigurable()) {
-                throw new IllegalArgumentException(
-                        "UCI button option '" + incomingName + "' cannot be stored in a profile");
-            }
-        }
-
-        LinkedHashMap<String, String> normalizedValues = new LinkedHashMap<>();
-        for (Map.Entry<String, UciOption> entry : engine.definition.getOptions().entrySet()) {
-            UciOption definitionOption = entry.getValue();
-            if (!definitionOption.isConfigurable()
-                    || UciSystemOptions.isSystemManaged(entry.getKey())) {
-                continue;
-            }
-            String value = dto.getOptionValues().containsKey(entry.getKey())
-                    ? dto.getOptionValues().get(entry.getKey())
-                    : definitionOption.getDefaultValue();
-            UciOption validator = definitionOption.copy();
-            validator.setValue(value);
-            normalizedValues.put(entry.getKey(), validator.getValue());
-        }
-
-        String name = dto.getName() == null || dto.getName().isBlank()
-                ? engine.name + " Profile"
-                : dto.getName().trim();
-        return new ManagedProfile(id, name, engine.id, normalizedValues);
+        return registry.profileFromDto(id, dto);
     }
 
-    /**
-     * Resolves the runtime config.
-     * @param profile the profile
-     * @param depth the depth
-     * @param moveTimeSeconds the move time seconds
-     * @return the result of the operation
-     */
     private UciEngineConfig resolveRuntimeConfig(
             ManagedProfile profile,
             int depth,
             int moveTimeSeconds) {
-        ManagedEngineDefinition engine = engineForProfile(profile);
-        return engine.definition.createRuntimeConfig(
-                Math.max(0, depth),
-                Math.max(0, moveTimeSeconds),
-                profile.optionValues);
+        return registry.resolveRuntimeConfig(profile, depth, moveTimeSeconds);
     }
 
-    /**
-     * Performs the to dto operation.
-     * @param managed the managed
-     * @return the result of the operation
-     */
     private EngineDefinitionDto toDto(ManagedEngineDefinition managed) {
-        EngineDefinitionDto dto = new EngineDefinitionDto();
-        dto.setId(managed.id);
-        dto.setName(managed.name);
-        dto.setEngine(managed.definition.getEngine());
-        dto.setEngineName(managed.definition.getEngineName());
-        dto.setEngineAuthor(managed.definition.getEngineAuthor());
-
-        LinkedHashMap<String, UciOptionDto> options = new LinkedHashMap<>();
-        for (Map.Entry<String, UciOption> entry : managed.definition.getOptions().entrySet()) {
-            UciOption option = entry.getValue();
-            options.put(entry.getKey(), new UciOptionDto(
-                    option.getType().toUciValue(),
-                    option.getDefaultValue(),
-                    option.getDefaultValue(),
-                    option.getMin(),
-                    option.getMax(),
-                    option.getVars()));
-        }
-        dto.setOptions(options);
-        return dto;
+        return registry.toDto(managed);
     }
 
-    /**
-     * Performs the to dto operation.
-     * @param managed the managed
-     * @return the result of the operation
-     */
     private EngineProfileDto toDto(ManagedProfile managed) {
-        EngineProfileDto dto = new EngineProfileDto();
-        dto.setId(managed.id);
-        dto.setName(managed.name);
-        dto.setEngineId(managed.engineId);
-        dto.setOptionValues(managed.optionValues);
-        return dto;
+        return registry.toDto(managed);
     }
 
-    /**
-     * Performs the discover system engines internal operation.
-     * @return the result of the operation
-     */
     private int discoverSystemEnginesInternal() {
         int added = 0;
         for (UciEngineDefinition definition : engineDiscoveryService.discover()) {
@@ -799,13 +484,6 @@ public class EngineSettingsService {
         return added;
     }
 
-    /**
-     * Repairs the fallback profile and default assignments against the current
-     * native-engine registry.
-     *
-     * An empty registry is a valid persisted state. In that case there is no
-     * fallback profile and no default assignment for any native-engine use case.
-     */
     private void repairFallbackAndAssignments() {
         if (engines.isEmpty()) {
             profiles.clear();
@@ -842,11 +520,6 @@ public class EngineSettingsService {
         defaultDeepAnalysisProfileId = resolveProfileId(defaultDeepAnalysisProfileId, fallbackProfileId);
     }
 
-    /**
-     * Finds the default profile for engine.
-     * @param engine the engine
-     * @return the result of the operation
-     */
     private ManagedProfile findDefaultProfileForEngine(ManagedEngineDefinition engine) {
         LinkedHashMap<String, String> defaults = defaultOptionValues(engine.definition);
         ManagedProfile firstForEngine = null;
@@ -864,11 +537,6 @@ public class EngineSettingsService {
         return firstForEngine;
     }
 
-    /**
-     * Creates the default profile.
-     * @param engine the engine
-     * @return the result of the operation
-     */
     private String createDefaultProfile(ManagedEngineDefinition engine) {
         EngineProfileDto dto = new EngineProfileDto();
         dto.setName(engine.name + " · Default");
@@ -880,51 +548,34 @@ public class EngineSettingsService {
         return id;
     }
 
-    /**
-     * Performs the default option values operation.
-     * @param definition the definition
-     * @return the result of the operation
-     */
     private LinkedHashMap<String, String> defaultOptionValues(UciEngineDefinition definition) {
-        LinkedHashMap<String, String> result = new LinkedHashMap<>();
-        for (Map.Entry<String, UciOption> entry : definition.getOptions().entrySet()) {
-            if (entry.getValue().isConfigurable()
-                    && !UciSystemOptions.isSystemManaged(entry.getKey())) {
-                result.put(entry.getKey(), entry.getValue().getDefaultValue());
-            }
-        }
-        return result;
+        return registry.defaultOptionValues(definition);
     }
 
-    /**
-     * Loads the store.
-     */
     private boolean loadStore() {
-        if (!Files.isRegularFile(storePath)) {
-            return false;
-        }
+        EngineConfigStoreDto stored = store.load();
+        if (stored == null) return false;
         try {
-            EngineConfigStoreDto store = objectMapper.readValue(storePath.toFile(), EngineConfigStoreDto.class);
-            fallbackProfileId = store.getFallbackProfileId();
+            fallbackProfileId = stored.getFallbackProfileId();
 
-            EngineProfileAssignmentsDto storedDefaults = store.getDefaults();
+            EngineProfileAssignmentsDto storedDefaults = stored.getDefaults();
             defaultWhitePlayerProfileId = storedDefaults.getWhitePlayerProfileId();
             defaultBlackPlayerProfileId = storedDefaults.getBlackPlayerProfileId();
             defaultEvaluationProfileId = storedDefaults.getEvaluationProfileId();
             defaultDeepAnalysisProfileId = storedDefaults.getDeepAnalysisProfileId();
 
-            boolean hasModernData = !store.getEngines().isEmpty() || !store.getProfiles().isEmpty();
+            boolean hasModernData = !stored.getEngines().isEmpty() || !stored.getProfiles().isEmpty();
             if (hasModernData) {
-                loadModernStore(store);
-            } else if (!store.getLegacyConfigs().isEmpty()) {
-                migrateLegacyConfigs(store.getLegacyConfigs());
+                loadModernStore(stored);
+            } else if (!stored.getLegacyConfigs().isEmpty()) {
+                applyMissingAssignments(legacyMigrator.migrate(stored.getLegacyConfigs(), registry));
                 logger.info("Migrated legacy combined engine configs to engine definitions and untyped profiles");
             }
 
-            applyLegacyAssignments(store);
+            applyLegacyAssignments(stored);
             return true;
         } catch (Exception e) {
-            logger.warn("Could not load engine config store " + storePath + ": " + e.getMessage());
+            logger.warn("Could not apply engine config store: " + e.getMessage());
             engines.clear();
             profiles.clear();
             fallbackProfileId = null;
@@ -936,10 +587,21 @@ public class EngineSettingsService {
         }
     }
 
-    /**
-     * Loads the modern store.
-     * @param store the store
-     */
+    private void applyMissingAssignments(EngineProfileAssignmentsDto migrated) {
+        if (defaultWhitePlayerProfileId == null) {
+            defaultWhitePlayerProfileId = migrated.getWhitePlayerProfileId();
+        }
+        if (defaultBlackPlayerProfileId == null) {
+            defaultBlackPlayerProfileId = migrated.getBlackPlayerProfileId();
+        }
+        if (defaultEvaluationProfileId == null) {
+            defaultEvaluationProfileId = migrated.getEvaluationProfileId();
+        }
+        if (defaultDeepAnalysisProfileId == null) {
+            defaultDeepAnalysisProfileId = migrated.getDeepAnalysisProfileId();
+        }
+    }
+
     private void loadModernStore(EngineConfigStoreDto store) {
         for (EngineDefinitionDto dto : store.getEngines()) {
             if (dto.getId() == null || dto.getId().isBlank()) {
@@ -965,10 +627,6 @@ public class EngineSettingsService {
         }
     }
 
-    /**
-     * Performs the seed assignment from legacy profile operation.
-     * @param dto the dto
-     */
     private void seedAssignmentFromLegacyProfile(EngineProfileDto dto) {
         if (dto.getLegacyType() == null || dto.getLegacyType().isBlank() || dto.getId() == null) {
             return;
@@ -1001,10 +659,6 @@ public class EngineSettingsService {
         }
     }
 
-    /**
-     * Applies the legacy assignments.
-     * @param store the store
-     */
     private void applyLegacyAssignments(EngineConfigStoreDto store) {
         String legacyPlayer = validProfileId(store.getLegacyDefaultPlayerConfigId());
         String legacyEvaluation = validProfileId(store.getLegacyEvaluationConfigId());
@@ -1027,272 +681,39 @@ public class EngineSettingsService {
         }
     }
 
-    /**
-     * Performs the migrate legacy configs operation.
-     * @param legacyConfigs the legacy configs
-     */
-    private void migrateLegacyConfigs(List<ManagedEngineConfigDto> legacyConfigs) {
-        LinkedHashMap<String, String> engineIdsByPath = new LinkedHashMap<>();
-
-        for (ManagedEngineConfigDto legacy : legacyConfigs) {
-            if (legacy.getEngine() == null || legacy.getEngine().isBlank()) {
-                continue;
-            }
-            String path = legacy.getEngine().trim();
-            String engineId = engineIdsByPath.get(path);
-            if (engineId == null) {
-                EngineDefinitionDto engineDto = new EngineDefinitionDto();
-                engineDto.setEngine(path);
-                engineDto.setEngineName(legacy.getEngineName());
-                engineDto.setEngineAuthor(legacy.getEngineAuthor());
-                engineDto.setName(legacy.getEngineName());
-
-                LinkedHashMap<String, UciOptionDto> definitionOptions = new LinkedHashMap<>();
-                for (Map.Entry<String, UciOptionDto> entry : legacy.getOptions().entrySet()) {
-                    UciOptionDto oldOption = entry.getValue();
-                    if (oldOption == null) {
-                        continue;
-                    }
-                    definitionOptions.put(entry.getKey(), new UciOptionDto(
-                            oldOption.getType(),
-                            oldOption.getDefaultValue(),
-                            oldOption.getDefaultValue(),
-                            oldOption.getMin(),
-                            oldOption.getMax(),
-                            oldOption.getVars()));
-                }
-                engineDto.setOptions(definitionOptions);
-
-                UciEngineDefinition definition = definitionFromDto(engineDto);
-                engineId = UUID.randomUUID().toString();
-                engines.put(engineId, new ManagedEngineDefinition(
-                        engineId,
-                        displayEngineName(engineDto.getName(), definition),
-                        definition));
-                engineIdsByPath.put(path, engineId);
-            }
-
-            EngineProfileDto profileDto = new EngineProfileDto();
-            profileDto.setName(legacy.getName());
-            profileDto.setEngineId(engineId);
-
-            LinkedHashMap<String, String> values = new LinkedHashMap<>();
-            for (Map.Entry<String, UciOptionDto> entry : legacy.getOptions().entrySet()) {
-                UciOptionDto option = entry.getValue();
-                if (option != null && !"button".equalsIgnoreCase(option.getType())) {
-                    values.put(entry.getKey(), option.getValue());
-                }
-            }
-            profileDto.setOptionValues(values);
-
-            String profileId = legacy.getId() == null || legacy.getId().isBlank()
-                    ? UUID.randomUUID().toString()
-                    : legacy.getId();
-            profiles.put(profileId, profileFromDto(profileId, profileDto));
-
-            EngineConfigType legacyType = legacy.getType() == null || legacy.getType().isBlank()
-                    ? inferLegacyType(legacy)
-                    : EngineConfigType.fromValue(legacy.getType());
-            seedMigratedAssignment(profileId, legacyType);
-        }
-    }
-
-    /**
-     * Performs the seed migrated assignment operation.
-     * @param profileId the profile id
-     * @param type the type
-     */
-    private void seedMigratedAssignment(String profileId, EngineConfigType type) {
-        switch (type) {
-            case PLAYER -> {
-                if (defaultWhitePlayerProfileId == null) {
-                    defaultWhitePlayerProfileId = profileId;
-                }
-                if (defaultBlackPlayerProfileId == null) {
-                    defaultBlackPlayerProfileId = profileId;
-                }
-            }
-            case EVALUATION -> {
-                if (defaultEvaluationProfileId == null) {
-                    defaultEvaluationProfileId = profileId;
-                }
-            }
-            case DEEP_ANALYSIS -> {
-                if (defaultDeepAnalysisProfileId == null) {
-                    defaultDeepAnalysisProfileId = profileId;
-                }
-            }
-        }
-    }
-
-    /**
-     * Performs the infer legacy type operation.
-     * @param dto the dto
-     * @return the result of the operation
-     */
-    private EngineConfigType inferLegacyType(ManagedEngineConfigDto dto) {
-        String name = dto.getName();
-        if (name != null) {
-            String normalized = name.toLowerCase();
-            if (normalized.contains("deep analysis") || normalized.contains("deep-analysis")) {
-                return EngineConfigType.DEEP_ANALYSIS;
-            }
-            if (normalized.contains("evaluation")) {
-                return EngineConfigType.EVALUATION;
-            }
-        }
-        return EngineConfigType.PLAYER;
-    }
-
-    /**
-     * Performs the persist store operation.
-     */
     private void persistStore() {
-        try {
-            Path parent = storePath.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-
-            EngineConfigStoreDto store = new EngineConfigStoreDto();
-            List<EngineDefinitionDto> engineDtos = new ArrayList<>();
-            for (ManagedEngineDefinition managed : engines.values()) {
-                engineDtos.add(toDto(managed));
-            }
-            List<EngineProfileDto> profileDtos = new ArrayList<>();
-            for (ManagedProfile managed : profiles.values()) {
-                profileDtos.add(toDto(managed));
-            }
-            store.setEngines(engineDtos);
-            store.setProfiles(profileDtos);
-            store.setDefaults(currentAssignments());
-            store.setFallbackProfileId(fallbackProfileId);
-
-            Path temporary = storePath.resolveSibling(storePath.getFileName() + ".tmp");
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(temporary.toFile(), store);
-            try {
-                Files.move(temporary, storePath,
-                        StandardCopyOption.REPLACE_EXISTING,
-                        StandardCopyOption.ATOMIC_MOVE);
-            } catch (IOException atomicMoveFailure) {
-                Files.move(temporary, storePath, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } catch (Exception e) {
-            logger.warn("Could not persist engine config store " + storePath + ": " + e.getMessage());
-        }
+        EngineConfigStoreDto snapshot = new EngineConfigStoreDto();
+        snapshot.setEngines(engines.values().stream().map(this::toDto).toList());
+        snapshot.setProfiles(profiles.values().stream().map(this::toDto).toList());
+        snapshot.setDefaults(currentAssignments());
+        snapshot.setFallbackProfileId(fallbackProfileId);
+        store.save(snapshot);
     }
 
-    /**
-     * Resolves the store path.
-     * @return the result of the operation
-     */
-    private Path resolveStorePath() {
-        String configured = System.getProperty(STORE_PROPERTY);
-        if (configured != null && !configured.isBlank()) {
-            return Path.of(configured.trim()).toAbsolutePath().normalize();
-        }
-        return Path.of(System.getProperty("user.home"), ".chess", "engine-configs.json")
-                .toAbsolutePath()
-                .normalize();
-    }
-
-    /**
-     * Performs the require engine operation.
-     * @param id the id
-     * @return the result of the operation
-     */
     private ManagedEngineDefinition requireEngine(String id) {
-        ManagedEngineDefinition result = engines.get(id);
-        if (result == null) {
-            throw new IllegalArgumentException("Unknown engine id: " + id);
-        }
-        return result;
+        return registry.requireEngine(id);
     }
 
-    /**
-     * Performs the require profile operation.
-     * @param id the id
-     * @return the result of the operation
-     */
     private ManagedProfile requireProfile(String id) {
-        ManagedProfile result = profiles.get(id);
-        if (result == null) {
-            throw new IllegalArgumentException("Unknown engine profile id: " + id);
-        }
-        return result;
+        return registry.requireProfile(id);
     }
 
-    /**
-     * Performs the valid profile operation.
-     * @param id the id
-     * @return the result of the operation
-     */
     private ManagedProfile validProfile(String id) {
-        return id == null ? null : profiles.get(id);
+        return registry.validProfile(id);
     }
 
-    /**
-     * Performs the engine for profile operation.
-     * @param profile the profile
-     * @return the result of the operation
-     */
     private ManagedEngineDefinition engineForProfile(ManagedProfile profile) {
-        return requireEngine(profile.engineId);
+        return registry.engineForProfile(profile);
     }
 
-    /**
-     * Finds the engine by path.
-     * @param enginePath the engine path
-     * @return the result of the operation
-     */
     private ManagedEngineDefinition findEngineByPath(String enginePath) {
-        if (enginePath == null || enginePath.isBlank()) {
-            return null;
-        }
-        for (ManagedEngineDefinition engine : engines.values()) {
-            if (sameEnginePath(engine.definition.getEngine(), enginePath)) {
-                return engine;
-            }
-        }
-        return null;
+        return registry.findEngineByPath(enginePath);
     }
 
-    /**
-     * Performs the same engine path operation.
-     * @param first the first
-     * @param second the second
-     * @return the result of the operation
-     */
     private boolean sameEnginePath(String first, String second) {
-        return canonicalEnginePath(first).equals(canonicalEnginePath(second));
+        return registry.sameEnginePath(first, second);
     }
 
-    /**
-     * Returns whether this object can onical engine path.
-     * @param value the value
-     * @return true when the condition is satisfied; otherwise false
-     */
-    private String canonicalEnginePath(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-        try {
-            Path path = Path.of(value.trim()).toAbsolutePath().normalize();
-            if (Files.exists(path)) {
-                return path.toRealPath().toString();
-            }
-            return path.toString();
-        } catch (Exception e) {
-            return value.trim();
-        }
-    }
-
-    /**
-     * Resolves the profile id.
-     * @param requested the requested
-     * @param fallback the fallback
-     * @return the result of the operation
-     */
     private String resolveProfileId(String requested, String fallback) {
         String requestedId = validProfileId(requested);
         if (requestedId != null) {
@@ -1308,20 +729,10 @@ public class EngineSettingsService {
         return null;
     }
 
-    /**
-     * Performs the valid profile id operation.
-     * @param id the id
-     * @return the result of the operation
-     */
     private String validProfileId(String id) {
         return id != null && profiles.containsKey(id) ? id : null;
     }
 
-    /**
-     * Returns whether the assigned.
-     * @param profileId the profile id
-     * @return true when the condition is satisfied; otherwise false
-     */
     private boolean isAssigned(String profileId) {
         return Objects.equals(profileId, defaultWhitePlayerProfileId)
                 || Objects.equals(profileId, defaultBlackPlayerProfileId)
@@ -1329,10 +740,6 @@ public class EngineSettingsService {
                 || Objects.equals(profileId, defaultDeepAnalysisProfileId);
     }
 
-    /**
-     * Performs the bump runtime versions operation.
-     * @param profileId the profile id
-     */
     private void bumpRuntimeVersions(String profileId) {
         if (profileId.equals(defaultWhitePlayerProfileId)) {
             whitePlayerVersion++;
@@ -1345,76 +752,11 @@ public class EngineSettingsService {
         }
     }
 
-    /**
-     * Performs the display engine name operation.
-     * @param requestedName the requested name
-     * @param definition the definition
-     * @return the result of the operation
-     */
     private String displayEngineName(String requestedName, UciEngineDefinition definition) {
-        if (requestedName != null && !requestedName.isBlank()) {
-            return requestedName.trim();
-        }
-        return definition.getEngineName();
+        return registry.displayEngineName(requestedName, definition);
     }
 
-    /**
-     * Performs the fallback engine name operation.
-     * @param path the path
-     * @return the result of the operation
-     */
     private String fallbackEngineName(String path) {
-        if (path == null || path.isBlank()) {
-            return "Engine";
-        }
-        try {
-            Path fileName = Path.of(path).getFileName();
-            return fileName == null ? path : fileName.toString();
-        } catch (Exception e) {
-            return path;
-        }
-    }
-
-    private static final class ManagedEngineDefinition {
-        private final String id;
-        private final String name;
-        private final UciEngineDefinition definition;
-
-        /**
-         * Creates a new ManagedEngineDefinition instance.
-         * @param id the id
-         * @param name the name
-         * @param definition the definition
-         */
-        private ManagedEngineDefinition(String id, String name, UciEngineDefinition definition) {
-            this.id = id;
-            this.name = name;
-            this.definition = definition;
-        }
-    }
-
-    private static final class ManagedProfile {
-        private final String id;
-        private final String name;
-        private final String engineId;
-        private final LinkedHashMap<String, String> optionValues;
-
-        /**
-         * Creates a new ManagedProfile instance.
-         * @param id the id
-         * @param name the name
-         * @param engineId the engine id
-         * @param optionValues the option values
-         */
-        private ManagedProfile(
-                String id,
-                String name,
-                String engineId,
-                Map<String, String> optionValues) {
-            this.id = id;
-            this.name = name;
-            this.engineId = engineId;
-            this.optionValues = new LinkedHashMap<>(optionValues);
-        }
+        return registry.fallbackEngineName(path);
     }
 }
