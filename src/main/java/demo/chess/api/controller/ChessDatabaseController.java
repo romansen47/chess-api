@@ -133,6 +133,8 @@ public class ChessDatabaseController {
         try {
             List<ChessDatabaseDtos.GameSummary> result = chessDatabaseService.search(request);
             return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
         } catch (SQLException | IOException e) {
             return ResponseEntity.internalServerError().body("Chess database search failed: " + e.getMessage());
         }
