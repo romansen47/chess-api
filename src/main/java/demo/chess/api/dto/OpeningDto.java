@@ -8,6 +8,8 @@ public class OpeningDto {
 
     private String id;
     private String name;
+    private String family;
+    private String variation;
     private String eco;
     private int startingPositionId;
     private String initialFen;
@@ -24,6 +26,10 @@ public class OpeningDto {
     public void setId(String id) { this.id = id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
+    public String getFamily() { return family; }
+    public void setFamily(String family) { this.family = family; }
+    public String getVariation() { return variation; }
+    public void setVariation(String variation) { this.variation = variation; }
     public String getEco() { return eco; }
     public void setEco(String eco) { this.eco = eco; }
     public int getStartingPositionId() { return startingPositionId; }
