@@ -6,10 +6,12 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import org.apache.commons.logging.Log;
@@ -73,6 +75,11 @@ public class OpeningLibraryService {
             throw new IllegalArgumentException("PGN contains no opening line");
         }
 
+        Set<String> knownOpeningKeys = new HashSet<>();
+        for (ManagedOpening existing : openings.values()) {
+            knownOpeningKeys.add(openingKey(existing));
+        }
+
         List<ManagedOpening> imported = new ArrayList<>();
         for (int index = 0; index < games.size(); index++) {
             String pgn = games.get(index);
@@ -90,7 +97,13 @@ public class OpeningLibraryService {
                     startingPosition.getId(),
                     List.copyOf(moves));
             toDto(opening);
-            imported.add(opening);
+            if (knownOpeningKeys.add(openingKey(opening))) {
+                imported.add(opening);
+            }
+        }
+
+        if (imported.isEmpty()) {
+            return List.of();
         }
 
         imported.forEach(opening -> openings.put(opening.id(), opening));
@@ -158,6 +171,10 @@ public class OpeningLibraryService {
         }
     }
 
+    private String openingKey(ManagedOpening opening) {
+        return opening.startingPositionId() + "|" + String.join(" ", opening.moves());
+    }
+
     private ManagedOpening requireOpening(String id) {
         ManagedOpening opening = id == null ? null : openings.get(id);
         if (opening == null) {
@@ -210,6 +227,8 @@ public class OpeningLibraryService {
         try {
             OpeningStoreDto store = objectMapper.readValue(storePath.toFile(), OpeningStoreDto.class);
             version = Math.max(1L, store.getVersion());
+            Set<String> loadedOpeningKeys = new HashSet<>();
+            boolean duplicateRemoved = false;
             for (OpeningStoreDto.Entry entry : store.getOpenings()) {
                 if (entry.getId() == null || entry.getId().isBlank()
                         || entry.getName() == null || entry.getName().isBlank()) {
@@ -222,7 +241,14 @@ public class OpeningLibraryService {
                         entry.getStartingPositionId(),
                         List.copyOf(entry.getMoves()));
                 toDto(opening);
+                if (!loadedOpeningKeys.add(openingKey(opening))) {
+                    duplicateRemoved = true;
+                    continue;
+                }
                 openings.put(opening.id(), opening);
+            }
+            if (duplicateRemoved) {
+                persistStore();
             }
         } catch (Exception e) {
             logger.warn("Could not load opening library " + storePath + ": " + e.getMessage());
