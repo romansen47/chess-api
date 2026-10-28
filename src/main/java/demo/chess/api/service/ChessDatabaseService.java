@@ -27,7 +27,6 @@ import demo.chess.database.GameSearch;
 import demo.chess.database.ImportCancelledException;
 import demo.chess.database.ImportProgress;
 import demo.chess.database.ImportResult;
-import demo.chess.database.OpeningLineSearch;
 import demo.chess.database.PositionMoveStatistics;
 import demo.chess.database.PositionStatistics;
 import demo.chess.database.SqliteChessDatabase;
@@ -47,7 +46,7 @@ import jakarta.annotation.PreDestroy;
 public class ChessDatabaseService {
 
     private final UciGameService uciGameService;
-    private final DatabaseOpeningSearchResolver openingSearchResolver;
+    private final DatabaseGameSearchMapper gameSearchMapper;
     private final Path databasePath;
     private final GameLoader gameLoader = new GameLoader();
     private final ChessAnalysisDiagnosticPgnSanitizer diagnosticPgnSanitizer =
@@ -64,9 +63,9 @@ public class ChessDatabaseService {
 
     public ChessDatabaseService(
             UciGameService uciGameService,
-            DatabaseOpeningSearchResolver openingSearchResolver) {
+            DatabaseGameSearchMapper gameSearchMapper) {
         this.uciGameService = uciGameService;
-        this.openingSearchResolver = openingSearchResolver;
+        this.gameSearchMapper = gameSearchMapper;
         this.databasePath = SqliteChessDatabase.defaultPath();
     }
 
@@ -158,24 +157,7 @@ public class ChessDatabaseService {
 
     public List<ChessDatabaseDtos.GameSummary> search(ChessDatabaseDtos.SearchRequest request)
             throws SQLException, IOException {
-        ChessDatabaseDtos.SearchRequest safeRequest = request == null
-                ? new ChessDatabaseDtos.SearchRequest(null, null, null, null, null, null, null, null, 200)
-                : request;
-        List<OpeningLineSearch> openingLines = openingSearchResolver.resolve(
-                safeRequest.openingVariation(),
-                safeRequest.openingLineId());
-        GameSearch search = new GameSearch(
-                safeRequest.white(),
-                safeRequest.black(),
-                safeRequest.player(),
-                safeRequest.player2(),
-                safeRequest.fromYear(),
-                safeRequest.toYear(),
-                safeRequest.result(),
-                safeRequest.minElo(),
-                safeRequest.eco(),
-                openingLines,
-                safeRequest.limit() == null ? 200 : safeRequest.limit());
+        GameSearch search = gameSearchMapper.map(request);
         return database().findGames(search).stream()
                 .map(game -> new ChessDatabaseDtos.GameSummary(
                         game.id(),
