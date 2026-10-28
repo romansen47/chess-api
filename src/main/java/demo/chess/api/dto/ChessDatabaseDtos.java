@@ -91,6 +91,9 @@ public final class ChessDatabaseDtos {
      * @param toYear maximum year
      * @param result PGN result
      * @param minElo minimum rating for both players
+     * @param eco ECO code prefix
+     * @param openingStartingPositionId starting position for an opening-line filter
+     * @param openingMoves UCI move prefix for an opening-line filter
      * @param limit maximum result count
      */
     public record SearchRequest(
@@ -102,7 +105,27 @@ public final class ChessDatabaseDtos {
             Integer toYear,
             String result,
             Integer minElo,
+            String eco,
+            Integer openingStartingPositionId,
+            List<String> openingMoves,
             Integer limit) {
+
+        /** Backward-compatible constructor without opening filters. */
+        public SearchRequest(
+                String white,
+                String black,
+                String player,
+                String player2,
+                Integer fromYear,
+                Integer toYear,
+                String result,
+                Integer minElo,
+                Integer limit) {
+            this(
+                    white, black, player, player2,
+                    fromYear, toYear, result, minElo,
+                    null, null, List.of(), limit);
+        }
 
         /**
          * Backward-compatible constructor without a second color-independent player.
