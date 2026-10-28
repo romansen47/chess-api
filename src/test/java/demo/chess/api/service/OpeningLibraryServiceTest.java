@@ -84,8 +84,9 @@ class OpeningLibraryServiceTest {
         assertEquals(2, imported.size());
         assertEquals("Grünfeld Defense", imported.get(0).getFamily());
         assertEquals("Russian Variation", imported.get(0).getVariation());
-        assertEquals(2, service.getOpeningLinesForVariation(
-                "Grünfeld Defense: Russian Variation").size());
+        assertEquals(2, service.getOpenings().stream()
+                .filter(opening -> "Grünfeld Defense: Russian Variation".equals(opening.getName()))
+                .count());
     }
 
     @Test
