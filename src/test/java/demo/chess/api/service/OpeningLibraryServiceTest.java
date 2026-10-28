@@ -61,6 +61,34 @@ class OpeningLibraryServiceTest {
     }
 
     @Test
+    void groupsMultipleExactMoveOrdersUnderOneVariation() throws Exception {
+        System.setProperty("chess.opening.library.file", tempDir.resolve("openings.json").toString());
+        OpeningLibraryService service = new OpeningLibraryService(new ObjectMapper());
+
+        String pgn = """
+                [Opening "Grünfeld Defense: Russian Variation"]
+                [ECO "D96"]
+                [Result "*"]
+
+                1. d4 Nf6 2. c4 g6 3. Nc3 d5 4. Nf3 Bg7 5. Qb3 *
+
+                [Opening "Grünfeld Defense: Russian Variation"]
+                [ECO "D97"]
+                [Result "*"]
+
+                1. Nf3 Nf6 2. c4 g6 3. Nc3 Bg7 4. d4 O-O 5. Qb3 *
+                """;
+
+        List<OpeningDto> imported = service.importPgn(pgn, "gruenfeld.pgn");
+
+        assertEquals(2, imported.size());
+        assertEquals("Grünfeld Defense", imported.get(0).getFamily());
+        assertEquals("Russian Variation", imported.get(0).getVariation());
+        assertEquals(2, service.getOpeningLinesForVariation(
+                "Grünfeld Defense: Russian Variation").size());
+    }
+
+    @Test
     void usesFileNameWhenPgnHasNoOpeningMetadata() throws Exception {
         System.setProperty("chess.opening.library.file", tempDir.resolve("openings.json").toString());
         OpeningLibraryService service = new OpeningLibraryService(new ObjectMapper());
