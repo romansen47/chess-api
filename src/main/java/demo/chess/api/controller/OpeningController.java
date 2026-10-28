@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import demo.chess.api.dto.OpeningDto;
 import demo.chess.api.dto.OpeningUpdateDto;
+import demo.chess.api.service.BundledOpeningCatalogService;
 import demo.chess.api.service.OpeningLibraryService;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 
@@ -26,9 +27,13 @@ import demo.chess.definitions.engines.impl.NoMoveFoundException;
 public class OpeningController {
 
     private final OpeningLibraryService openingLibraryService;
+    private final BundledOpeningCatalogService bundledOpeningCatalogService;
 
-    public OpeningController(OpeningLibraryService openingLibraryService) {
+    public OpeningController(
+            OpeningLibraryService openingLibraryService,
+            BundledOpeningCatalogService bundledOpeningCatalogService) {
         this.openingLibraryService = openingLibraryService;
+        this.bundledOpeningCatalogService = bundledOpeningCatalogService;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -49,6 +54,20 @@ public class OpeningController {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (IOException e) {
             return ResponseEntity.internalServerError().body("I/O error while importing openings");
+        }
+    }
+
+    @PostMapping(
+            value = "/catalogs/lichess/import",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> importLichessCatalog() {
+        try {
+            return ResponseEntity.ok(bundledOpeningCatalogService.importLichessCatalog());
+        } catch (NoMoveFoundException | IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (IOException e) {
+            return ResponseEntity.internalServerError()
+                    .body("I/O error while importing bundled Lichess openings");
         }
     }
 
