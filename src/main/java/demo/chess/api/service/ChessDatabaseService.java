@@ -165,6 +165,9 @@ public class ChessDatabaseService {
                 safeRequest.toYear(),
                 safeRequest.result(),
                 safeRequest.minElo(),
+                safeRequest.eco(),
+                safeRequest.openingStartingPositionId(),
+                safeRequest.openingMoves(),
                 safeRequest.limit() == null ? 200 : safeRequest.limit());
         return database().findGames(search).stream()
                 .map(game -> new ChessDatabaseDtos.GameSummary(
