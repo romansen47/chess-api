@@ -9,6 +9,7 @@ import java.util.NoSuchElementException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -161,6 +162,25 @@ public class ChessDatabaseController {
             return ResponseEntity.badRequest().body(e.getMessage());
         } catch (SQLException | IOException e) {
             return ResponseEntity.internalServerError().body("Could not load database game: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Deletes one stored game and updates the aggregated position statistics.
+     *
+     * @param gameId database game identifier
+     * @return an empty response
+     */
+    @DeleteMapping("/games/{gameId}")
+    public ResponseEntity<?> deleteGame(@PathVariable long gameId) {
+        try {
+            chessDatabaseService.deleteGame(gameId);
+            return ResponseEntity.noContent().build();
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        } catch (SQLException | IOException e) {
+            return ResponseEntity.internalServerError()
+                    .body("Could not delete database game: " + e.getMessage());
         }
     }
 

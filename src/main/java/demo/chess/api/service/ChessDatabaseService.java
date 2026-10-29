@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -181,6 +182,14 @@ public class ChessDatabaseService {
             database().saveAnnotatedPgn(gameId, sanitizedPgn);
         }
         return uciGameService.importGame(sanitizedPgn, gameId);
+    }
+
+    /** Deletes one game and its contribution to the position statistics. */
+    public void deleteGame(long gameId) throws SQLException, IOException {
+        database().deleteGame(gameId);
+        if (Objects.equals(uciGameService.getImportedDatabaseGameId(), gameId)) {
+            uciGameService.setImportedDatabaseGameId(null);
+        }
     }
 
     /** Returns Chess960-aware continuations for the selected analysis position. */
