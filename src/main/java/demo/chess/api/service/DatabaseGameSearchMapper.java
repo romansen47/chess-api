@@ -24,6 +24,7 @@ public class DatabaseGameSearchMapper {
                         null, null, null, null, null, null, null, null, 200)
                 : request;
         List<OpeningLineSearch> openingLines = openingSearchResolver.resolve(
+                safeRequest.openingFamily(),
                 safeRequest.openingVariation(),
                 safeRequest.openingLineId());
         return new GameSearch(

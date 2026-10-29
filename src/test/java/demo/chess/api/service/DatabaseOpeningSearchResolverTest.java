@@ -40,8 +40,17 @@ class DatabaseOpeningSearchResolverTest {
                 [Result "*"]
 
                 1. Nf3 Nf6 2. c4 g6 *
+
+                [Opening "Grünfeld Defense: Exchange Variation"]
+                [Result "*"]
+
+                1. d4 Nf6 2. c4 g6 3. Nc3 d5 *
                 """, "lines.pgn");
         DatabaseOpeningSearchResolver resolver = new DatabaseOpeningSearchResolver(library);
+
+        List<OpeningLineSearch> family =
+                resolver.resolve("Grünfeld Defense", null, null);
+        assertEquals(3, family.size());
 
         List<OpeningLineSearch> variation =
                 resolver.resolve("Grünfeld Defense: Russian Variation", null);

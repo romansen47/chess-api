@@ -92,6 +92,7 @@ public final class ChessDatabaseDtos {
      * @param result PGN result
      * @param minElo minimum rating for both players
      * @param eco ECO code prefix
+     * @param openingFamily complete opening-family name; matches all stored variations
      * @param openingVariation complete opening-variation name; matches any explicit move order
      * @param openingLineId optional exact opening-line id within the variation
      * @param limit maximum result count
@@ -106,6 +107,7 @@ public final class ChessDatabaseDtos {
             String result,
             Integer minElo,
             String eco,
+            String openingFamily,
             String openingVariation,
             String openingLineId,
             Integer limit) {
@@ -124,7 +126,7 @@ public final class ChessDatabaseDtos {
             this(
                     white, black, player, player2,
                     fromYear, toYear, result, minElo,
-                    null, null, null, limit);
+                    null, null, null, null, limit);
         }
 
         /**
