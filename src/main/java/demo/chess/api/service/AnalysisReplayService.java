@@ -411,9 +411,11 @@ public class AnalysisReplayService {
             return new AnalysisEvaluation(eval, bar, depth, lines, deepAnalysisResult);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            source.active = false;
             safeStop(source.engine);
             return new AnalysisEvaluation(0.0, 0.5, 0, List.of());
         } catch (ExecutionException | IOException e) {
+            source.active = false;
             safeStop(source.engine);
             return new AnalysisEvaluation(0.0, 0.5, 0, List.of());
         }
