@@ -32,8 +32,9 @@ public class EngineSettingsService {
     private final EngineDiscoveryService engineDiscoveryService;
     private final String defaultEnginePath;
     private final EngineSettingsRegistry registry = new EngineSettingsRegistry();
-    private final EngineSettingsStore store;
+    private final EngineSettingsRepository store;
     private final LegacyEngineSettingsMigrator legacyMigrator = new LegacyEngineSettingsMigrator();
+    private final EngineSettingsVersions versions = new EngineSettingsVersions();
     private final LinkedHashMap<String, ManagedEngineDefinition> engines = registry.engines();
     private final LinkedHashMap<String, ManagedProfile> profiles = registry.profiles();
 
@@ -43,14 +44,17 @@ public class EngineSettingsService {
     private String defaultEvaluationProfileId;
     private String defaultDeepAnalysisProfileId;
 
-    private long version = 1L;
-    private long whitePlayerVersion = 1L;
-    private long blackPlayerVersion = 1L;
-    private long evaluationVersion = 1L;
-
     public EngineSettingsService(ObjectMapper objectMapper, EngineDiscoveryService engineDiscoveryService) {
-        this.store = new EngineSettingsStore(objectMapper);
-        this.engineDiscoveryService = engineDiscoveryService;
+        this(new EngineSettingsStore(objectMapper), engineDiscoveryService);
+    }
+
+    EngineSettingsService(
+            EngineSettingsRepository store,
+            EngineDiscoveryService engineDiscoveryService) {
+        this.store = Objects.requireNonNull(store, "store");
+        this.engineDiscoveryService = Objects.requireNonNull(
+                engineDiscoveryService,
+                "engineDiscoveryService");
         this.defaultEnginePath = engineDiscoveryService.getPreferredEnginePath();
 
         boolean storedConfigurationLoaded = loadStore();
@@ -79,10 +83,7 @@ public class EngineSettingsService {
         discoverSystemEnginesInternal();
         repairFallbackAndAssignments();
 
-        whitePlayerVersion++;
-        blackPlayerVersion++;
-        evaluationVersion++;
-        version++;
+        versions.allRuntimeRolesChanged();
 
         persistStore();
         logger.info("Reset engine settings and rediscovered system UCI engines in "
@@ -99,17 +100,10 @@ public class EngineSettingsService {
         if (addedEngines > 0) {
             repairFallbackAndAssignments();
 
-            if (!Objects.equals(previousWhite, defaultWhitePlayerProfileId)) {
-                whitePlayerVersion++;
-            }
-            if (!Objects.equals(previousBlack, defaultBlackPlayerProfileId)) {
-                blackPlayerVersion++;
-            }
-            if (!Objects.equals(previousEvaluation, defaultEvaluationProfileId)) {
-                evaluationVersion++;
-            }
-
-            version++;
+            versions.configurationChanged(
+                    !Objects.equals(previousWhite, defaultWhitePlayerProfileId),
+                    !Objects.equals(previousBlack, defaultBlackPlayerProfileId),
+                    !Objects.equals(previousEvaluation, defaultEvaluationProfileId));
             persistStore();
         }
         return getOverview();
@@ -144,7 +138,7 @@ public class EngineSettingsService {
                 profileDtos,
                 currentAssignments(),
                 fallbackProfileId,
-                version);
+                versions.configuration());
     }
 
     public synchronized EngineProfileAssignmentsDto updateDefaultAssignments(EngineProfileAssignmentsDto incoming) {
@@ -157,29 +151,25 @@ public class EngineSettingsService {
         String evaluation = resolveProfileId(incoming.getEvaluationProfileId(), fallbackProfileId);
         String deepAnalysis = resolveProfileId(incoming.getDeepAnalysisProfileId(), fallbackProfileId);
 
-        boolean changed = false;
-        if (!Objects.equals(white, defaultWhitePlayerProfileId)) {
+        boolean whiteChanged = !Objects.equals(white, defaultWhitePlayerProfileId);
+        boolean blackChanged = !Objects.equals(black, defaultBlackPlayerProfileId);
+        boolean evaluationChanged = !Objects.equals(evaluation, defaultEvaluationProfileId);
+        boolean deepAnalysisChanged = !Objects.equals(deepAnalysis, defaultDeepAnalysisProfileId);
+        if (whiteChanged) {
             defaultWhitePlayerProfileId = white;
-            whitePlayerVersion++;
-            changed = true;
         }
-        if (!Objects.equals(black, defaultBlackPlayerProfileId)) {
+        if (blackChanged) {
             defaultBlackPlayerProfileId = black;
-            blackPlayerVersion++;
-            changed = true;
         }
-        if (!Objects.equals(evaluation, defaultEvaluationProfileId)) {
+        if (evaluationChanged) {
             defaultEvaluationProfileId = evaluation;
-            evaluationVersion++;
-            changed = true;
         }
-        if (!Objects.equals(deepAnalysis, defaultDeepAnalysisProfileId)) {
+        if (deepAnalysisChanged) {
             defaultDeepAnalysisProfileId = deepAnalysis;
-            changed = true;
         }
 
-        if (changed) {
-            version++;
+        if (whiteChanged || blackChanged || evaluationChanged || deepAnalysisChanged) {
+            versions.configurationChanged(whiteChanged, blackChanged, evaluationChanged);
             persistStore();
         }
         return currentAssignments();
@@ -219,7 +209,7 @@ public class EngineSettingsService {
                 displayEngineName(incoming.getName(), definition),
                 definition);
         engines.put(id, managed);
-        version++;
+        versions.configurationChanged();
         persistStore();
         return toDto(managed);
     }
@@ -241,7 +231,7 @@ public class EngineSettingsService {
                 displayEngineName(incoming.getName(), replacementDefinition),
                 replacementDefinition);
         engines.put(existing.id, replacement);
-        version++;
+        versions.configurationChanged();
         persistStore();
         return toDto(replacement);
     }
@@ -267,16 +257,7 @@ public class EngineSettingsService {
         // configuration instead of inventing a synthetic executable.
         repairFallbackAndAssignments();
 
-        if (whiteChanged) {
-            whitePlayerVersion++;
-        }
-        if (blackChanged) {
-            blackPlayerVersion++;
-        }
-        if (evaluationChanged) {
-            evaluationVersion++;
-        }
-        version++;
+        versions.configurationChanged(whiteChanged, blackChanged, evaluationChanged);
         persistStore();
     }
 
@@ -291,7 +272,7 @@ public class EngineSettingsService {
         String id = UUID.randomUUID().toString();
         ManagedProfile profile = profileFromDto(id, incoming);
         profiles.put(id, profile);
-        version++;
+        versions.configurationChanged();
         persistStore();
         return toDto(profile);
     }
@@ -308,8 +289,11 @@ public class EngineSettingsService {
 
         ManagedProfile replacement = profileFromDto(existing.id, incoming);
         profiles.put(existing.id, replacement);
-        version++;
-        bumpRuntimeVersions(existing.id);
+        versions.profileChanged(
+                existing.id,
+                defaultWhitePlayerProfileId,
+                defaultBlackPlayerProfileId,
+                defaultEvaluationProfileId);
         persistStore();
         return toDto(replacement);
     }
@@ -324,7 +308,7 @@ public class EngineSettingsService {
                     "Engine profile is assigned under Defaults and cannot be deleted");
         }
         profiles.remove(existing.id);
-        version++;
+        versions.configurationChanged();
         persistStore();
     }
 
@@ -415,19 +399,19 @@ public class EngineSettingsService {
     }
 
     public synchronized long getVersion() {
-        return version;
+        return versions.configuration();
     }
 
     public synchronized long getWhitePlayerVersion() {
-        return whitePlayerVersion;
+        return versions.whitePlayer();
     }
 
     public synchronized long getBlackPlayerVersion() {
-        return blackPlayerVersion;
+        return versions.blackPlayer();
     }
 
     public synchronized long getEvaluationVersion() {
-        return evaluationVersion;
+        return versions.evaluation();
     }
 
     public String getDefaultEnginePath() {
@@ -738,18 +722,6 @@ public class EngineSettingsService {
                 || Objects.equals(profileId, defaultBlackPlayerProfileId)
                 || Objects.equals(profileId, defaultEvaluationProfileId)
                 || Objects.equals(profileId, defaultDeepAnalysisProfileId);
-    }
-
-    private void bumpRuntimeVersions(String profileId) {
-        if (profileId.equals(defaultWhitePlayerProfileId)) {
-            whitePlayerVersion++;
-        }
-        if (profileId.equals(defaultBlackPlayerProfileId)) {
-            blackPlayerVersion++;
-        }
-        if (profileId.equals(defaultEvaluationProfileId)) {
-            evaluationVersion++;
-        }
     }
 
     private String displayEngineName(String requestedName, UciEngineDefinition definition) {

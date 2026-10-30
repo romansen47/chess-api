@@ -12,7 +12,7 @@ import demo.chess.api.dto.EngineConfigStoreDto;
 import tools.jackson.databind.ObjectMapper;
 
 /** Atomic JSON persistence for engine settings. */
-final class EngineSettingsStore {
+final class EngineSettingsStore implements EngineSettingsRepository {
 
     private static final Log logger = LogFactory.getLog(EngineSettingsStore.class);
     private static final String STORE_PROPERTY = "chess.engine.config.file";
@@ -25,7 +25,8 @@ final class EngineSettingsStore {
         this.path = resolvePath();
     }
 
-    EngineConfigStoreDto load() {
+    @Override
+    public EngineConfigStoreDto load() {
         if (!Files.isRegularFile(path)) return null;
         try {
             return objectMapper.readValue(path.toFile(), EngineConfigStoreDto.class);
@@ -35,7 +36,8 @@ final class EngineSettingsStore {
         }
     }
 
-    void save(EngineConfigStoreDto store) {
+    @Override
+    public void save(EngineConfigStoreDto store) {
         try {
             Path parent = path.getParent();
             if (parent != null) Files.createDirectories(parent);

@@ -4,9 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,12 +16,14 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.LongSupplier;
 
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.ChessDatabaseDtos;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.database.ChessDatabaseStatus;
+import demo.chess.database.ChessDatabase;
 import demo.chess.database.GameSearch;
 import demo.chess.database.ImportCancelledException;
 import demo.chess.database.ImportProgress;
@@ -49,25 +49,53 @@ public class ChessDatabaseService {
     private final UciGameService uciGameService;
     private final DatabaseGameSearchMapper gameSearchMapper;
     private final Path databasePath;
-    private final GameLoader gameLoader = new GameLoader();
-    private final ChessAnalysisDiagnosticPgnSanitizer diagnosticPgnSanitizer =
-            new ChessAnalysisDiagnosticPgnSanitizer();
-    private final ExecutorService importExecutor = Executors.newSingleThreadExecutor(runnable -> {
-        Thread thread = new Thread(runnable, "chess-database-import");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final GameLoader gameLoader;
+    private final ChessAnalysisDiagnosticPgnSanitizer diagnosticPgnSanitizer;
+    private final DatabaseFactory databaseFactory;
+    private final ExecutorService importExecutor;
+    private final ImportTemporaryFileStore temporaryFileStore;
+    private final LongSupplier nanoTime;
     private final ConcurrentMap<String, ImportJobState> importJobs = new ConcurrentHashMap<>();
     private final AtomicReference<String> activeImportId = new AtomicReference<>();
 
-    private volatile SqliteChessDatabase database;
+    private volatile ChessDatabase database;
 
     public ChessDatabaseService(
             UciGameService uciGameService,
             DatabaseGameSearchMapper gameSearchMapper) {
+        this(
+                uciGameService,
+                gameSearchMapper,
+                SqliteChessDatabase.defaultPath(),
+                SqliteChessDatabase::new,
+                createImportExecutor(),
+                new ImportTemporaryFileStore(),
+                System::nanoTime,
+                new GameLoader(),
+                new ChessAnalysisDiagnosticPgnSanitizer());
+    }
+
+    ChessDatabaseService(
+            UciGameService uciGameService,
+            DatabaseGameSearchMapper gameSearchMapper,
+            Path databasePath,
+            DatabaseFactory databaseFactory,
+            ExecutorService importExecutor,
+            ImportTemporaryFileStore temporaryFileStore,
+            LongSupplier nanoTime,
+            GameLoader gameLoader,
+            ChessAnalysisDiagnosticPgnSanitizer diagnosticPgnSanitizer) {
         this.uciGameService = uciGameService;
         this.gameSearchMapper = gameSearchMapper;
-        this.databasePath = SqliteChessDatabase.defaultPath();
+        this.databasePath = Objects.requireNonNull(databasePath, "databasePath");
+        this.databaseFactory = Objects.requireNonNull(databaseFactory, "databaseFactory");
+        this.importExecutor = Objects.requireNonNull(importExecutor, "importExecutor");
+        this.temporaryFileStore = Objects.requireNonNull(temporaryFileStore, "temporaryFileStore");
+        this.nanoTime = Objects.requireNonNull(nanoTime, "nanoTime");
+        this.gameLoader = Objects.requireNonNull(gameLoader, "gameLoader");
+        this.diagnosticPgnSanitizer = Objects.requireNonNull(
+                diagnosticPgnSanitizer,
+                "diagnosticPgnSanitizer");
     }
 
     public ChessDatabaseDtos.Status getStatus() {
@@ -128,20 +156,22 @@ public class ChessDatabaseService {
         if (!activeImportId.compareAndSet(null, importId)) {
             throw new IllegalStateException("Another chess database import is already running.");
         }
-        Path temporaryFile = Files.createTempFile("chess-database-import-", ".pgn");
+        Path temporaryFile = null;
         try {
-            Files.copy(inputStream, temporaryFile, StandardCopyOption.REPLACE_EXISTING);
-            long totalBytes = Files.size(temporaryFile);
+            temporaryFile = temporaryFileStore.stage(inputStream);
+            long totalBytes = temporaryFileStore.size(temporaryFile);
             ImportJobState job = new ImportJobState(
                     importId,
                     fileName == null || fileName.isBlank() ? "database.pgn" : fileName,
-                    totalBytes);
+                    totalBytes,
+                    nanoTime);
             importJobs.put(importId, job);
-            importExecutor.submit(() -> runImport(job, temporaryFile));
+            Path stagedFile = temporaryFile;
+            importExecutor.submit(() -> runImport(job, stagedFile));
             return job.snapshot();
         } catch (IOException | RuntimeException e) {
             activeImportId.compareAndSet(importId, null);
-            Files.deleteIfExists(temporaryFile);
+            if (temporaryFile != null) temporaryFileStore.deleteIfExists(temporaryFile);
             throw e;
         }
     }
@@ -239,7 +269,7 @@ public class ChessDatabaseService {
     }
 
     private void runImport(ImportJobState job, Path temporaryFile) {
-        try (InputStream inputStream = Files.newInputStream(temporaryFile)) {
+        try (InputStream inputStream = temporaryFileStore.open(temporaryFile)) {
             ImportResult result = database().importPgn(
                     job.id,
                     inputStream,
@@ -253,7 +283,7 @@ public class ChessDatabaseService {
             job.failed(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
         } finally {
             try {
-                Files.deleteIfExists(temporaryFile);
+                temporaryFileStore.deleteIfExists(temporaryFile);
             } catch (IOException ignored) {
                 // Temporary file cleanup must not alter the final import state.
             }
@@ -278,13 +308,26 @@ public class ChessDatabaseService {
         }
     }
 
-    private SqliteChessDatabase database() throws SQLException, IOException {
-        SqliteChessDatabase current = database;
+    private ChessDatabase database() throws SQLException, IOException {
+        ChessDatabase current = database;
         if (current != null) return current;
         synchronized (this) {
-            if (database == null) database = new SqliteChessDatabase(databasePath);
+            if (database == null) database = databaseFactory.open(databasePath);
             return database;
         }
+    }
+
+    private static ExecutorService createImportExecutor() {
+        return Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "chess-database-import");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @FunctionalInterface
+    interface DatabaseFactory {
+        ChessDatabase open(Path path) throws SQLException, IOException;
     }
 
     private enum ImportPhase {
@@ -299,7 +342,8 @@ public class ChessDatabaseService {
         private final String id;
         private final String fileName;
         private final long totalBytes;
-        private final long startedNanos = System.nanoTime();
+        private final LongSupplier nanoTime;
+        private final long startedNanos;
         private volatile String status = "RUNNING";
         private volatile ImportPhase phase = ImportPhase.READING_PGN;
         private volatile long bytesRead;
@@ -311,10 +355,16 @@ public class ChessDatabaseService {
         private volatile String message;
         private volatile boolean cancellationRequested;
 
-        private ImportJobState(String id, String fileName, long totalBytes) {
+        private ImportJobState(
+                String id,
+                String fileName,
+                long totalBytes,
+                LongSupplier nanoTime) {
             this.id = id;
             this.fileName = fileName;
             this.totalBytes = totalBytes;
+            this.nanoTime = nanoTime;
+            this.startedNanos = nanoTime.getAsLong();
         }
 
         private void updateProgress(ImportProgress progress) {
@@ -368,7 +418,7 @@ public class ChessDatabaseService {
         }
 
         private long elapsedSinceStartMillis() {
-            return Math.max(0L, (System.nanoTime() - startedNanos) / 1_000_000L);
+            return Math.max(0L, (nanoTime.getAsLong() - startedNanos) / 1_000_000L);
         }
 
         private ChessDatabaseDtos.ImportJob snapshot() {
