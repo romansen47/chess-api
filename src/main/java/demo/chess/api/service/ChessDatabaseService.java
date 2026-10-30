@@ -18,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.LongSupplier;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import demo.chess.api.dto.ChessDatabaseDtos;
@@ -60,6 +61,7 @@ public class ChessDatabaseService {
 
     private volatile ChessDatabase database;
 
+    @Autowired
     public ChessDatabaseService(
             UciGameService uciGameService,
             DatabaseGameSearchMapper gameSearchMapper) {

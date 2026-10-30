@@ -8,6 +8,7 @@ import java.util.UUID;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import tools.jackson.databind.ObjectMapper;
@@ -44,6 +45,7 @@ public class EngineSettingsService {
     private String defaultEvaluationProfileId;
     private String defaultDeepAnalysisProfileId;
 
+    @Autowired
     public EngineSettingsService(ObjectMapper objectMapper, EngineDiscoveryService engineDiscoveryService) {
         this(new EngineSettingsStore(objectMapper), engineDiscoveryService);
     }
