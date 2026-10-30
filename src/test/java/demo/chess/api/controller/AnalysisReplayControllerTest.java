@@ -5,14 +5,31 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.service.AnalysisReplayService;
+import demo.chess.definitions.engines.management.UciEngineLogEntry;
 
 class AnalysisReplayControllerTest {
+
+    @Test
+    void engineLogDelegatesToReplayService() {
+        AnalysisReplayService service = mock(AnalysisReplayService.class);
+        List<UciEngineLogEntry> expected = List.of(
+                new UciEngineLogEntry(1L, "2026-10-30T12:00:00Z",
+                        "RESPONSE", "info depth 12"));
+        when(service.activeEngineLog()).thenReturn(expected);
+
+        AnalysisReplayController controller = new AnalysisReplayController(service);
+
+        assertSame(expected, controller.engineLog());
+        verify(service).activeEngineLog();
+    }
 
     @Test
     void stateDelegatesToReplayService() {

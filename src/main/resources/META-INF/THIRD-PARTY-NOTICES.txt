@@ -1,0 +1,15 @@
+Lichess chess-openings catalog
+==============================
+
+This distribution contains a transformed PGN representation of the opening
+catalog from:
+
+  Project:  lichess-org/chess-openings
+  Source:   https://github.com/lichess-org/chess-openings
+  Revision: e76b8b4ec5c8aeeba41dac6caf4a60b938f652db
+  License:  CC0 1.0 Universal / public domain dedication
+  License:  https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+The source ECO, opening name and exact move-order data are converted from the
+five TSV source files into the bundled openings/lichess-openings.pgn resource.
+CAT does not contact Lichess or GitHub while starting or using the application.

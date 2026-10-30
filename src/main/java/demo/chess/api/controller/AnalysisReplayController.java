@@ -1,5 +1,7 @@
 package demo.chess.api.controller;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +14,7 @@ import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.AnalysisReplayStepDto;
 import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.api.service.AnalysisReplayService;
+import demo.chess.definitions.engines.management.UciEngineLogEntry;
 
 @RestController
 @RequestMapping("/api/analysis-replay")
@@ -38,6 +41,12 @@ public class AnalysisReplayController {
         return state == null
                 ? ResponseEntity.noContent().build()
                 : ResponseEntity.ok(state);
+    }
+
+    /** Returns raw UCI traffic while Deep Analysis is running. */
+    @GetMapping("/engine-log")
+    public List<UciEngineLogEntry> engineLog() {
+        return analysisReplayService.activeEngineLog();
     }
 
     /**

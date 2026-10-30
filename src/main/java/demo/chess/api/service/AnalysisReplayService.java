@@ -24,6 +24,9 @@ import demo.chess.definitions.engines.DeepAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
+import demo.chess.definitions.engines.management.ManagedUciEngine;
+import demo.chess.definitions.engines.management.UciEngineLogEntry;
+import demo.chess.definitions.engines.management.UciEngineProcessManager;
 import demo.chess.definitions.moves.Castling;
 import demo.chess.definitions.moves.Move;
 import demo.chess.game.Game;
@@ -278,6 +281,24 @@ public class AnalysisReplayService {
         if (session == null) return null;
         return toStepDto(session, !session.active, null, null, null,
                 latestEvaluation(session), latestBar(session), latestDepth(session), null);
+    }
+
+    /**
+     * Returns a live snapshot of the active Deep Analysis UCI traffic.
+     *
+     * <p>This method deliberately does not acquire the replay monitor. A
+     * finite engine search can block {@link #next()} while it reads UCI output;
+     * diagnostics must remain readable throughout that search.</p>
+     *
+     * @return active engine log, or an empty list outside a running replay
+     */
+    public List<UciEngineLogEntry> activeEngineLog() {
+        AnalysisReplaySession observed = session;
+        if (observed == null || !observed.active
+                || !(observed.engine instanceof ManagedUciEngine managed)) {
+            return List.of();
+        }
+        return UciEngineProcessManager.log(managed.getManagementId());
     }
 
     /**

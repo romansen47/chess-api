@@ -11,7 +11,7 @@ import demo.chess.api.dto.OpeningCatalogImportResultDto;
 import demo.chess.api.dto.OpeningDto;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 
-/** Imports the pinned public-domain Lichess opening catalog bundled with the application. */
+/** Installs the pinned public-domain Lichess opening catalog bundled with the application. */
 @Service
 public class BundledOpeningCatalogService {
 
@@ -34,7 +34,7 @@ public class BundledOpeningCatalogService {
      *
      * @return import result including the pinned source revision
      */
-    public OpeningCatalogImportResultDto importLichessCatalog()
+    public OpeningCatalogImportResultDto ensureCatalogInstalled()
             throws IOException, NoMoveFoundException {
         String content = readCatalog();
         List<OpeningDto> imported = openingLibraryService.importPgn(content, LICHESS_FILE_NAME);

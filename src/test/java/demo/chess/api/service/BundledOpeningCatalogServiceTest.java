@@ -32,20 +32,17 @@ class BundledOpeningCatalogServiceTest {
         OpeningLibraryService library = new OpeningLibraryService(new ObjectMapper());
         BundledOpeningCatalogService catalog = new BundledOpeningCatalogService(library);
 
-        OpeningCatalogImportResultDto first = catalog.importLichessCatalog();
+        BundledOpeningCatalogInitializer initializer =
+                new BundledOpeningCatalogInitializer(catalog);
+        initializer.afterPropertiesSet();
 
-        assertEquals(BundledOpeningCatalogService.LICHESS_CATALOG_ENTRIES, first.catalogEntries());
-        assertEquals(BundledOpeningCatalogService.LICHESS_CATALOG_ENTRIES, first.importedCount());
-        assertEquals(
-                BundledOpeningCatalogService.LICHESS_SOURCE_REVISION,
-                first.sourceRevision());
         assertEquals(
                 BundledOpeningCatalogService.LICHESS_CATALOG_ENTRIES,
                 library.getOpenings().size());
         assertTrue(library.getOpenings().stream().anyMatch(opening ->
                 "Sicilian Defense: Najdorf Variation, English Attack".equals(opening.getName())));
 
-        OpeningCatalogImportResultDto second = catalog.importLichessCatalog();
+        OpeningCatalogImportResultDto second = catalog.ensureCatalogInstalled();
 
         assertEquals(0, second.importedCount());
         assertEquals(

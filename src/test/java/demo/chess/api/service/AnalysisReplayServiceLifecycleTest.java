@@ -1,6 +1,7 @@
 package demo.chess.api.service;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
 import java.util.List;
 import java.util.Optional;
@@ -27,9 +29,67 @@ import demo.chess.api.dto.BoardDto;
 import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.DeepAnalysisEngine;
 import demo.chess.definitions.engines.UciEngineConfig;
+import demo.chess.definitions.engines.management.ManagedUciEngine;
+import demo.chess.definitions.engines.management.UciEngineLogEntry;
+import demo.chess.definitions.engines.management.UciEngineProcessManager;
 import demo.chess.game.impl.Simulation;
 
 class AnalysisReplayServiceLifecycleTest {
+
+    @Test
+    void activeEngineLogRemainsReadableAndDisappearsAfterCancel()
+            throws Exception {
+        String managementId = UciEngineProcessManager.register(
+                "DeepAnalysisUciEngine",
+                "/test/engine");
+        UciEngineProcessManager.logResponse(
+                managementId,
+                "info depth 12 multipv 1 score cp 34 pv e2e4");
+
+        DeepAnalysisEngine engine = mock(
+                DeepAnalysisEngine.class,
+                withSettings().extraInterfaces(ManagedUciEngine.class));
+        when(((ManagedUciEngine) engine).getManagementId())
+                .thenReturn(managementId);
+        DeepAnalysisEngineFactory factory = mock(DeepAnalysisEngineFactory.class);
+        when(factory.create("/test/engine")).thenReturn(engine);
+
+        AnalysisReplayService service = newService(factory);
+        service.start(new AnalysisReplaySettingsDto("profile", 12, 5));
+
+        CountDownLatch monitorHeld = new CountDownLatch(1);
+        CountDownLatch releaseMonitor = new CountDownLatch(1);
+        Thread blocker = new Thread(() -> {
+            synchronized (service) {
+                monitorHeld.countDown();
+                try {
+                    releaseMonitor.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }, "analysis-replay-log-monitor-blocker");
+        blocker.start();
+        assertTrue(monitorHeld.await(1, TimeUnit.SECONDS));
+
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try {
+            Future<List<UciEngineLogEntry>> logRead =
+                    executor.submit(service::activeEngineLog);
+            List<UciEngineLogEntry> activeLog =
+                    logRead.get(500, TimeUnit.MILLISECONDS);
+            assertTrue(activeLog.stream().anyMatch(entry ->
+                    entry.message().startsWith("info depth 12")));
+        } finally {
+            releaseMonitor.countDown();
+            executor.shutdownNow();
+            blocker.join(1000);
+        }
+
+        service.cancel();
+
+        assertEquals(List.of(), service.activeEngineLog());
+    }
 
     @Test
     void restartStopsPreviousEngineBeforeCreatingReplacement() throws Exception {
