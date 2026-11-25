@@ -21,7 +21,7 @@ import demo.chess.api.dto.EngineProfileDto;
 import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.definitions.ChessStartingPosition;
 
-class DeepAnalysisNativeFallbackTest {
+class GameAnalysisNativeFallbackTest {
 
     private static final String DIRECTORY_PROPERTY = "chess.engine.discovery.directory";
     private static final String STORE_PROPERTY = "chess.engine.config.file";
@@ -51,7 +51,7 @@ class DeepAnalysisNativeFallbackTest {
         EngineAvailabilityService availability = new EngineAvailabilityService(runtime, settings);
 
         EngineConfigOverviewDto overview = settings.getOverview();
-        String defaultProfileId = settings.getDefaultDeepAnalysisProfileId();
+        String defaultProfileId = settings.getDefaultGameAnalysisProfileId();
         EngineProfileDto defaultProfile = overview.getProfiles().stream()
                 .filter(profile -> defaultProfileId.equals(profile.getId()))
                 .findFirst()
@@ -63,11 +63,11 @@ class DeepAnalysisNativeFallbackTest {
         Files.delete(Path.of(defaultEngine.getEngine()));
 
         String fallbackProfileId = availability
-                .findAvailableDeepAnalysisProfileId(defaultProfileId)
+                .findAvailableGameAnalysisProfileId(defaultProfileId)
                 .orElseThrow();
 
         assertNotEquals(defaultProfileId, fallbackProfileId);
-        assertTrue(availability.getAvailability(NativeEngineRole.DEEP_ANALYSIS).available());
+        assertTrue(availability.getAvailability(NativeEngineRole.GAME_ANALYSIS).available());
     }
 
     @Test
@@ -86,14 +86,14 @@ class DeepAnalysisNativeFallbackTest {
         String classicalProfileId = profileIdForPath(overview, classical);
         String chess960ProfileId = profileIdForPath(overview, chess960);
 
-        String resolved = availability.findAvailableDeepAnalysisProfileId(
+        String resolved = availability.findAvailableGameAnalysisProfileId(
                         classicalProfileId,
                         ChessStartingPosition.of(0))
                 .orElseThrow();
 
         assertEquals(chess960ProfileId, resolved);
         assertTrue(availability.getAvailability(
-                NativeEngineRole.DEEP_ANALYSIS,
+                NativeEngineRole.GAME_ANALYSIS,
                 ChessStartingPosition.of(0)).available());
     }
 

@@ -30,18 +30,22 @@ public class GameAnalysisHistoryService {
 
     private final ChessDatabaseService databaseService;
     private final UciGameService uciGameService;
+    private final EngineSettingsService engineSettingsService;
 
     public GameAnalysisHistoryService(
             ChessDatabaseService databaseService,
-            UciGameService uciGameService) {
+            UciGameService uciGameService,
+            EngineSettingsService engineSettingsService) {
         this.databaseService = databaseService;
         this.uciGameService = uciGameService;
+        this.engineSettingsService = engineSettingsService;
     }
 
     /** Stores a completed run. A new run becomes active but never deletes older runs. */
     public long saveCompletedRun(
             String gameKey,
             String engineProfileId,
+            String profileName,
             UciEngineConfig config,
             List<AnalysisProfilePointDto> profile) throws SQLException, IOException {
         Objects.requireNonNull(config, "config");
@@ -50,6 +54,7 @@ public class GameAnalysisHistoryService {
                 gameKey,
                 config.getEngineName(),
                 engineProfileId,
+                profileName,
                 config.getDepth(),
                 config.getMoveTimeSeconds(),
                 config.getIntOption("MultiPV", 1),
@@ -194,7 +199,8 @@ public class GameAnalysisHistoryService {
 
     private GameAnalysisDtos.RunSummary toSummary(AnalysisRunSummary run) {
         return new GameAnalysisDtos.RunSummary(
-                run.id(), run.engineName(), run.engineProfileId(), run.requestedDepth(),
+                run.id(), run.engineName(), run.engineProfileId(),
+                displayProfileName(run.profileName(), run.engineProfileId()), run.requestedDepth(),
                 run.moveTimeSeconds(), run.multiPv(), run.positionCount(), run.maximumDepth(),
                 run.createdAt(), run.active());
     }
@@ -203,9 +209,22 @@ public class GameAnalysisHistoryService {
         int maximumDepth = run.positions().stream()
                 .mapToInt(AnalysisPosition::depth).max().orElse(0);
         return new GameAnalysisDtos.RunSummary(
-                run.id(), run.engineName(), run.engineProfileId(), run.requestedDepth(),
+                run.id(), run.engineName(), run.engineProfileId(),
+                displayProfileName(run.profileName(), run.engineProfileId()), run.requestedDepth(),
                 run.moveTimeSeconds(), run.multiPv(), run.positions().size(), maximumDepth,
                 run.createdAt(), run.active());
+    }
+
+    /** Resolves runs created before profile names were stored without rewriting history. */
+    private String displayProfileName(String storedName, String profileId) {
+        if (storedName != null && !storedName.isBlank() && !storedName.equals(profileId)) {
+            return storedName;
+        }
+        try {
+            return engineSettingsService.getProfileName(profileId);
+        } catch (RuntimeException ignored) {
+            return storedName == null || storedName.isBlank() ? profileId : storedName;
+        }
     }
 
     private List<GameAnalysisDtos.Position> toPositions(List<AnalysisPosition> positions) {

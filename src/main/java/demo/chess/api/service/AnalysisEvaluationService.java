@@ -27,7 +27,7 @@ import demo.chess.game.impl.Simulation;
  * analysis mode.
  *
  * <p>The active runtime evaluation profile is deliberately used here instead
- * of the deep-analysis profile. The engine stays alive while the same logical
+ * of the game-analysis profile. The engine stays alive while the same logical
  * position is polled so the infinite UCI search can refine its cached result.
  * Selecting a different original ply, variation or runtime evaluation profile
  * resets that search cleanly.</p>

@@ -43,14 +43,14 @@ public class AnalysisReplayController {
                 : ResponseEntity.ok(state);
     }
 
-    /** Returns raw UCI traffic while Deep Analysis is running. */
+    /** Returns raw UCI traffic while game analysis is running. */
     @GetMapping("/engine-log")
     public List<UciEngineLogEntry> engineLog() {
         return analysisReplayService.activeEngineLog();
     }
 
     /**
-     * Starts a new deep-analysis replay with the requested engine settings.
+     * Starts a new game-analysis replay with the requested engine settings.
      *
      * @param settings analysis settings, or {@code null} for service defaults
      * @return initial replay state
@@ -69,7 +69,7 @@ public class AnalysisReplayController {
     }
 
     /**
-     * Advances the active deep-analysis replay by one ply.
+     * Advances the active game-analysis replay by one ply.
      *
      * @return updated replay state
      */
@@ -87,7 +87,7 @@ public class AnalysisReplayController {
     }
 
     /**
-     * Cancels the active deep-analysis replay and stops its engine.
+     * Cancels the active game-analysis replay and stops its engine.
      *
      * @return final cancelled replay state
      */

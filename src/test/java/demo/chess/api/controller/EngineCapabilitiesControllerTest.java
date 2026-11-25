@@ -45,9 +45,9 @@ class EngineCapabilitiesControllerTest {
                 .thenReturn(NativeEngineAvailability.unavailable(
                         NativeEngineRole.EVALUATION,
                         NativeEngineAvailabilityReason.EXECUTABLE_NOT_FOUND));
-        when(service.getAvailability(NativeEngineRole.DEEP_ANALYSIS, analysisPosition))
+        when(service.getAvailability(NativeEngineRole.GAME_ANALYSIS, analysisPosition))
                 .thenReturn(NativeEngineAvailability.unavailable(
-                        NativeEngineRole.DEEP_ANALYSIS,
+                        NativeEngineRole.GAME_ANALYSIS,
                         NativeEngineAvailabilityReason.CHESS960_UNSUPPORTED));
 
         MockMvc mvc = MockMvcBuilders
@@ -68,13 +68,13 @@ class EngineCapabilitiesControllerTest {
                 .andExpect(jsonPath("$.evaluation.configured", is(true)))
                 .andExpect(jsonPath("$.evaluation.available", is(false)))
                 .andExpect(jsonPath("$.evaluation.reason", is("EXECUTABLE_NOT_FOUND")))
-                .andExpect(jsonPath("$.deepAnalysis.configured", is(true)))
-                .andExpect(jsonPath("$.deepAnalysis.available", is(false)))
-                .andExpect(jsonPath("$.deepAnalysis.reason", is("CHESS960_UNSUPPORTED")));
+                .andExpect(jsonPath("$.gameAnalysis.configured", is(true)))
+                .andExpect(jsonPath("$.gameAnalysis.available", is(false)))
+                .andExpect(jsonPath("$.gameAnalysis.reason", is("CHESS960_UNSUPPORTED")));
 
         verify(service).getAvailability(NativeEngineRole.WHITE_PLAYER, livePosition);
         verify(service).getAvailability(NativeEngineRole.BLACK_PLAYER, livePosition);
         verify(service).getAvailability(NativeEngineRole.EVALUATION, livePosition);
-        verify(service).getAvailability(NativeEngineRole.DEEP_ANALYSIS, analysisPosition);
+        verify(service).getAvailability(NativeEngineRole.GAME_ANALYSIS, analysisPosition);
     }
 }

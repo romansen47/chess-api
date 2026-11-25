@@ -45,7 +45,7 @@ class EngineSettingsProfileTest {
     }
 
     /**
-     * Verifies profile normalization and the runtime search-limit semantics used by deep analysis.
+     * Verifies profile normalization and the runtime search-limit semantics used by game analysis.
      */
     @Test
     void profileValuesAreNormalizedAndResolvedIntoRuntimeConfig() throws Exception {
@@ -74,11 +74,11 @@ class EngineSettingsProfileTest {
         assertEquals("Aggressive", runtime.getStringOption("Style", "missing"));
         assertEquals("/tablebases", runtime.getStringOption("SyzygyPath", "missing"));
 
-        UciEngineConfig depthLimited = service.getDeepAnalysisConfig(created.getId(), 8, 30);
+        UciEngineConfig depthLimited = service.getGameAnalysisConfig(created.getId(), 8, 30);
         assertEquals(8, depthLimited.getDepth());
         assertEquals(0, depthLimited.getMoveTimeSeconds());
 
-        UciEngineConfig timeLimited = service.getDeepAnalysisConfig(created.getId(), 0, 0);
+        UciEngineConfig timeLimited = service.getGameAnalysisConfig(created.getId(), 0, 0);
         assertEquals(0, timeLimited.getDepth());
         assertEquals(1, timeLimited.getMoveTimeSeconds());
     }

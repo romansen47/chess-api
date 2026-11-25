@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service;
 
 import demo.chess.analysis.annotation.MoveAnnotation;
 import demo.chess.analysis.annotation.MoveAnnotationClassifier;
-import demo.chess.definitions.engines.DeepAnalysisResult;
+import demo.chess.definitions.engines.PositionAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.UciPositionKey;
@@ -35,7 +35,7 @@ import demo.chess.notation.UciMoveCodec;
  * service runs a second engine process on the position before the move and
  * accumulates one immutable MultiPV snapshot per completed depth. The existing
  * chess-core MoveAnnotationClassifier then receives a transient
- * DeepAnalysisResult built from those live snapshots.</p>
+ * PositionAnalysisResult built from those live snapshots.</p>
  */
 @Service
 public class AnalysisMoveAssessmentService {
@@ -169,8 +169,8 @@ public class AnalysisMoveAssessmentService {
                 history.put(depth, List.copyOf(finalLines));
             }
 
-            DeepAnalysisResult liveResult =
-                    new DeepAnalysisResult(finalLines, history);
+            PositionAnalysisResult liveResult =
+                    new PositionAnalysisResult(finalLines, history);
             String canonicalPlayedMoveUci = UciMoveCodec.encode(
                     positionBeforeMove, replayMove);
             MoveAnnotation annotation = classifier.classify(

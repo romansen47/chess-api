@@ -9,20 +9,20 @@ import demo.chess.definitions.ChessStartingPosition;
 import demo.chess.definitions.engines.UciEngineConfig;
 
 /**
- * Applies the native deep-analysis profile fallback policy.
+ * Applies the native game-analysis profile fallback policy.
  *
  * <p>Resolution order is deterministic: an explicitly requested profile,
- * then the configured deep-analysis default, then every remaining configured
+ * then the configured game-analysis default, then every remaining configured
  * native profile. Browser engines are deliberately not part of this resolver.
  * The first profile that passes {@link NativeEngineProbe} for the selected
  * starting position wins.</p>
  */
-final class DeepAnalysisProfileResolver {
+final class GameAnalysisProfileResolver {
 
     private final EngineSettingsService engineSettingsService;
     private final NativeEngineProbe engineProbe;
 
-    DeepAnalysisProfileResolver(
+    GameAnalysisProfileResolver(
             EngineSettingsService engineSettingsService,
             NativeEngineProbe engineProbe) {
         this.engineSettingsService = engineSettingsService;
@@ -47,7 +47,7 @@ final class DeepAnalysisProfileResolver {
             ChessStartingPosition startingPosition) {
         Set<String> candidates = new LinkedHashSet<>();
         addCandidate(candidates, requestedProfileId);
-        addCandidate(candidates, engineSettingsService.getDefaultDeepAnalysisProfileId());
+        addCandidate(candidates, engineSettingsService.getDefaultGameAnalysisProfileId());
         for (EngineProfileDto profile : engineSettingsService.getOverview().getProfiles()) {
             if (profile != null) addCandidate(candidates, profile.getId());
         }

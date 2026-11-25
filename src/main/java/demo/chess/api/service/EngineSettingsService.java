@@ -43,7 +43,7 @@ public class EngineSettingsService {
     private String defaultWhitePlayerProfileId;
     private String defaultBlackPlayerProfileId;
     private String defaultEvaluationProfileId;
-    private String defaultDeepAnalysisProfileId;
+    private String defaultGameAnalysisProfileId;
 
     @Autowired
     public EngineSettingsService(ObjectMapper objectMapper, EngineDiscoveryService engineDiscoveryService) {
@@ -80,7 +80,7 @@ public class EngineSettingsService {
         defaultWhitePlayerProfileId = null;
         defaultBlackPlayerProfileId = null;
         defaultEvaluationProfileId = null;
-        defaultDeepAnalysisProfileId = null;
+        defaultGameAnalysisProfileId = null;
 
         discoverSystemEnginesInternal();
         repairFallbackAndAssignments();
@@ -151,12 +151,12 @@ public class EngineSettingsService {
         String white = resolveProfileId(incoming.getWhitePlayerProfileId(), fallbackProfileId);
         String black = resolveProfileId(incoming.getBlackPlayerProfileId(), fallbackProfileId);
         String evaluation = resolveProfileId(incoming.getEvaluationProfileId(), fallbackProfileId);
-        String deepAnalysis = resolveProfileId(incoming.getDeepAnalysisProfileId(), fallbackProfileId);
+        String gameAnalysis = resolveProfileId(incoming.getGameAnalysisProfileId(), fallbackProfileId);
 
         boolean whiteChanged = !Objects.equals(white, defaultWhitePlayerProfileId);
         boolean blackChanged = !Objects.equals(black, defaultBlackPlayerProfileId);
         boolean evaluationChanged = !Objects.equals(evaluation, defaultEvaluationProfileId);
-        boolean deepAnalysisChanged = !Objects.equals(deepAnalysis, defaultDeepAnalysisProfileId);
+        boolean gameAnalysisChanged = !Objects.equals(gameAnalysis, defaultGameAnalysisProfileId);
         if (whiteChanged) {
             defaultWhitePlayerProfileId = white;
         }
@@ -166,11 +166,11 @@ public class EngineSettingsService {
         if (evaluationChanged) {
             defaultEvaluationProfileId = evaluation;
         }
-        if (deepAnalysisChanged) {
-            defaultDeepAnalysisProfileId = deepAnalysis;
+        if (gameAnalysisChanged) {
+            defaultGameAnalysisProfileId = gameAnalysis;
         }
 
-        if (whiteChanged || blackChanged || evaluationChanged || deepAnalysisChanged) {
+        if (whiteChanged || blackChanged || evaluationChanged || gameAnalysisChanged) {
             versions.configurationChanged(whiteChanged, blackChanged, evaluationChanged);
             persistStore();
         }
@@ -318,8 +318,8 @@ public class EngineSettingsService {
         return resolveProfileId(profileId, fallbackProfileId);
     }
 
-    public synchronized String normalizeDeepAnalysisProfileId(String profileId) {
-        return resolveProfileId(profileId, defaultDeepAnalysisProfileId);
+    public synchronized String normalizeGameAnalysisProfileId(String profileId) {
+        return resolveProfileId(profileId, defaultGameAnalysisProfileId);
     }
 
     public synchronized String getDefaultWhitePlayerProfileId() {
@@ -334,8 +334,13 @@ public class EngineSettingsService {
         return defaultEvaluationProfileId;
     }
 
-    public synchronized String getDefaultDeepAnalysisProfileId() {
-        return defaultDeepAnalysisProfileId;
+    public synchronized String getDefaultGameAnalysisProfileId() {
+        return defaultGameAnalysisProfileId;
+    }
+
+    /** Returns the user-visible name snapshotted for a game-analysis run. */
+    public synchronized String getProfileName(String profileId) {
+        return requireProfile(profileId).name;
     }
 
     public synchronized UciEngineConfig getConfig(String id) {
@@ -354,11 +359,11 @@ public class EngineSettingsService {
         return resolveRuntimeConfig(requireProfile(defaultEvaluationProfileId), 0, 0);
     }
 
-    public synchronized UciEngineConfig getDeepAnalysisConfig(
+    public synchronized UciEngineConfig getGameAnalysisConfig(
             String profileId,
             int depth,
             int moveTimeSeconds) {
-        String resolved = normalizeDeepAnalysisProfileId(profileId);
+        String resolved = normalizeGameAnalysisProfileId(profileId);
         int safeDepth = Math.max(0, depth);
         int safeMoveTimeSeconds = safeDepth > 0 ? 0 : Math.max(1, moveTimeSeconds);
         return resolveRuntimeConfig(requireProfile(resolved), safeDepth, safeMoveTimeSeconds);
@@ -425,7 +430,7 @@ public class EngineSettingsService {
                 defaultWhitePlayerProfileId,
                 defaultBlackPlayerProfileId,
                 defaultEvaluationProfileId,
-                defaultDeepAnalysisProfileId);
+                defaultGameAnalysisProfileId);
     }
 
     private UciEngineDefinition definitionFromDto(EngineDefinitionDto dto) {
@@ -477,7 +482,7 @@ public class EngineSettingsService {
             defaultWhitePlayerProfileId = null;
             defaultBlackPlayerProfileId = null;
             defaultEvaluationProfileId = null;
-            defaultDeepAnalysisProfileId = null;
+            defaultGameAnalysisProfileId = null;
             return;
         }
 
@@ -503,7 +508,7 @@ public class EngineSettingsService {
         defaultWhitePlayerProfileId = resolveProfileId(defaultWhitePlayerProfileId, fallbackProfileId);
         defaultBlackPlayerProfileId = resolveProfileId(defaultBlackPlayerProfileId, fallbackProfileId);
         defaultEvaluationProfileId = resolveProfileId(defaultEvaluationProfileId, fallbackProfileId);
-        defaultDeepAnalysisProfileId = resolveProfileId(defaultDeepAnalysisProfileId, fallbackProfileId);
+        defaultGameAnalysisProfileId = resolveProfileId(defaultGameAnalysisProfileId, fallbackProfileId);
     }
 
     private ManagedProfile findDefaultProfileForEngine(ManagedEngineDefinition engine) {
@@ -548,7 +553,7 @@ public class EngineSettingsService {
             defaultWhitePlayerProfileId = storedDefaults.getWhitePlayerProfileId();
             defaultBlackPlayerProfileId = storedDefaults.getBlackPlayerProfileId();
             defaultEvaluationProfileId = storedDefaults.getEvaluationProfileId();
-            defaultDeepAnalysisProfileId = storedDefaults.getDeepAnalysisProfileId();
+            defaultGameAnalysisProfileId = storedDefaults.getGameAnalysisProfileId();
 
             boolean hasModernData = !stored.getEngines().isEmpty() || !stored.getProfiles().isEmpty();
             if (hasModernData) {
@@ -568,7 +573,7 @@ public class EngineSettingsService {
             defaultWhitePlayerProfileId = null;
             defaultBlackPlayerProfileId = null;
             defaultEvaluationProfileId = null;
-            defaultDeepAnalysisProfileId = null;
+            defaultGameAnalysisProfileId = null;
             return false;
         }
     }
@@ -583,8 +588,8 @@ public class EngineSettingsService {
         if (defaultEvaluationProfileId == null) {
             defaultEvaluationProfileId = migrated.getEvaluationProfileId();
         }
-        if (defaultDeepAnalysisProfileId == null) {
-            defaultDeepAnalysisProfileId = migrated.getDeepAnalysisProfileId();
+        if (defaultGameAnalysisProfileId == null) {
+            defaultGameAnalysisProfileId = migrated.getGameAnalysisProfileId();
         }
     }
 
@@ -637,9 +642,9 @@ public class EngineSettingsService {
                     defaultEvaluationProfileId = dto.getId();
                 }
             }
-            case DEEP_ANALYSIS -> {
-                if (defaultDeepAnalysisProfileId == null) {
-                    defaultDeepAnalysisProfileId = dto.getId();
+            case GAME_ANALYSIS -> {
+                if (defaultGameAnalysisProfileId == null) {
+                    defaultGameAnalysisProfileId = dto.getId();
                 }
             }
         }
@@ -651,7 +656,7 @@ public class EngineSettingsService {
         if (legacyEvaluation == null) {
             legacyEvaluation = validProfileId(store.getLegacyDefaultEvaluationConfigId());
         }
-        String legacyDeep = validProfileId(store.getLegacyDefaultDeepAnalysisConfigId());
+        String legacyDeep = validProfileId(store.getLegacyDefaultGameAnalysisConfigId());
 
         if (defaultWhitePlayerProfileId == null && legacyPlayer != null) {
             defaultWhitePlayerProfileId = legacyPlayer;
@@ -662,8 +667,8 @@ public class EngineSettingsService {
         if (defaultEvaluationProfileId == null && legacyEvaluation != null) {
             defaultEvaluationProfileId = legacyEvaluation;
         }
-        if (defaultDeepAnalysisProfileId == null && legacyDeep != null) {
-            defaultDeepAnalysisProfileId = legacyDeep;
+        if (defaultGameAnalysisProfileId == null && legacyDeep != null) {
+            defaultGameAnalysisProfileId = legacyDeep;
         }
     }
 
@@ -723,7 +728,7 @@ public class EngineSettingsService {
         return Objects.equals(profileId, defaultWhitePlayerProfileId)
                 || Objects.equals(profileId, defaultBlackPlayerProfileId)
                 || Objects.equals(profileId, defaultEvaluationProfileId)
-                || Objects.equals(profileId, defaultDeepAnalysisProfileId);
+                || Objects.equals(profileId, defaultGameAnalysisProfileId);
     }
 
     private String displayEngineName(String requestedName, UciEngineDefinition definition) {

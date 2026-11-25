@@ -24,7 +24,8 @@ class GameAnalysisHistoryServiceTest {
     void comparesEngineOrderAndPrincipalVariationDivergence() throws Exception {
         ChessDatabaseService database = mock(ChessDatabaseService.class);
         UciGameService games = mock(UciGameService.class);
-        GameAnalysisHistoryService service = new GameAnalysisHistoryService(database, games);
+        EngineSettingsService settings = mock(EngineSettingsService.class);
+        GameAnalysisHistoryService service = new GameAnalysisHistoryService(database, games, settings);
         when(games.getCurrentGameSnapshot()).thenReturn(snapshot());
         String gameKey = service.currentGameKey();
 
@@ -51,7 +52,8 @@ class GameAnalysisHistoryServiceTest {
     void reportsSameRootMoveWithDifferentContinuationSeparately() throws Exception {
         ChessDatabaseService database = mock(ChessDatabaseService.class);
         UciGameService games = mock(UciGameService.class);
-        GameAnalysisHistoryService service = new GameAnalysisHistoryService(database, games);
+        EngineSettingsService settings = mock(EngineSettingsService.class);
+        GameAnalysisHistoryService service = new GameAnalysisHistoryService(database, games, settings);
         when(games.getCurrentGameSnapshot()).thenReturn(snapshot());
         String gameKey = service.currentGameKey();
         when(database.getAnalysisRun(1)).thenReturn(run(1, gameKey, "A", List.of(
@@ -70,6 +72,26 @@ class GameAnalysisHistoryServiceTest {
         assertEquals(1, position.rightBestMoveRankOnLeft());
     }
 
+    @Test
+    void resolvesProfileNameForRunsStoredBeforeProfileSnapshots() throws Exception {
+        ChessDatabaseService database = mock(ChessDatabaseService.class);
+        UciGameService games = mock(UciGameService.class);
+        EngineSettingsService settings = mock(EngineSettingsService.class);
+        GameAnalysisHistoryService service = new GameAnalysisHistoryService(database, games, settings);
+        when(games.getCurrentGameSnapshot()).thenReturn(snapshot());
+        String gameKey = service.currentGameKey();
+        AnalysisLine best = line(1, 0.2, "e2e4");
+        AnalysisRun legacyRun = new AnalysisRun(
+                1, gameKey, "Stockfish", "profile", "profile",
+                20, 5, 1, "", "now", true,
+                List.of(new AnalysisPosition(
+                        1, best.evaluation(), best.depth(), best.mateDistance(), List.of(best))));
+        when(database.getAnalysisRun(1)).thenReturn(legacyRun);
+        when(settings.getProfileName("profile")).thenReturn("Tournament profile");
+
+        assertEquals("Tournament profile", service.getRun(1).summary().profileName());
+    }
+
     private GameSnapshotDto snapshot() {
         UciGameDto game = new UciGameDto(
                 2, "WHITE", "", List.of(
@@ -82,7 +104,8 @@ class GameAnalysisHistoryServiceTest {
     private AnalysisRun run(long id, String gameKey, String engine, List<AnalysisLine> lines) {
         AnalysisLine best = lines.get(0);
         return new AnalysisRun(
-                id, gameKey, engine, "profile", 20, 5, lines.size(), "", "now", false,
+                id, gameKey, engine, "profile", engine + " profile",
+                20, 5, lines.size(), "", "now", false,
                 List.of(new AnalysisPosition(
                         18, best.evaluation(), best.depth(), best.mateDistance(), lines)));
     }

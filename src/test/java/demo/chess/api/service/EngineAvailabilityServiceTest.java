@@ -211,8 +211,8 @@ class EngineAvailabilityServiceTest {
                 true,
                 NativeEngineAvailabilityReason.AVAILABLE);
         assertAvailability(
-                context.availabilityService().getAvailability(NativeEngineRole.DEEP_ANALYSIS),
-                NativeEngineRole.DEEP_ANALYSIS,
+                context.availabilityService().getAvailability(NativeEngineRole.GAME_ANALYSIS),
+                NativeEngineRole.GAME_ANALYSIS,
                 true,
                 true,
                 NativeEngineAvailabilityReason.AVAILABLE);

@@ -2,7 +2,7 @@ package demo.chess.api.dto;
 
 /**
  * Display-facing representation of one move annotation calculated by the
- * chess core from finite DeepAnalysis data.
+ * chess core from finite GameAnalysis data.
  */
 public class MoveAnnotationDto {
 

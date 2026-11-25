@@ -96,7 +96,7 @@ class EngineRuntimeWithoutNativeEngineTest {
     }
 
     @Test
-    void deepAnalysisReportsMissingNativeEngineWithoutDefaultPathFallback() throws Exception {
+    void gameAnalysisReportsMissingNativeEngineWithoutDefaultPathFallback() throws Exception {
         EngineSettingsService settingsService = createSettingsServiceWithoutEngine();
         EvaluationService evaluationService = mock(EvaluationService.class);
         UciGameService uciGameService = mock(UciGameService.class);
@@ -109,7 +109,7 @@ class EngineRuntimeWithoutNativeEngineTest {
                 uciGameService,
                 new EngineLineDisplayService());
 
-        assertUnavailable(NativeEngineRole.DEEP_ANALYSIS, () -> replayService.start(null));
+        assertUnavailable(NativeEngineRole.GAME_ANALYSIS, () -> replayService.start(null));
         verifyNoInteractions(evaluationService);
     }
 

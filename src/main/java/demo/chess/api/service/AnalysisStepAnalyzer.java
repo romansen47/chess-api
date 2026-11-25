@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import demo.chess.api.dto.EngineLineDto;
-import demo.chess.definitions.engines.DeepAnalysisEngine;
-import demo.chess.definitions.engines.DeepAnalysisResult;
+import demo.chess.definitions.engines.PositionAnalysisEngine;
+import demo.chess.definitions.engines.PositionAnalysisResult;
 import demo.chess.definitions.engines.EngineLine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
@@ -26,7 +26,7 @@ final class AnalysisStepAnalyzer {
 
     AnalysisStepEvaluation analyze(
             Game replayGame,
-            DeepAnalysisEngine engine,
+            PositionAnalysisEngine engine,
             UciEngineConfig engineConfig,
             int fallbackDepth) throws NoMoveFoundException {
         Double terminal = TerminalEvaluationMapper.toEvaluation(
@@ -43,7 +43,7 @@ final class AnalysisStepAnalyzer {
 
         try {
             engine.clearCachedLines();
-            DeepAnalysisResult result = engine.analyze(replayGame, engineConfig);
+            PositionAnalysisResult result = engine.analyze(replayGame, engineConfig);
             List<EngineLine> bestLines = result.getFinalLines();
             if (bestLines.isEmpty()) {
                 return new AnalysisStepEvaluation(0.0, 0.5, 0, List.of(), result, false);
@@ -75,7 +75,7 @@ final class AnalysisStepAnalyzer {
             double bar,
             int depth,
             List<EngineLineDto> lines,
-            DeepAnalysisResult deepAnalysisResult,
+            PositionAnalysisResult positionAnalysisResult,
             boolean cancelled) {
 
         private static AnalysisStepEvaluation cancelledResult() {

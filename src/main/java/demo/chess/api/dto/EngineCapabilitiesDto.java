@@ -6,11 +6,11 @@ package demo.chess.api.dto;
  * @param whitePlayer White computer-player capability
  * @param blackPlayer Black computer-player capability
  * @param evaluation live-evaluation capability
- * @param deepAnalysis deep-analysis capability
+ * @param gameAnalysis game-analysis capability
  */
 public record EngineCapabilitiesDto(
         EngineCapabilityDto whitePlayer,
         EngineCapabilityDto blackPlayer,
         EngineCapabilityDto evaluation,
-        EngineCapabilityDto deepAnalysis) {
+        EngineCapabilityDto gameAnalysis) {
 }

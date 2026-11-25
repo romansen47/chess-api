@@ -12,6 +12,7 @@ public final class GameAnalysisDtos {
             long id,
             String engineName,
             String engineProfileId,
+            String profileName,
             int requestedDepth,
             int moveTimeSeconds,
             int multiPv,

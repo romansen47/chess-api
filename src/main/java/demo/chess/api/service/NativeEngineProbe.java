@@ -15,7 +15,7 @@ import demo.chess.definitions.engines.UciEngineInspector;
  * native engine executable.
  *
  * <p>This component intentionally knows nothing about engine roles, profile
- * priorities, browser fallbacks or deep-analysis policy. The application uses
+ * priorities, browser fallbacks or game-analysis policy. The application uses
  * Chess960 UCI semantics for every Scharnagl position, including 518, so a
  * usable executable must advertise {@code UCI_Chess960} in addition to
  * completing the UCI handshake.</p>

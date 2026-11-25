@@ -8,7 +8,7 @@ public enum NativeEngineRole {
     WHITE_PLAYER("white player"),
     BLACK_PLAYER("black player"),
     EVALUATION("evaluation"),
-    DEEP_ANALYSIS("deep analysis");
+    GAME_ANALYSIS("game analysis");
 
     private final String displayName;
 

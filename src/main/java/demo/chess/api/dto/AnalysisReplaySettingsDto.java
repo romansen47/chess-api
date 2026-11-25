@@ -3,7 +3,7 @@ package demo.chess.api.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 /**
- * Settings of one deep-analysis run. The selected profile only contains UCI
+ * Settings of one game-analysis run. The selected profile only contains UCI
  * values; depth/move-time are use-case limits and therefore live here.
  */
 public class AnalysisReplaySettingsDto {

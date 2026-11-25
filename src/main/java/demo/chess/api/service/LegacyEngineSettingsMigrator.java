@@ -92,8 +92,11 @@ final class LegacyEngineSettingsMigrator {
         String name = dto.getName();
         if (name != null) {
             String normalized = name.toLowerCase();
-            if (normalized.contains("deep analysis") || normalized.contains("deep-analysis")) {
-                return EngineConfigType.DEEP_ANALYSIS;
+            if (normalized.contains("game analysis")
+                    || normalized.contains("game-analysis")
+                    || normalized.contains("deep analysis")
+                    || normalized.contains("deep-analysis")) {
+                return EngineConfigType.GAME_ANALYSIS;
             }
             if (normalized.contains("evaluation")) return EngineConfigType.EVALUATION;
         }
@@ -104,7 +107,7 @@ final class LegacyEngineSettingsMigrator {
         private String white;
         private String black;
         private String evaluation;
-        private String deepAnalysis;
+        private String gameAnalysis;
 
         private void seed(String profileId, EngineConfigType type) {
             switch (type) {
@@ -115,14 +118,14 @@ final class LegacyEngineSettingsMigrator {
                 case EVALUATION -> {
                     if (evaluation == null) evaluation = profileId;
                 }
-                case DEEP_ANALYSIS -> {
-                    if (deepAnalysis == null) deepAnalysis = profileId;
+                case GAME_ANALYSIS -> {
+                    if (gameAnalysis == null) gameAnalysis = profileId;
                 }
             }
         }
 
         private EngineProfileAssignmentsDto toDto() {
-            return new EngineProfileAssignmentsDto(white, black, evaluation, deepAnalysis);
+            return new EngineProfileAssignmentsDto(white, black, evaluation, gameAnalysis);
         }
     }
 }

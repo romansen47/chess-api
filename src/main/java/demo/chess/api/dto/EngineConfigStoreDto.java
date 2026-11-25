@@ -23,7 +23,7 @@ public class EngineConfigStoreDto {
     @JsonProperty(value = "defaultEvaluationConfigId", access = JsonProperty.Access.WRITE_ONLY)
     private String legacyDefaultEvaluationConfigId;
     @JsonProperty(value = "defaultDeepAnalysisConfigId", access = JsonProperty.Access.WRITE_ONLY)
-    private String legacyDefaultDeepAnalysisConfigId;
+    private String legacyDefaultGameAnalysisConfigId;
     @JsonProperty(value = "evaluationConfigId", access = JsonProperty.Access.WRITE_ONLY)
     private String legacyEvaluationConfigId;
 
@@ -128,12 +128,12 @@ public class EngineConfigStoreDto {
     }
 
     /**
-     * Returns the legacy default deep analysis config id.
-     * @return the legacy default deep analysis config id
+     * Returns the legacy default game analysis config id.
+     * @return the legacy default game analysis config id
      */
     @JsonIgnore
-    public String getLegacyDefaultDeepAnalysisConfigId() {
-        return legacyDefaultDeepAnalysisConfigId;
+    public String getLegacyDefaultGameAnalysisConfigId() {
+        return legacyDefaultGameAnalysisConfigId;
     }
 
     /**

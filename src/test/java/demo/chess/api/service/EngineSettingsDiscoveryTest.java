@@ -150,7 +150,7 @@ class EngineSettingsDiscoveryTest {
         assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getWhitePlayerProfileId());
         assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getBlackPlayerProfileId());
         assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getEvaluationProfileId());
-        assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getDeepAnalysisProfileId());
+        assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getGameAnalysisProfileId());
     }
 
     /**
@@ -200,7 +200,7 @@ class EngineSettingsDiscoveryTest {
         assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getWhitePlayerProfileId());
         assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getBlackPlayerProfileId());
         assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getEvaluationProfileId());
-        assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getDeepAnalysisProfileId());
+        assertEquals(overview.getFallbackProfileId(), overview.getDefaults().getGameAnalysisProfileId());
 
         assertTrue(overview.getEngines().stream().anyMatch(engine ->
                 engine.getEngine().equals(lc0.toAbsolutePath().normalize().toString())));
@@ -265,7 +265,7 @@ class EngineSettingsDiscoveryTest {
         assertEquals(fallbackBefore, after.getDefaults().getWhitePlayerProfileId());
         assertEquals(fallbackBefore, after.getDefaults().getBlackPlayerProfileId());
         assertEquals(fallbackBefore, after.getDefaults().getEvaluationProfileId());
-        assertEquals(fallbackBefore, after.getDefaults().getDeepAnalysisProfileId());
+        assertEquals(fallbackBefore, after.getDefaults().getGameAnalysisProfileId());
         assertTrue(after.getEngines().stream().noneMatch(engine -> engine.getEngine().endsWith("new-engine")));
 
         EngineConfigOverviewDto secondScan = service.discoverSystemEngines();
@@ -311,7 +311,7 @@ class EngineSettingsDiscoveryTest {
         assertEquals(after.getFallbackProfileId(), after.getDefaults().getWhitePlayerProfileId());
         assertEquals(after.getFallbackProfileId(), after.getDefaults().getBlackPlayerProfileId());
         assertEquals(after.getFallbackProfileId(), after.getDefaults().getEvaluationProfileId());
-        assertEquals(after.getFallbackProfileId(), after.getDefaults().getDeepAnalysisProfileId());
+        assertEquals(after.getFallbackProfileId(), after.getDefaults().getGameAnalysisProfileId());
     }
 
     /**
@@ -325,7 +325,7 @@ class EngineSettingsDiscoveryTest {
         assertNull(overview.getDefaults().getWhitePlayerProfileId());
         assertNull(overview.getDefaults().getBlackPlayerProfileId());
         assertNull(overview.getDefaults().getEvaluationProfileId());
-        assertNull(overview.getDefaults().getDeepAnalysisProfileId());
+        assertNull(overview.getDefaults().getGameAnalysisProfileId());
     }
 
     /**

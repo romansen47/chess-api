@@ -27,7 +27,7 @@ import org.mockito.InOrder;
 import demo.chess.api.dto.AnalysisReplaySettingsDto;
 import demo.chess.api.dto.BoardDto;
 import demo.chess.definitions.ChessStartingPosition;
-import demo.chess.definitions.engines.DeepAnalysisEngine;
+import demo.chess.definitions.engines.PositionAnalysisEngine;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.management.ManagedUciEngine;
 import demo.chess.definitions.engines.management.UciEngineLogEntry;
@@ -40,18 +40,18 @@ class AnalysisReplayServiceLifecycleTest {
     void activeEngineLogRemainsReadableAndDisappearsAfterCancel()
             throws Exception {
         String managementId = UciEngineProcessManager.register(
-                "DeepAnalysisUciEngine",
+                "PositionAnalysisUciEngine",
                 "/test/engine");
         UciEngineProcessManager.logResponse(
                 managementId,
                 "info depth 12 multipv 1 score cp 34 pv e2e4");
 
-        DeepAnalysisEngine engine = mock(
-                DeepAnalysisEngine.class,
+        PositionAnalysisEngine engine = mock(
+                PositionAnalysisEngine.class,
                 withSettings().extraInterfaces(ManagedUciEngine.class));
         when(((ManagedUciEngine) engine).getManagementId())
                 .thenReturn(managementId);
-        DeepAnalysisEngineFactory factory = mock(DeepAnalysisEngineFactory.class);
+        PositionAnalysisEngineFactory factory = mock(PositionAnalysisEngineFactory.class);
         when(factory.create("/test/engine")).thenReturn(engine);
 
         AnalysisReplayService service = newService(factory);
@@ -93,9 +93,9 @@ class AnalysisReplayServiceLifecycleTest {
 
     @Test
     void restartStopsPreviousEngineBeforeCreatingReplacement() throws Exception {
-        DeepAnalysisEngine firstEngine = mock(DeepAnalysisEngine.class);
-        DeepAnalysisEngine replacementEngine = mock(DeepAnalysisEngine.class);
-        DeepAnalysisEngineFactory factory = mock(DeepAnalysisEngineFactory.class);
+        PositionAnalysisEngine firstEngine = mock(PositionAnalysisEngine.class);
+        PositionAnalysisEngine replacementEngine = mock(PositionAnalysisEngine.class);
+        PositionAnalysisEngineFactory factory = mock(PositionAnalysisEngineFactory.class);
         when(factory.create("/test/engine"))
                 .thenReturn(firstEngine, replacementEngine);
 
@@ -115,8 +115,8 @@ class AnalysisReplayServiceLifecycleTest {
 
     @Test
     void cancelStopsEngineBeforeReplayMonitorBecomesAvailable() throws Exception {
-        DeepAnalysisEngine engine = mock(DeepAnalysisEngine.class);
-        DeepAnalysisEngineFactory factory = mock(DeepAnalysisEngineFactory.class);
+        PositionAnalysisEngine engine = mock(PositionAnalysisEngine.class);
+        PositionAnalysisEngineFactory factory = mock(PositionAnalysisEngineFactory.class);
         when(factory.create("/test/engine")).thenReturn(engine);
 
         AnalysisReplayService service = newService(factory);
@@ -156,7 +156,7 @@ class AnalysisReplayServiceLifecycleTest {
         }
     }
 
-    private AnalysisReplayService newService(DeepAnalysisEngineFactory factory)
+    private AnalysisReplayService newService(PositionAnalysisEngineFactory factory)
             throws Exception {
         GameService gameService = mock(GameService.class);
         EngineSettingsService engineSettingsService =
@@ -179,11 +179,11 @@ class AnalysisReplayServiceLifecycleTest {
         when(analysisGameReplayService.currentContext()).thenReturn(context);
         when(analysisGameReplayService.createPositionAtPly(context, 0))
                 .thenReturn(replayGame);
-        when(engineAvailabilityService.findAvailableDeepAnalysisProfileId(
+        when(engineAvailabilityService.findAvailableGameAnalysisProfileId(
                 eq("profile"),
                 any(ChessStartingPosition.class)))
                 .thenReturn(Optional.of("profile"));
-        when(engineSettingsService.getDeepAnalysisConfig("profile", 12, 5))
+        when(engineSettingsService.getGameAnalysisConfig("profile", 12, 5))
                 .thenReturn(config);
         when(config.getEngine()).thenReturn("/test/engine");
         when(config.getEngineName()).thenReturn("Test Engine");

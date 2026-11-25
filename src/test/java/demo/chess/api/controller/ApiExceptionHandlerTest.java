@@ -114,10 +114,10 @@ class ApiExceptionHandlerTest {
     }
 
     @Test
-    void deepAnalysisStartEndpointUsesSameCentralContract() throws Exception {
+    void gameAnalysisStartEndpointUsesSameCentralContract() throws Exception {
         AnalysisReplayService replayService = mock(AnalysisReplayService.class);
         when(replayService.start(null)).thenThrow(
-                new NativeEngineUnavailableException(NativeEngineRole.DEEP_ANALYSIS));
+                new NativeEngineUnavailableException(NativeEngineRole.GAME_ANALYSIS));
 
         MockMvc mvc = MockMvcBuilders
                 .standaloneSetup(new AnalysisReplayController(replayService))
@@ -127,9 +127,9 @@ class ApiExceptionHandlerTest {
         mvc.perform(post("/api/analysis-replay/start"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.code", is("ENGINE_UNAVAILABLE")))
-                .andExpect(jsonPath("$.role", is("DEEP_ANALYSIS")))
+                .andExpect(jsonPath("$.role", is("GAME_ANALYSIS")))
                 .andExpect(jsonPath(
                         "$.message",
-                        is("No native engine is configured for deep analysis")));
+                        is("No native engine is configured for game analysis")));
     }
 }

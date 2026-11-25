@@ -1,5 +1,7 @@
 package demo.chess.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Global default profile assignments for the four engine use cases.
  */
@@ -8,7 +10,7 @@ public class EngineProfileAssignmentsDto {
     private String whitePlayerProfileId;
     private String blackPlayerProfileId;
     private String evaluationProfileId;
-    private String deepAnalysisProfileId;
+    private String gameAnalysisProfileId;
 
     /**
      * Creates a new EngineProfileAssignmentsDto instance.
@@ -21,17 +23,17 @@ public class EngineProfileAssignmentsDto {
      * @param whitePlayerProfileId the white player profile id
      * @param blackPlayerProfileId the black player profile id
      * @param evaluationProfileId the evaluation profile id
-     * @param deepAnalysisProfileId the deep analysis profile id
+     * @param gameAnalysisProfileId the game analysis profile id
      */
     public EngineProfileAssignmentsDto(
             String whitePlayerProfileId,
             String blackPlayerProfileId,
             String evaluationProfileId,
-            String deepAnalysisProfileId) {
+            String gameAnalysisProfileId) {
         this.whitePlayerProfileId = whitePlayerProfileId;
         this.blackPlayerProfileId = blackPlayerProfileId;
         this.evaluationProfileId = evaluationProfileId;
-        this.deepAnalysisProfileId = deepAnalysisProfileId;
+        this.gameAnalysisProfileId = gameAnalysisProfileId;
     }
 
     /**
@@ -83,18 +85,26 @@ public class EngineProfileAssignmentsDto {
     }
 
     /**
-     * Returns the deep analysis profile id.
-     * @return the deep analysis profile id
+     * Returns the game analysis profile id.
+     * @return the game analysis profile id
      */
-    public String getDeepAnalysisProfileId() {
-        return deepAnalysisProfileId;
+    public String getGameAnalysisProfileId() {
+        return gameAnalysisProfileId;
     }
 
     /**
-     * Sets the deep analysis profile id.
-     * @param deepAnalysisProfileId the deep analysis profile id
+     * Sets the game analysis profile id.
+     * @param gameAnalysisProfileId the game analysis profile id
      */
-    public void setDeepAnalysisProfileId(String deepAnalysisProfileId) {
-        this.deepAnalysisProfileId = deepAnalysisProfileId;
+    public void setGameAnalysisProfileId(String gameAnalysisProfileId) {
+        this.gameAnalysisProfileId = gameAnalysisProfileId;
+    }
+
+    /** Accepts the persisted field name used before the terminology migration. */
+    @JsonProperty(value = "deepAnalysisProfileId", access = JsonProperty.Access.WRITE_ONLY)
+    public void setLegacyDeepAnalysisProfileId(String profileId) {
+        if (gameAnalysisProfileId == null || gameAnalysisProfileId.isBlank()) {
+            gameAnalysisProfileId = profileId;
+        }
     }
 }

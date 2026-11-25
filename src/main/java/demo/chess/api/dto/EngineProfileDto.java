@@ -12,7 +12,7 @@ import demo.chess.definitions.engines.UciSystemOptions;
  * Reusable engine profile: one engine definition plus concrete user-managed
  * UCI option values.
  *
- * <p>Player/evaluation/deep-analysis are deliberately not profile properties.
+ * <p>Player/evaluation/game-analysis are deliberately not profile properties.
  * Those are use-case assignments handled separately. Protocol state derived
  * from the current game is not a profile property either: system-managed
  * options such as {@code UCI_Chess960} are removed when profile values enter

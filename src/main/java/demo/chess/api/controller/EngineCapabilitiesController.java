@@ -57,7 +57,7 @@ public class EngineCapabilitiesController {
                 toDto(engineAvailabilityService.getAvailability(
                         NativeEngineRole.EVALUATION, livePosition)),
                 toDto(engineAvailabilityService.getAvailability(
-                        NativeEngineRole.DEEP_ANALYSIS, analysisPosition)));
+                        NativeEngineRole.GAME_ANALYSIS, analysisPosition)));
     }
 
     private ChessStartingPosition liveStartingPosition() {

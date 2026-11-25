@@ -16,8 +16,8 @@ import demo.chess.api.engine.NativeEngineRole;
 import demo.chess.api.exception.NativeEngineUnavailableException;
 import demo.chess.api.mapper.MoveAnnotationDtoMapper;
 import demo.chess.definitions.ChessStartingPosition;
-import demo.chess.definitions.engines.DeepAnalysisEngine;
-import demo.chess.definitions.engines.DeepAnalysisResult;
+import demo.chess.definitions.engines.PositionAnalysisEngine;
+import demo.chess.definitions.engines.PositionAnalysisResult;
 import demo.chess.definitions.engines.UciEngineConfig;
 import demo.chess.definitions.engines.impl.NoMoveFoundException;
 import demo.chess.definitions.engines.management.ManagedUciEngine;
@@ -31,14 +31,14 @@ import demo.chess.notation.PgnNotation;
 import demo.chess.notation.UciMoveCodec;
 
 /**
- * Coordinates stepwise deep analysis of the currently selected game.
+ * Coordinates stepwise game analysis of the currently selected game.
  *
  * <p>The service owns replay-session state and orchestration only. Native
  * profile selection is delegated to {@link EngineAvailabilityService}, engine
- * process creation to {@link DeepAnalysisEngineFactory}, chess legality and
+ * process creation to {@link PositionAnalysisEngineFactory}, chess legality and
  * replay to the core, and DTO conversion to the existing API mappers.</p>
  *
- * <p>Deep analysis is deliberately native-only. Browser Stockfish can be a
+ * <p>Game analysis is deliberately native-only. Browser Stockfish can be a
  * live-evaluation fallback, but it never creates an analysis replay session.
  * Native profile resolution is variant-aware, so a responsive classical-only
  * engine is skipped when the selected replay is Chess960.</p>
@@ -50,7 +50,7 @@ public class AnalysisReplayService {
     private final EngineAvailabilityService engineAvailabilityService;
     private final EvaluationService evaluationService;
     private final AnalysisGameReplayService analysisGameReplayService;
-    private final DeepAnalysisEngineFactory deepAnalysisEngineFactory;
+    private final PositionAnalysisEngineFactory positionAnalysisEngineFactory;
     private final GameAnalysisHistoryService historyService;
     private final AnalysisReplayPresenter presenter;
     private final AnalysisStepAnalyzer stepAnalyzer;
@@ -67,13 +67,13 @@ public class AnalysisReplayService {
             UciGameService uciGameService,
             AnalysisGameReplayService analysisGameReplayService,
             EngineLineDisplayService engineLineDisplayService,
-            DeepAnalysisEngineFactory deepAnalysisEngineFactory,
+            PositionAnalysisEngineFactory positionAnalysisEngineFactory,
             GameAnalysisHistoryService historyService) {
         this.engineSettingsService = engineSettingsService;
         this.engineAvailabilityService = engineAvailabilityService;
         this.evaluationService = evaluationService;
         this.analysisGameReplayService = analysisGameReplayService;
-        this.deepAnalysisEngineFactory = deepAnalysisEngineFactory;
+        this.positionAnalysisEngineFactory = positionAnalysisEngineFactory;
         this.historyService = historyService;
         this.presenter = new AnalysisReplayPresenter(gameService);
         this.stepAnalyzer = new AnalysisStepAnalyzer(engineLineDisplayService);
@@ -99,7 +99,7 @@ public class AnalysisReplayService {
                 uciGameService,
                 analysisGameReplayService,
                 engineLineDisplayService,
-                new DeepAnalysisEngineFactory(),
+                new PositionAnalysisEngineFactory(),
                 null);
     }
 
@@ -112,7 +112,7 @@ public class AnalysisReplayService {
             UciGameService uciGameService,
             AnalysisGameReplayService analysisGameReplayService,
             EngineLineDisplayService engineLineDisplayService,
-            DeepAnalysisEngineFactory deepAnalysisEngineFactory) {
+            PositionAnalysisEngineFactory positionAnalysisEngineFactory) {
         this(
                 gameService,
                 engineSettingsService,
@@ -121,7 +121,7 @@ public class AnalysisReplayService {
                 uciGameService,
                 analysisGameReplayService,
                 engineLineDisplayService,
-                deepAnalysisEngineFactory,
+                positionAnalysisEngineFactory,
                 null);
     }
 
@@ -145,12 +145,12 @@ public class AnalysisReplayService {
                 uciGameService,
                 new AnalysisGameReplayService(uciGameService),
                 engineLineDisplayService,
-                new DeepAnalysisEngineFactory(),
+                new PositionAnalysisEngineFactory(),
                 null);
     }
 
     /**
-     * Starts a new native deep-analysis replay from the selected game.
+     * Starts a new native game-analysis replay from the selected game.
      *
      * <p>A previous replay is stopped before any replacement engine is
      * created. The stop happens outside the replay monitor so a finite UCI
@@ -169,21 +169,23 @@ public class AnalysisReplayService {
             int moveTimeSeconds = settings != null ? Math.max(1, settings.getMoveTimeSeconds()) : 5;
 
             String engineProfileId = engineAvailabilityService
-                    .findAvailableDeepAnalysisProfileId(requestedProfileId, startingPosition)
-                    .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.DEEP_ANALYSIS));
-            UciEngineConfig engineConfig = engineSettingsService.getDeepAnalysisConfig(
+                    .findAvailableGameAnalysisProfileId(requestedProfileId, startingPosition)
+                    .orElseThrow(() -> new NativeEngineUnavailableException(NativeEngineRole.GAME_ANALYSIS));
+            UciEngineConfig engineConfig = engineSettingsService.getGameAnalysisConfig(
                     engineProfileId, depth, moveTimeSeconds);
 
-            DeepAnalysisEngine deepAnalysisEngine =
-                    deepAnalysisEngineFactory.create(engineConfig.getEngine());
+            PositionAnalysisEngine positionAnalysisEngine =
+                    positionAnalysisEngineFactory.create(engineConfig.getEngine());
             String engineName = engineConfig.getEngineName();
+            String profileName = engineSettingsService.getProfileName(engineProfileId);
             AnalysisReplaySession newSession = new AnalysisReplaySession(
                     moveListSnapshot,
                     analysisGameReplayService.createPositionAtPly(gameContext, 0),
-                    deepAnalysisEngine,
+                    positionAnalysisEngine,
                     engineConfig,
                     engineName,
                     engineProfileId,
+                    profileName,
                     historyService != null ? historyService.currentGameKey() : null);
 
             double initialEvaluation = 0.0;
@@ -223,7 +225,7 @@ public class AnalysisReplayService {
                         "Analysis replay cancelled.");
             }
             source.initialPositionAnalyzed = true;
-            source.lastDeepAnalysisResult = initial.deepAnalysisResult();
+            source.lastPositionAnalysisResult = initial.positionAnalysisResult();
             source.profile.set(0, new AnalysisProfilePointDto(
                     0, null, null, "Start",
                     Math.round(initial.evaluation() * 100.0) / 100.0,
@@ -249,7 +251,7 @@ public class AnalysisReplayService {
         }
 
         Move originalMove = source.originalMoves.get(source.currentPly);
-        DeepAnalysisResult analysisBeforeMove = source.lastDeepAnalysisResult;
+        PositionAnalysisResult analysisBeforeMove = source.lastPositionAnalysisResult;
         Game positionBeforeMove = analysisBeforeMove != null
                 ? Simulation.forkSimulationFrom(source.replayGame.getMoveList())
                 : null;
@@ -317,7 +319,7 @@ public class AnalysisReplayService {
                             profilePoint);
         }
 
-        source.lastDeepAnalysisResult = evaluation.deepAnalysisResult();
+        source.lastPositionAnalysisResult = evaluation.positionAnalysisResult();
 
         boolean done = source.currentPly >= source.originalMoves.size();
         if (done) {
@@ -338,7 +340,7 @@ public class AnalysisReplayService {
     }
 
     /**
-     * Returns a live snapshot of the active Deep Analysis UCI traffic.
+     * Returns a live snapshot of the active game-analysis UCI traffic.
      *
      * <p>This method deliberately does not acquire the replay monitor. A
      * finite engine search can block {@link #next()} while it reads UCI output;
@@ -455,8 +457,8 @@ public class AnalysisReplayService {
             AnalysisStepAnalyzer.AnalysisStepEvaluation evaluation) {
         if (evaluation == null) return false;
         if (Math.abs(evaluation.evaluation()) >= 99.0) return true;
-        return evaluation.deepAnalysisResult() != null
-                && !evaluation.deepAnalysisResult().getFinalLines().isEmpty();
+        return evaluation.positionAnalysisResult() != null
+                && !evaluation.positionAnalysisResult().getFinalLines().isEmpty();
     }
 
     private boolean hasExactlyOneLegalReply(Game position)
@@ -528,7 +530,7 @@ public class AnalysisReplayService {
                 : null;
     }
 
-    private void safeStop(DeepAnalysisEngine engine) {
+    private void safeStop(PositionAnalysisEngine engine) {
         if (engine == null) return;
         try {
             engine.stopEvaluation();
@@ -545,6 +547,7 @@ public class AnalysisReplayService {
             historyService.saveCompletedRun(
                     source.gameKey,
                     source.engineProfileId,
+                    source.profileName,
                     source.engineConfig,
                     source.profile);
             source.persisted = true;
@@ -556,14 +559,14 @@ public class AnalysisReplayService {
     private static class PendingForcedReplyAnnotation {
         private final Game positionBeforeMove;
         private final String playedMoveUci;
-        private final DeepAnalysisResult analysisBeforeMove;
+        private final PositionAnalysisResult analysisBeforeMove;
         private final double resultingEvaluation;
         private final AnalysisProfilePointDto profilePoint;
 
         private PendingForcedReplyAnnotation(
                 Game positionBeforeMove,
                 String playedMoveUci,
-                DeepAnalysisResult analysisBeforeMove,
+                PositionAnalysisResult analysisBeforeMove,
                 double resultingEvaluation,
                 AnalysisProfilePointDto profilePoint) {
             this.positionBeforeMove = positionBeforeMove;
@@ -577,13 +580,14 @@ public class AnalysisReplayService {
     private static class AnalysisReplaySession {
         private final List<Move> originalMoves;
         private final Game replayGame;
-        private final DeepAnalysisEngine engine;
+        private final PositionAnalysisEngine engine;
         private final UciEngineConfig engineConfig;
         private final String engineName;
         private final String engineProfileId;
+        private final String profileName;
         private final String gameKey;
         private final List<AnalysisProfilePointDto> profile = new ArrayList<>();
-        private DeepAnalysisResult lastDeepAnalysisResult;
+        private PositionAnalysisResult lastPositionAnalysisResult;
         private PendingForcedReplyAnnotation pendingForcedReplyAnnotation;
         private int currentPly;
         private boolean initialPositionAnalyzed;
@@ -593,10 +597,11 @@ public class AnalysisReplayService {
         private AnalysisReplaySession(
                 List<Move> originalMoves,
                 Game replayGame,
-                DeepAnalysisEngine engine,
+                PositionAnalysisEngine engine,
                 UciEngineConfig engineConfig,
                 String engineName,
                 String engineProfileId,
+                String profileName,
                 String gameKey) {
             this.originalMoves = originalMoves;
             this.replayGame = replayGame;
@@ -604,6 +609,7 @@ public class AnalysisReplayService {
             this.engineConfig = engineConfig;
             this.engineName = engineName;
             this.engineProfileId = engineProfileId;
+            this.profileName = profileName;
             this.gameKey = gameKey;
         }
     }

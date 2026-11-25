@@ -102,7 +102,7 @@ class NativeEngineStartupFailureTest {
     }
 
     @Test
-    void deepAnalysisReportsUnavailableAfterAllNativeProfilesAreExhaustedWithoutStoppingLiveEvaluation()
+    void gameAnalysisReportsUnavailableAfterAllNativeProfilesAreExhaustedWithoutStoppingLiveEvaluation()
             throws Exception {
         TestContext context = createConfiguredContext();
         Files.delete(context.enginePath());
@@ -122,7 +122,7 @@ class NativeEngineStartupFailureTest {
                 NativeEngineUnavailableException.class,
                 () -> service.start(null));
 
-        assertEquals(NativeEngineRole.DEEP_ANALYSIS, exception.getRole());
+        assertEquals(NativeEngineRole.GAME_ANALYSIS, exception.getRole());
         verifyNoInteractions(evaluationService);
     }
 
