@@ -67,13 +67,13 @@ A responsive UCI executable is **not automatically usable by this application**.
 Capability checks are contextual:
 
 - White/Black player and live-evaluation roles are checked against the current live game's starting position;
-- Deep Analysis is checked against the currently selected analysis game, which may be an imported PGN with a different Chess960 starting position.
+- Game analysis is checked against the currently selected analysis game, which may be an imported PGN with a different Chess960 starting position.
 
-Deep-analysis profile selection is isolated in `DeepAnalysisProfileResolver`. Resolution order is deterministic: explicitly requested profile, configured deep-analysis default, then the remaining configured native profiles. Each candidate is probed against the selected starting position, so a healthy classical-only engine is skipped in favor of a later Chess960-capable native engine when necessary.
+Game-analysis profile selection is isolated in `GameAnalysisProfileResolver`. Resolution order is deterministic: explicitly requested profile, configured game-analysis default, then the remaining configured native profiles. Each candidate is probed against the selected starting position, so a healthy classical-only engine is skipped in favor of a later Chess960-capable native engine when necessary.
 
-**Browser Stockfish is a live-evaluation fallback only.** It is intentionally outside native deep-analysis resolution. If no configured native engine can be used for the selected variant, deep analysis is unavailable and the frontend must not enable "Analyse starten" merely because Browser Stockfish works.
+**Browser Stockfish is a live-evaluation fallback only.** It is intentionally outside native game-analysis resolution. If no configured native engine can be used for the selected variant, game analysis is unavailable and the frontend must not enable "Analyse starten" merely because Browser Stockfish works.
 
-`AnalysisReplayService` resolves native capability against `UciGameService.getAnalysisStartingPosition()` before creating a replay. Native process startup is delegated to `DeepAnalysisEngineFactory`. Move-quality classification receives canonical UCI produced by the core codec, so Chess960 castling is classified against the same move representation emitted by the engine.
+`AnalysisReplayService` resolves native capability against `UciGameService.getAnalysisStartingPosition()` before creating a replay. Native process startup is delegated to `PositionAnalysisEngineFactory`. Move-quality classification receives canonical UCI produced by the core codec, so Chess960 castling is classified against the same move representation emitted by the engine.
 
 ### System-managed UCI options
 
@@ -83,7 +83,7 @@ This boundary prevents a stored profile default such as `UCI_Chess960=false` fro
 
 ## Game-scoped engine lifecycle
 
-Native engine processes are owned by backend application services, never by the browser. `EngineLifecycleCoordinator` is the single game-replacement shutdown boundary. Before a new live game, imported PGN, or stored database game replaces the current selection it stops/releases White and Black player engines, live evaluation, historical/variation evaluation and move assessment, and any finite deep-analysis replay engine.
+Native engine processes are owned by backend application services, never by the browser. `EngineLifecycleCoordinator` is the single game-replacement shutdown boundary. Before a new live game, imported PGN, or stored database game replaces the current selection it stops/releases White and Black player engines, live evaluation, historical/variation evaluation and move assessment, and any finite game-analysis engine.
 
 This backend guarantee is independent of frontend request ordering. Frontend cleanup can still stop browser-local workers, but a successful `POST /new-game` never relies on that cleanup to terminate native processes.
 
@@ -129,7 +129,7 @@ When extending the application, keep these boundaries intact:
 2. Controllers validate HTTP shape and delegate; they do not implement domain rules.
 3. DTO mapping belongs in mapper/serializer components, not controllers.
 4. Imported/replay state must carry its Chess960 starting position end-to-end.
-5. Browser evaluation capability and native deep-analysis capability are separate concepts.
+5. Browser evaluation capability and native game-analysis capability are separate concepts.
 6. Engine executable health, advertised variant capability and engine/profile selection policy are separate concerns.
 7. System-managed UCI options are not profile preferences.
 8. All native engine roles require `UCI_Chess960`, including games that use Scharnagl position 518.
