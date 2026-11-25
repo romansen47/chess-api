@@ -27,6 +27,9 @@ public class EngineLineDto {
      */
     private String moves;
 
+    /** Canonical UCI move sequence used for persistence and comparison. */
+    private List<String> uciMoves = List.of();
+
     /**
      * Brettstellungen der Variante als 64-Zeichen-Strings.
      *
@@ -159,6 +162,16 @@ public class EngineLineDto {
      */
     public void setMoves(String moves) {
         this.moves = moves;
+    }
+
+    /** @return canonical UCI move sequence */
+    public List<String> getUciMoves() {
+        return uciMoves;
+    }
+
+    /** @param uciMoves canonical UCI move sequence */
+    public void setUciMoves(List<String> uciMoves) {
+        this.uciMoves = uciMoves != null ? List.copyOf(uciMoves) : List.of();
     }
 
     /**

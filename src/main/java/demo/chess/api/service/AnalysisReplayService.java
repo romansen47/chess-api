@@ -51,6 +51,7 @@ public class AnalysisReplayService {
     private final EvaluationService evaluationService;
     private final AnalysisGameReplayService analysisGameReplayService;
     private final DeepAnalysisEngineFactory deepAnalysisEngineFactory;
+    private final GameAnalysisHistoryService historyService;
     private final AnalysisReplayPresenter presenter;
     private final AnalysisStepAnalyzer stepAnalyzer;
     private final MoveAnnotationClassifier moveAnnotationClassifier = new MoveAnnotationClassifier();
@@ -66,12 +67,14 @@ public class AnalysisReplayService {
             UciGameService uciGameService,
             AnalysisGameReplayService analysisGameReplayService,
             EngineLineDisplayService engineLineDisplayService,
-            DeepAnalysisEngineFactory deepAnalysisEngineFactory) {
+            DeepAnalysisEngineFactory deepAnalysisEngineFactory,
+            GameAnalysisHistoryService historyService) {
         this.engineSettingsService = engineSettingsService;
         this.engineAvailabilityService = engineAvailabilityService;
         this.evaluationService = evaluationService;
         this.analysisGameReplayService = analysisGameReplayService;
         this.deepAnalysisEngineFactory = deepAnalysisEngineFactory;
+        this.historyService = historyService;
         this.presenter = new AnalysisReplayPresenter(gameService);
         this.stepAnalyzer = new AnalysisStepAnalyzer(engineLineDisplayService);
     }
@@ -96,7 +99,30 @@ public class AnalysisReplayService {
                 uciGameService,
                 analysisGameReplayService,
                 engineLineDisplayService,
-                new DeepAnalysisEngineFactory());
+                new DeepAnalysisEngineFactory(),
+                null);
+    }
+
+    /** Compatibility constructor retained for lifecycle tests with a custom factory. */
+    public AnalysisReplayService(
+            GameService gameService,
+            EngineSettingsService engineSettingsService,
+            EngineAvailabilityService engineAvailabilityService,
+            EvaluationService evaluationService,
+            UciGameService uciGameService,
+            AnalysisGameReplayService analysisGameReplayService,
+            EngineLineDisplayService engineLineDisplayService,
+            DeepAnalysisEngineFactory deepAnalysisEngineFactory) {
+        this(
+                gameService,
+                engineSettingsService,
+                engineAvailabilityService,
+                evaluationService,
+                uciGameService,
+                analysisGameReplayService,
+                engineLineDisplayService,
+                deepAnalysisEngineFactory,
+                null);
     }
 
     /**
@@ -119,7 +145,8 @@ public class AnalysisReplayService {
                 uciGameService,
                 new AnalysisGameReplayService(uciGameService),
                 engineLineDisplayService,
-                new DeepAnalysisEngineFactory());
+                new DeepAnalysisEngineFactory(),
+                null);
     }
 
     /**
@@ -155,7 +182,9 @@ public class AnalysisReplayService {
                     analysisGameReplayService.createPositionAtPly(gameContext, 0),
                     deepAnalysisEngine,
                     engineConfig,
-                    engineName);
+                    engineName,
+                    engineProfileId,
+                    historyService != null ? historyService.currentGameKey() : null);
 
             double initialEvaluation = 0.0;
             newSession.profile.add(new AnalysisProfilePointDto(
@@ -183,9 +212,37 @@ public class AnalysisReplayService {
     public synchronized AnalysisReplayStepDto next() throws NoMoveFoundException, IOException {
         AnalysisReplaySession source = session;
         if (source == null || !source.active) return inactiveStep("No active analysis replay.");
+        if (!source.initialPositionAnalyzed) {
+            AnalysisStepAnalyzer.AnalysisStepEvaluation initial =
+                    analyzeCurrentReplayPosition(source);
+            if (initial.cancelled()) {
+                source.active = false;
+                safeStop(source.engine);
+                return toStepDto(source, true, null, null, null,
+                        latestEvaluation(source), latestBar(source), latestDepth(source),
+                        "Analysis replay cancelled.");
+            }
+            source.initialPositionAnalyzed = true;
+            source.lastDeepAnalysisResult = initial.deepAnalysisResult();
+            source.profile.set(0, new AnalysisProfilePointDto(
+                    0, null, null, "Start",
+                    Math.round(initial.evaluation() * 100.0) / 100.0,
+                    initial.bar(), initial.depth(), initial.lines()));
+            if (source.originalMoves.isEmpty()) {
+                source.active = false;
+                safeStop(source.engine);
+                persistCompletedRun(source);
+                return toStepDto(source, true, null, null, null,
+                        initial.evaluation(), initial.bar(), initial.depth(),
+                        "Analysis replay finished.");
+            }
+            return toStepDto(source, false, null, null, null,
+                    initial.evaluation(), initial.bar(), initial.depth(), null);
+        }
         if (source.currentPly >= source.originalMoves.size()) {
             source.active = false;
             safeStop(source.engine);
+            persistCompletedRun(source);
             return toStepDto(source, true, null, null, null,
                     latestEvaluation(source), latestBar(source), latestDepth(source),
                     "Analysis replay finished.");
@@ -266,6 +323,7 @@ public class AnalysisReplayService {
         if (done) {
             source.active = false;
             safeStop(source.engine);
+            persistCompletedRun(source);
         }
         return toStepDto(source, done, from, to, san,
                 evaluation.evaluation(), evaluation.bar(), evaluation.depth(),
@@ -478,6 +536,23 @@ public class AnalysisReplayService {
         }
     }
 
+    private void persistCompletedRun(AnalysisReplaySession source) {
+        if (historyService == null || source == null || source.persisted
+                || source.gameKey == null || source.gameKey.isBlank()) {
+            return;
+        }
+        try {
+            historyService.saveCompletedRun(
+                    source.gameKey,
+                    source.engineProfileId,
+                    source.engineConfig,
+                    source.profile);
+            source.persisted = true;
+        } catch (Exception ignored) {
+            // Analysis remains usable in memory when local persistence is unavailable.
+        }
+    }
+
     private static class PendingForcedReplyAnnotation {
         private final Game positionBeforeMove;
         private final String playedMoveUci;
@@ -505,10 +580,14 @@ public class AnalysisReplayService {
         private final DeepAnalysisEngine engine;
         private final UciEngineConfig engineConfig;
         private final String engineName;
+        private final String engineProfileId;
+        private final String gameKey;
         private final List<AnalysisProfilePointDto> profile = new ArrayList<>();
         private DeepAnalysisResult lastDeepAnalysisResult;
         private PendingForcedReplyAnnotation pendingForcedReplyAnnotation;
         private int currentPly;
+        private boolean initialPositionAnalyzed;
+        private boolean persisted;
         private volatile boolean active = true;
 
         private AnalysisReplaySession(
@@ -516,12 +595,16 @@ public class AnalysisReplayService {
                 Game replayGame,
                 DeepAnalysisEngine engine,
                 UciEngineConfig engineConfig,
-                String engineName) {
+                String engineName,
+                String engineProfileId,
+                String gameKey) {
             this.originalMoves = originalMoves;
             this.replayGame = replayGame;
             this.engine = engine;
             this.engineConfig = engineConfig;
             this.engineName = engineName;
+            this.engineProfileId = engineProfileId;
+            this.gameKey = gameKey;
         }
     }
 }

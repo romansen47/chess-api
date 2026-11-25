@@ -43,8 +43,15 @@ public class EngineLineDisplayService {
                 line.getMateDistance(),
                 displayData.moves,
                 displayData.positions);
+        result.setUciMoves(splitUciMoves(line.getMoves()));
         result.setMoveArrows(displayData.moveArrows);
         return result;
+    }
+
+    private List<String> splitUciMoves(String moves) {
+        return moves == null || moves.isBlank()
+                ? List.of()
+                : List.of(moves.trim().split("\\s+"));
     }
 
     private EngineLineDisplayData convertEngineLine(Game currentGame, String uciMoves) {

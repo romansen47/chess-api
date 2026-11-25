@@ -25,6 +25,8 @@ import demo.chess.api.dto.ChessDatabaseDtos;
 import demo.chess.api.dto.UciGameDto;
 import demo.chess.database.ChessDatabaseStatus;
 import demo.chess.database.ChessDatabase;
+import demo.chess.database.AnalysisRun;
+import demo.chess.database.AnalysisRunSummary;
 import demo.chess.database.GameSearch;
 import demo.chess.database.ImportCancelledException;
 import demo.chess.database.ImportProgress;
@@ -222,6 +224,28 @@ public class ChessDatabaseService {
         if (Objects.equals(uciGameService.getImportedDatabaseGameId(), gameId)) {
             uciGameService.setImportedDatabaseGameId(null);
         }
+    }
+
+    /** Persists one completed immutable game-analysis run. */
+    public long saveAnalysisRun(AnalysisRun run) throws SQLException, IOException {
+        return database().saveAnalysisRun(run);
+    }
+
+    /** Lists completed runs for one canonical game key. */
+    public List<AnalysisRunSummary> findAnalysisRuns(String gameKey)
+            throws SQLException, IOException {
+        return database().findAnalysisRuns(gameKey);
+    }
+
+    /** Loads a completed run including its position results. */
+    public AnalysisRun getAnalysisRun(long runId) throws SQLException, IOException {
+        return database().getAnalysisRun(runId);
+    }
+
+    /** Makes a stored run the active result source for its game. */
+    public void setActiveAnalysisRun(String gameKey, long runId)
+            throws SQLException, IOException {
+        database().setActiveAnalysisRun(gameKey, runId);
     }
 
     /** Returns Chess960-aware continuations for the selected analysis position. */
